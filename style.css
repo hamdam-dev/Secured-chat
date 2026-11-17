@@ -9,7 +9,7 @@ body {
     display: flex; 
     flex-direction: column; 
     height: 100vh; 
-    height: 100dvh; /* Mobile browser fix */
+    height: 100dvh; /* Mobile fix */
     overflow: hidden; 
 }
 
@@ -49,20 +49,20 @@ header h3::before { content: '❤️'; font-size: 16px; }
 }
 #logout-btn:hover { background: #ffcdd2; }
 
-/* Messages Area with Custom Background */
+/* Messages Area - Custom Naamon aur Emojis wala Background */
 #messages-container { 
     flex: 1; 
-    min-height: 0; /* Keyboard issue fix */
+    min-height: 0; /* Keyboard fix */
     padding: 20px 15px; 
     overflow-y: auto; 
     display: flex; 
     flex-direction: column; 
     gap: 15px; 
     
-    /* Yeh raha "Janan loves Mino" aur Hearts wala background */
+    /* Yahan aapke naamon aur emojis ka background set kiya gaya hai */
     background-color: #fce4ec;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Ctext x='20' y='50' font-family='Arial' font-size='14' fill='rgba(216, 27, 96, 0.15)' transform='rotate(-10 20 50)'%3EJanan %F0%9F%92%95 Mino%3C/text%3E%3Ctext x='150' y='120' font-family='Arial' font-size='24' fill='rgba(216, 27, 96, 0.1)' transform='rotate(15 150 120)'%3E%E2%9D%A4%EF%B8%8F%3C/text%3E%3Ctext x='50' y='200' font-family='Arial' font-size='16' fill='rgba(216, 27, 96, 0.1)' transform='rotate(-5 50 200)'%3E%F0%9F%92%96%3C/text%3E%3Ctext x='200' y='250' font-family='Arial' font-size='14' fill='rgba(216, 27, 96, 0.15)' transform='rotate(10 200 250)'%3EJanan %F0%9F%92%95 Mino%3C/text%3E%3C/svg%3E");
-    background-size: 250px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Ctext x='20' y='40' font-family='sans-serif' font-size='18' font-weight='bold' fill='rgba(216, 27, 96, 0.15)' transform='rotate(-15 20 40)'%3EJanan loves Mino %F0%9F%92%95%3C/text%3E%3Ctext x='200' y='80' font-family='sans-serif' font-size='16' font-weight='bold' fill='rgba(156, 39, 176, 0.15)' transform='rotate(10 200 80)'%3EMino loves Janan %E2%9D%A4%EF%B8%8F%3C/text%3E%3Ctext x='50' y='120' font-family='sans-serif' font-size='14' font-weight='bold' fill='rgba(233, 30, 99, 0.15)' transform='rotate(20 50 120)'%3EZargoo %F0%9F%92%96%3C/text%3E%3Ctext x='250' y='160' font-family='sans-serif' font-size='16' font-weight='bold' fill='rgba(0, 150, 136, 0.15)' transform='rotate(-10 250 160)'%3EJwandun %F0%9F%A5%B0%3C/text%3E%3Ctext x='80' y='200' font-family='sans-serif' font-size='14' font-weight='bold' fill='rgba(255, 152, 0, 0.15)' transform='rotate(5 80 200)'%3EMama %F0%9F%A7%B8%3C/text%3E%3Ctext x='180' y='250' font-family='sans-serif' font-size='18' font-weight='bold' fill='rgba(216, 27, 96, 0.15)' transform='rotate(-20 180 250)'%3EKachocho %F0%9F%90%BB%3C/text%3E%3Ctext x='280' y='280' font-family='sans-serif' font-size='14' font-weight='bold' fill='rgba(33, 150, 243, 0.15)' transform='rotate(15 280 280)'%3EKatoto %F0%9F%8C%B8%3C/text%3E%3Ctext x='30' y='300' font-family='sans-serif' font-size='16' font-weight='bold' fill='rgba(156, 39, 176, 0.15)' transform='rotate(-5 30 300)'%3EZra Sar %E2%9C%A8%3C/text%3E%3Ctext x='150' y='350' font-family='sans-serif' font-size='14' font-weight='bold' fill='rgba(233, 30, 99, 0.15)' transform='rotate(25 150 350)'%3ELove %F0%9F%98%98%3C/text%3E%3Ctext x='300' y='340' font-family='sans-serif' font-size='16' font-weight='bold' fill='rgba(0, 150, 136, 0.15)' transform='rotate(-15 300 340)'%3EBacha %F0%9F%92%95%3C/text%3E%3Ctext x='100' y='380' font-family='sans-serif' font-size='14' font-weight='bold' fill='rgba(255, 152, 0, 0.15)' transform='rotate(10 100 380)'%3EKachocha %E2%9D%A4%EF%B8%8F%3C/text%3E%3Ctext x='250' y='400' font-family='sans-serif' font-size='16' font-weight='bold' fill='rgba(33, 150, 243, 0.15)' transform='rotate(-25 250 400)'%3ESqaman %F0%9F%92%96%3C/text%3E%3Ctext x='10' y='170' font-family='sans-serif' font-size='16' font-weight='bold' fill='rgba(216, 27, 96, 0.15)' transform='rotate(-10 10 170)'%3EJan %F0%9F%92%95%3C/text%3E%3Ctext x='320' y='50' font-family='sans-serif' font-size='16' font-weight='bold' fill='rgba(156, 39, 176, 0.15)' transform='rotate(20 320 50)'%3EMino %E2%9D%A4%EF%B8%8F%3C/text%3E%3Ctext x='120' y='60' font-size='20' fill='rgba(216, 27, 96, 0.15)' transform='rotate(15 120 60)'%3E%F0%9F%92%96%3C/text%3E%3Ctext x='350' y='200' font-size='20' fill='rgba(233, 30, 99, 0.15)' transform='rotate(-10 350 200)'%3E%F0%9F%A5%B0%3C/text%3E%3Ctext x='20' y='260' font-size='20' fill='rgba(156, 39, 176, 0.15)' transform='rotate(5 20 260)'%3E%F0%9F%90%BB%3C/text%3E%3Ctext x='200' y='310' font-size='20' fill='rgba(0, 150, 136, 0.15)' transform='rotate(-20 200 310)'%3E%F0%9F%8C%B8%3C/text%3E%3Ctext x='300' y='120' font-size='20' fill='rgba(255, 152, 0, 0.15)' transform='rotate(10 300 120)'%3E%E2%9C%A8%3C/text%3E%3C/svg%3E");
+    background-size: 350px;
 }
 
 /* Pyare Round Bubbles */
@@ -85,7 +85,7 @@ header h3::before { content: '❤️'; font-size: 16px; }
     display: flex; padding: 10px 15px; background: white; gap: 10px; 
     align-items: flex-end; padding-bottom: max(15px, env(safe-area-inset-bottom));
     box-shadow: 0 -2px 15px rgba(0,0,0,0.05); border-radius: 30px 30px 0 0;
-    flex-shrink: 0; /* Taki button dabbe nahi */
+    flex-shrink: 0; 
     width: 100%;
 }
 
@@ -102,7 +102,7 @@ header h3::before { content: '❤️'; font-size: 16px; }
     width: 48px; height: 48px; border-radius: 50%; margin: 0; padding: 0; 
     display: flex; align-items: center; justify-content: center; font-size: 20px; 
     background: #d81b60; color: white; flex-shrink: 0; box-shadow: 0 4px 10px rgba(216, 27, 96, 0.3);
-    min-width: 48px; /* Button chota hone se bachayega */
+    min-width: 48px; 
 }
 #send-btn:hover { background: #c2185b; }
 
