@@ -3,73 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Our Private Chat</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background-color: #0b141a; color: #e9edef; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        
-        /* --- LOGIN SCREEN --- */
-        #login-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; padding: 20px; background: #111b21; }
-        #login-screen h2 { margin-bottom: 30px; color: #00a884; font-size: 28px; }
-        input { width: 100%; max-width: 320px; padding: 15px; margin: 10px 0; border-radius: 10px; border: 1px solid #2a3942; background: #202c33; color: white; outline: none; font-size: 16px; }
-        button { padding: 15px; margin-top: 15px; background: #00a884; color: #111b21; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; width: 100%; max-width: 320px; font-size: 16px; transition: 0.2s; }
-        button:hover { background: #008f6f; }
-        .error { color: #ff5252; margin-top: 15px; font-size: 14px; text-align: center; font-weight: bold; }
-
-        /* --- CHAT SCREEN --- */
-        #chat-screen { display: none; flex-direction: column; height: 100vh; background: #0b141a; }
-        
-        header { background: #202c33; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3); z-index: 10; }
-        header h3 { color: #e9edef; font-size: 18px; display: flex; align-items: center; gap: 10px; }
-        header h3::before { content: ''; display: inline-block; width: 10px; height: 10px; background: #00a884; border-radius: 50%; }
-        #logout-btn { background: #ea4335; padding: 8px 15px; width: auto; margin: 0; font-size: 14px; color: white; border-radius: 5px; }
-
-        /* Messages Area */
-        #messages-container { flex: 1; padding: 20px 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); background-size: cover; background-blend-mode: overlay; background-color: #0b141a; opacity: 0.95;}
-        
-        .msg-bubble { max-width: 80%; padding: 10px 12px; border-radius: 10px; font-size: 15px; line-height: 1.4; position: relative; word-wrap: break-word; display: flex; flex-direction: column; }
-        
-        .msg-sent { background: #005c4b; align-self: flex-end; border-top-right-radius: 0; }
-        .msg-received { background: #202c33; align-self: flex-start; border-top-left-radius: 0; }
-        
-        .msg-time { font-size: 11px; color: #8696a0; align-self: flex-end; margin-top: 5px; }
-
-        /* Input Area */
-        #input-area { display: flex; padding: 10px; background: #202c33; gap: 10px; align-items: flex-end; }
-        
-        .input-wrapper { flex: 1; display: flex; background: #2a3942; border-radius: 20px; padding: 5px 15px; align-items: center; }
-        
-        #message-input { flex: 1; background: transparent; border: none; color: #e9edef; padding: 10px 5px; font-size: 16px; resize: none; max-height: 100px; outline: none; margin: 0; }
-        
-        #send-btn { width: 45px; height: 45px; border-radius: 50%; margin: 0; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 20px; background: #00a884; color: #111b21; flex-shrink: 0; }
-        
-        .emoji-btn { background: transparent; color: #8696a0; font-size: 24px; border: none; margin: 0; padding: 0 10px; width: auto; cursor: pointer; }
-    </style>
+    <title>Humari Pyari Chat</title>
+    <!-- Yeh line CSS file ko link karti hai -->
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
     <!-- LOGIN SCREEN -->
     <div id="login-screen">
-        <h2>💬 Secure Chat</h2>
-        <input type="email" id="email" placeholder="Email" required>
-        <input type="password" id="password" placeholder="Password" required>
-        <button id="login-btn">Login</button>
+        <h2>Humari Chat 💖</h2>
+        <input type="email" id="email" placeholder="Email daalein..." required>
+        <input type="password" id="password" placeholder="Password daalein..." required>
+        <button id="login-btn">Login Karein</button>
         <p id="login-error" class="error"></p>
     </div>
 
     <!-- CHAT SCREEN -->
     <div id="chat-screen">
         <header>
-            <h3>Humari Chat</h3>
+            <h3>Sirf Hum Dono</h3>
             <button id="logout-btn">Logout</button>
         </header>
         
         <div id="messages-container"></div>
         
+        <!-- Text Box -->
         <div id="input-area">
             <div class="input-wrapper">
                 <button class="emoji-btn" id="emoji-btn">😊</button>
-                <textarea id="message-input" rows="1" placeholder="Message likhein..."></textarea>
+                <textarea id="message-input" rows="1" placeholder="Yahan likhein..."></textarea>
             </div>
             <button id="send-btn">➤</button>
         </div>
@@ -94,7 +56,6 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // Elements
         const loginScreen = document.getElementById('login-screen');
         const chatScreen = document.getElementById('chat-screen');
         const loginBtn = document.getElementById('login-btn');
@@ -105,27 +66,22 @@
         const loginError = document.getElementById('login-error');
         const emojiBtn = document.getElementById('emoji-btn');
 
-        // Login Logic
         loginBtn.addEventListener('click', () => {
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             loginError.innerText = "Loading...";
-            loginError.style.color = "#00a884";
+            loginError.style.color = "#d81b60";
 
             signInWithEmailAndPassword(auth, email, password)
                 .then(() => { loginError.innerText = ""; })
                 .catch((error) => { 
                     loginError.innerText = "Ghalat email ya password!";
-                    loginError.style.color = "#ff5252";
+                    loginError.style.color = "#d32f2f";
                 });
         });
 
-        // Logout Logic
-        logoutBtn.addEventListener('click', () => {
-            signOut(auth);
-        });
+        logoutBtn.addEventListener('click', () => { signOut(auth); });
 
-        // Auth State
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 loginScreen.style.display = 'none';
@@ -138,14 +94,12 @@
             }
         });
 
-        // Textarea auto-resize (Line barhne par box bada hoga)
         messageInput.addEventListener('input', function() {
             this.style.height = 'auto';
             this.style.height = (this.scrollHeight) + 'px';
             if(this.value === '') this.style.height = 'auto';
         });
 
-        // Send Message
         sendBtn.addEventListener('click', async () => {
             const text = messageInput.value.trim();
             if (text === "") return;
@@ -156,20 +110,18 @@
                     sender: auth.currentUser.uid,
                     createdAt: serverTimestamp()
                 });
-                messageInput.value = ""; // Clear input
-                messageInput.style.height = 'auto'; // Reset height
+                messageInput.value = ""; 
+                messageInput.style.height = 'auto'; 
             } catch (e) {
                 console.error("Error: ", e);
             }
         });
 
-        // Emoji button (Simple smile add karega)
         emojiBtn.addEventListener('click', () => {
-            messageInput.value += " 😊 ";
+            messageInput.value += " ❤️ ";
             messageInput.focus();
         });
 
-        // Load Messages (Realtime)
         function loadMessages(myUid) {
             const q = query(collection(db, "messages"), orderBy("createdAt", "asc"));
             
@@ -185,12 +137,10 @@
                         msgDiv.className = 'msg-bubble msg-received';
                     }
                     
-                    // Text add karein
                     const textSpan = document.createElement('span');
                     textSpan.innerText = data.text;
                     msgDiv.appendChild(textSpan);
 
-                    // Time add karein
                     const timeSpan = document.createElement('span');
                     timeSpan.className = 'msg-time';
                     if (data.createdAt) {
