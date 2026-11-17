@@ -3,24 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
-    <title>Janan & Mino 💖</title>
+    <title>Notes</title> <!-- Naam Notes rakha hai -->
     <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
 </head>
 <body>
 
-    <!-- LOGIN SCREEN -->
-    <div id="login-screen">
-        <h2>Janan & Mino 💖</h2>
+    <!-- 1. NOTES SCREEN (Disguise) -->
+    <div id="notes-screen">
+        <div class="notes-header">
+            <h2>My Notes</h2>
+            <span class="date" id="current-date"></span>
+        </div>
+        
+        <textarea id="note-content" placeholder="Yahan apne notes likhein..."></textarea>
+        
+        <div class="notes-footer">
+            <button id="save-note-btn">Save Note</button>
+            <p id="note-status"></p>
+        </div>
+    </div>
+
+    <!-- 2. LOGIN SCREEN -->
+    <div id="login-screen" style="display: none;">
+        <h2>Humari Chat 💖</h2>
         <input type="email" id="email" placeholder="Email daalein..." required>
         <input type="password" id="password" placeholder="Password daalein..." required>
         <button id="login-btn">Login Karein</button>
         <p id="login-error" class="error"></p>
     </div>
 
-    <!-- CHAT SCREEN -->
-    <div id="chat-screen">
-        
-        <!-- YEH RAHA AAPKA CUTE BACKGROUND (Saare Naam aur Emojis) -->
+    <!-- 3. CHAT SCREEN -->
+    <div id="chat-screen" style="display: none;">
         <div id="love-background">
             <span class="bg-text" style="top: 5%; left: 5%;">Janan loves Mino 💕</span>
             <span class="bg-text" style="top: 15%; right: 5%;">Mino loves Janan ❤️</span>
@@ -36,16 +50,12 @@
             <span class="bg-text" style="top: 50%; right: 40%;">Sqaman 💕</span>
             <span class="bg-text" style="top: 70%; left: 30%;">Jan 💖</span>
             <span class="bg-text" style="top: 90%; right: 30%;">Mino ❤️</span>
-            
-            <!-- Extra Emojis jo background mein pyare lagenge -->
             <span class="bg-emoji" style="top: 20%; left: 25%;">💕</span>
             <span class="bg-emoji" style="top: 40%; right: 25%;">🥰</span>
             <span class="bg-emoji" style="top: 60%; left: 35%;">🌸</span>
             <span class="bg-emoji" style="top: 80%; right: 20%;">🧸</span>
             <span class="bg-emoji" style="top: 15%; right: 35%;">✨</span>
             <span class="bg-emoji" style="top: 65%; right: 45%;">💖</span>
-            <span class="bg-emoji" style="top: 35%; left: 30%;">😘</span>
-            <span class="bg-emoji" style="top: 85%; left: 45%;">❤️</span>
         </div>
 
         <header>
@@ -83,6 +93,49 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
+        // --- NOTES APP LOGIC (DISGUISE) ---
+        const notesScreen = document.getElementById('notes-screen');
+        const noteContent = document.getElementById('note-content');
+        const saveNoteBtn = document.getElementById('save-note-btn');
+        const noteStatus = document.getElementById('note-status');
+        
+        // SECRET CODE YAHAN SET KAREIN (Jo aap note mein likhenge)
+        const SECRET_CODE = "Janan"; 
+
+        // Aaj ki date dikhane ke liye
+        document.getElementById('current-date').innerText = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+        saveNoteBtn.addEventListener('click', () => {
+            const text = noteContent.value.trim();
+
+            // 1. Check if Secret Code is entered
+            if (text === SECRET_CODE) {
+                noteContent.value = ""; // Clear notes
+                notesScreen.style.display = 'none';
+                
+                // Check if user is already logged in
+                if(auth.currentUser) {
+                    document.getElementById('chat-screen').style.display = 'flex';
+                } else {
+                    document.getElementById('login-screen').style.display = 'flex';
+                }
+                return;
+            }
+
+            // 2. Normal Note Save Logic
+            if (text === "") {
+                noteStatus.innerText = "Note khali hai!";
+                noteStatus.style.color = "red";
+            } else {
+                noteStatus.innerText = "Note Saved Successfully!";
+                noteStatus.style.color = "green";
+                noteContent.value = ""; // Clear note
+            }
+
+            setTimeout(() => { noteStatus.innerText = ""; }, 2000);
+        });
+
+        // --- CHAT LOGIC ---
         const loginScreen = document.getElementById('login-screen');
         const chatScreen = document.getElementById('chat-screen');
         const loginBtn = document.getElementById('login-btn');
@@ -107,16 +160,18 @@
                 });
         });
 
-        logoutBtn.addEventListener('click', () => { signOut(auth); });
+        logoutBtn.addEventListener('click', () => { 
+            signOut(auth); 
+            // Logout hote hi wapas Notes screen par bhej dein
+            chatScreen.style.display = 'none';
+            notesScreen.style.display = 'flex';
+            noteContent.value = "";
+        });
 
         onAuthStateChanged(auth, (user) => {
             if (user) {
-                loginScreen.style.display = 'none';
-                chatScreen.style.display = 'flex';
                 loadMessages(user.uid);
             } else {
-                loginScreen.style.display = 'flex';
-                chatScreen.style.display = 'none';
                 messagesContainer.innerHTML = '';
             }
         });
