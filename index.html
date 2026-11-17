@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
     
-    <!-- REPLY PREVIEW KA EXTRA CSS -->
+    <!-- REPLY PREVIEW & CHAT EXTRA CSS -->
     <style>
         #reply-preview {
             display: none; align-items: center; justify-content: space-between;
@@ -95,7 +95,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, setDoc, getDocs, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, setDoc, getDocs, deleteDoc, updateDoc, where } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBxiEXvK-xeepTuYRYdizeFqNufzb--3Ac",
@@ -110,23 +110,40 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // --- CUTE POP SOUND ---
-        function playCutePop() {
+        // --- ROMANTIC CHIME SOUND (Web Audio API) ---
+        // Yeh ek soft aur pyari si ghanti ki awaaz banata hai
+        function playRomanticChime() {
             try {
                 const AudioContext = window.AudioContext || window.webkitAudioContext;
                 if (!AudioContext) return;
                 const ctx = new AudioContext();
-                const osc = ctx.createOscillator();
-                const gain = ctx.createGain();
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(800, ctx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.1);
-                gain.gain.setValueAtTime(0.5, ctx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
-                osc.connect(gain);
-                gain.connect(ctx.destination);
-                osc.start();
-                osc.stop(ctx.currentTime + 0.1);
+                
+                // Pehla Note (Soft C)
+                const osc1 = ctx.createOscillator();
+                const gain1 = ctx.createGain();
+                osc1.type = 'sine';
+                osc1.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+                gain1.gain.setValueAtTime(0.3, ctx.currentTime);
+                gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
+                osc1.connect(gain1);
+                gain1.connect(ctx.destination);
+                osc1.start();
+                osc1.stop(ctx.currentTime + 0.8);
+
+                // Doosra Note (Soft E) - thoda delay ke sath
+                setTimeout(() => {
+                    const osc2 = ctx.createOscillator();
+                    const gain2 = ctx.createGain();
+                    osc2.type = 'sine';
+                    osc2.frequency.setValueAtTime(659.25, ctx.currentTime); // E5
+                    gain2.gain.setValueAtTime(0.3, ctx.currentTime);
+                    gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
+                    osc2.connect(gain2);
+                    gain2.connect(ctx.destination);
+                    osc2.start();
+                    osc2.stop(ctx.currentTime + 0.8);
+                }, 150); // 150ms ka gap
+
             } catch (e) { console.log("Sound error:", e); }
         }
 
@@ -144,7 +161,7 @@
                 notesScreen.style.display = 'none';
                 if(auth.currentUser) {
                     document.getElementById('chat-screen').style.display = 'flex';
-                    markMessagesAsRead(); // Read receipts update
+                    markMessagesAsRead(); 
                 } else {
                     document.getElementById('login-screen').style.display = 'flex';
                 }
@@ -164,7 +181,7 @@
         
         let isFirstLoad = true; 
         let typingTimeout;
-        let replyingToText = null; // Reply track karne ke liye
+        let replyingToText = null;
 
         // --- REPLY SWIPE LOGIC ---
         const replyPreview = document.getElementById('reply-preview');
@@ -180,7 +197,7 @@
             element.addEventListener('touchstart', (e) => { startX = e.touches[0].clientX; }, {passive: true});
             element.addEventListener('touchend', (e) => {
                 let endX = e.changedTouches[0].clientX;
-                if (endX - startX > 60) { // Agar 60px right swipe kiya
+                if (endX - startX > 60) { 
                     replyingToText = text;
                     replyText.innerText = text;
                     replyPreview.style.display = 'flex';
@@ -220,7 +237,6 @@
             if (user) {
                 setDoc(doc(db, "status", user.uid), { online: true, typing: false, lastSeen: serverTimestamp() }, { merge: true });
 
-                // Status Listener (Typing aur Online)
                 onSnapshot(collection(db, "status"), (snapshot) => {
                     snapshot.forEach((docSnap) => {
                         if (docSnap.id !== user.uid) {
@@ -255,7 +271,7 @@
                     setDoc(doc(db, "status", auth.currentUser.uid), { online: false, typing: false, lastSeen: serverTimestamp() }, { merge: true });
                 } else {
                     setDoc(doc(db, "status", auth.currentUser.uid), { online: true }, { merge: true });
-                    markMessagesAsRead(); // Wapas aane par read mark karein
+                    markMessagesAsRead(); 
                 }
             }
         });
@@ -272,13 +288,16 @@
             clearTimeout(typingTimeout);
             typingTimeout = setTimeout(() => {
                 setDoc(doc(db, "status", auth.currentUser.uid), { typing: false }, { merge: true });
-            }, 2000); // 2 second baad typing off
+            }, 2000); 
         });
 
-        // --- SEND MESSAGE ---
+        // --- SEND MESSAGE (With Romantic Sound) ---
         document.getElementById('send-btn').addEventListener('click', async () => {
             const text = messageInput.value.trim();
             if (text === "") return;
+
+            // Bhejte waqt bhi pyari si awaaz bajao
+            playRomanticChime();
 
             const msgData = {
                 text: text,
@@ -288,7 +307,7 @@
             };
 
             if (replyingToText) {
-                msgData.replyTo = replyingToText; // Reply save karein
+                msgData.replyTo = replyingToText; 
                 replyingToText = null;
                 replyPreview.style.display = 'none';
             }
@@ -302,16 +321,20 @@
             } catch (e) { console.error("Error: ", e); }
         });
 
-        // --- READ RECEIPTS LOGIC (Mark as Read) ---
+        // --- READ RECEIPTS LOGIC (FIXED) ---
         async function markMessagesAsRead() {
             if (!auth.currentUser || chatScreen.style.display !== 'flex') return;
-            const snapshot = await getDocs(query(collection(db, "messages")));
-            snapshot.forEach(async (docSnap) => {
-                const data = docSnap.data();
-                if (data.sender !== auth.currentUser.uid && !data.read) {
-                    await updateDoc(doc(db, "messages", docSnap.id), { read: true });
-                }
-            });
+            try {
+                // Sirf un messages ko dhoondein jo mere nahi hain aur unread hain
+                const q = query(collection(db, "messages"), where("read", "==", false));
+                const snapshot = await getDocs(q);
+                snapshot.forEach(async (docSnap) => {
+                    const data = docSnap.data();
+                    if (data.sender !== auth.currentUser.uid) {
+                        await updateDoc(doc(db, "messages", docSnap.id), { read: true });
+                    }
+                });
+            } catch(e) { console.log("Read error", e); }
         }
 
         // --- LOAD MESSAGES ---
@@ -328,8 +351,8 @@
                 });
 
                 if (hasNewMessage && chatScreen.style.display === 'flex') {
-                    playCutePop();
-                    markMessagesAsRead(); // Naya message aate hi read mark karein
+                    playRomanticChime(); // Naya message aane par sound
+                    markMessagesAsRead(); // Foran read mark karein taake samne wale ko double tick jaye
                 }
 
                 isFirstLoad = false;
@@ -345,7 +368,6 @@
                         msgDiv.className = 'msg-bubble msg-received';
                     }
                     
-                    // Reply Box Show Karein (Agar message reply hai)
                     if (data.replyTo) {
                         const replyBox = document.createElement('div');
                         replyBox.className = 'msg-reply-box';
@@ -372,13 +394,13 @@
                     }
                     metaDiv.appendChild(timeSpan);
 
-                    // Read Receipts (Double Tick)
+                    // Double Tick Logic
                     if (data.sender === myUid) {
                         const tickSpan = document.createElement('span');
                         tickSpan.style.fontSize = "12px";
                         if (data.read) {
                             tickSpan.innerText = "✓✓"; 
-                            tickSpan.style.color = "#53bdeb"; 
+                            tickSpan.style.color = "#53bdeb"; // Blue ticks
                         } else {
                             tickSpan.innerText = "✓"; 
                             tickSpan.style.color = "rgba(255,255,255,0.7)";
@@ -388,8 +410,6 @@
 
                     msgDiv.appendChild(metaDiv);
                     messagesContainer.appendChild(msgDiv);
-                    
-                    // Har message par swipe to reply setup karein
                     setupSwipeToReply(msgDiv, data.text);
                 });
                 
