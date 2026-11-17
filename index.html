@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Our Private Chat</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
+        body { background-color: #121212; color: white; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        
+        #login-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; padding: 20px; }
+        #login-screen h2 { margin-bottom: 20px; color: #4CAF50; }
+        input { width: 100%; max-width: 300px; padding: 12px; margin: 8px 0; border-radius: 8px; border: 1px solid #333; background: #1e1e1e; color: white; outline: none; }
+        button { padding: 12px; margin-top: 10px; background: #4CAF50; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; max-width: 300px; }
+        button:hover { background: #45a049; }
+        .error { color: #ff5252; margin-top: 10px; font-size: 14px; text-align: center; }
+
+        #chat-screen { display: none; flex-direction: column; height: 100vh; }
+        header { background: #1e1e1e; padding: 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; }
+        header h3 { color: #4CAF50; font-size: 18px; }
+        #logout-btn { background: #ff5252; padding: 6px 12px; width: auto; margin: 0; font-size: 14px; }
+        
+        #messages-container { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+        
+        .msg-bubble { max-width: 75%; padding: 10px 15px; border-radius: 15px; font-size: 15px; word-wrap: break-word; }
+        .msg-sent { background: #4CAF50; align-self: flex-end; border-bottom-right-radius: 2px; }
+        .msg-received { background: #333; align-self: flex-start; border-bottom-left-radius: 2px; }
+        
+        #input-area { display: flex; padding: 10px; background: #1e1e1e; border-top: 1px solid #333; gap: 10px; }
+        #message-input { flex: 1; padding: 12px; border-radius: 20px; margin: 0; }
+        #send-btn { width: 50px; height: 50px; border-radius: 50%; margin: 0; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+    </style>
+</head>
+<body>
+
+    <div id="login-screen">
+        <h2>Secure Chat</h2>
+        <input type="email" id="email" placeholder="Email (aapka ya gf ka)" required>
+        <input type="password" id="password" placeholder="Password" required>
+        <button id="login-btn">Login</button>
+        <p id="login-error" class="error"></p>
+    </div>
+
+    <div id="chat-screen">
+        <header>
+            <h3>Humari Chat</h3>
+            <button id="logout-btn">Logout</button>
+        </header>
+        <div id="messages-container"></div>
+        <div id="input-area">
+            <input type="text" id="message-input" placeholder="Message likhein...">
+            <button id="send-btn">➤</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBxiEXvK-xeepTuYRYdizeFqNufzb--3Ac",
+            authDomain: "chat-8e3ff.firebaseapp.com",
+            projectId: "chat-8e3ff",
+            storageBucket: "chat-8e3ff.firebasestorage.app",
+            messagingSenderId: "576628137714",
+            appId: "1:576628137714:web:551e0f79bb8cd5df9b7a6b"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        const loginScreen = document.getElementById('login-screen');
+        const chatScreen = document.getElementById('chat-screen');
+        const loginBtn = document.getElementById('login-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        const sendBtn = document.getElementById('send-btn');
+        const messageInput = document.getElementById('message-input');
+        const messagesContainer = document.getElementById('messages-container');
+        const loginError = document.getElementById('login-error');
+
+        loginBtn.addEventListener('click', () => {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            loginError.innerText = "Loading...";
+
+            signInWithEmailAndPassword(auth, email, password)
+                .then(() => { loginError.innerText = ""; })
+                .catch((error) => { loginError.innerText = "Ghalat email ya password!"; });
+        });
+
+        logoutBtn.addEventListener('click', () => {
+            signOut(auth);
+        });
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                loginScreen.style.display = 'none';
+                chatScreen.style.display = 'flex';
+                loadMessages(user.uid);
+            } else {
+                loginScreen.style.display = 'flex';
+                chatScreen.style.display = 'none';
+                messagesContainer.innerHTML = '';
+            }
+        });
+
+        sendBtn.addEventListener('click', async () => {
+            const text = messageInput.value.trim();
+            if (text === "") return;
+
+            try {
+                await addDoc(collection(db, "messages"), {
+                    text: text,
+                    sender: auth.currentUser.uid,
+                    createdAt: serverTimestamp()
+                });
+                messageInput.value = "";
+            } catch (e) {
+                console.error("Error: ", e);
+            }
+        });
+
+        messageInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') sendBtn.click();
+        });
+
+        function loadMessages(myUid) {
+            const q = query(collection(db, "messages"), orderBy("createdAt"));
+            
+            onSnapshot(q, (snapshot) => {
+                messagesContainer.innerHTML = ""; 
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    const msgDiv = document.createElement('div');
+                    
+                    if (data.sender === myUid) {
+                        msgDiv.className = 'msg-bubble msg-sent';
+                    } else {
+                        msgDiv.className = 'msg-bubble msg-received';
+                    }
+                    
+                    msgDiv.innerText = data.text;
+                    messagesContainer.appendChild(msgDiv);
+                });
+                
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            });
+        }
+    </script>
+</body>
+</html>
