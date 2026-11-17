@@ -6,6 +6,19 @@
     <title>Notes</title>
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
+    
+    <!-- REPLY PREVIEW KA EXTRA CSS -->
+    <style>
+        #reply-preview {
+            display: none; align-items: center; justify-content: space-between;
+            background: #ffe5ec; padding: 10px 15px; border-radius: 10px; margin-bottom: 10px;
+            border-left: 4px solid #d81b60; width: 100%;
+        }
+        #reply-preview span { font-size: 14px; color: #333; max-width: 80%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600;}
+        #cancel-reply { background: none; border: none; color: #d81b60; font-size: 18px; cursor: pointer; width: auto; margin: 0; padding: 0; box-shadow: none;}
+        .msg-reply-box { background: rgba(0,0,0,0.1); padding: 5px 8px; border-radius: 8px; margin-bottom: 6px; font-size: 12px; border-left: 3px solid #fff; opacity: 0.9; }
+        .msg-received .msg-reply-box { border-left-color: #d81b60; background: rgba(216,27,96,0.1); }
+    </style>
 </head>
 <body>
 
@@ -63,6 +76,12 @@
         
         <div id="messages-container"></div>
         
+        <!-- REPLY PREVIEW AREA -->
+        <div id="reply-preview">
+            <span id="reply-text"></span>
+            <button id="cancel-reply">✖</button>
+        </div>
+
         <div id="input-area">
             <div class="input-wrapper">
                 <button class="emoji-btn" id="emoji-btn">😊</button>
@@ -91,8 +110,7 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // --- CUTE POP SOUND GENERATOR (Web Audio API) ---
-        // Yeh internet ke baghair browser mein sound banata hai
+        // --- CUTE POP SOUND ---
         function playCutePop() {
             try {
                 const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -100,141 +118,122 @@
                 const ctx = new AudioContext();
                 const osc = ctx.createOscillator();
                 const gain = ctx.createGain();
-                
                 osc.type = 'sine';
                 osc.frequency.setValueAtTime(800, ctx.currentTime);
                 osc.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.1);
-                
                 gain.gain.setValueAtTime(0.5, ctx.currentTime);
                 gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
-                
                 osc.connect(gain);
                 gain.connect(ctx.destination);
-                
                 osc.start();
                 osc.stop(ctx.currentTime + 0.1);
-            } catch (e) {
-                console.log("Sound error:", e);
-            }
+            } catch (e) { console.log("Sound error:", e); }
         }
 
-        // --- NOTES APP LOGIC (DISGUISE) ---
+        // --- NOTES APP (DISGUISE) ---
         const notesScreen = document.getElementById('notes-screen');
         const noteContent = document.getElementById('note-content');
         const saveNoteBtn = document.getElementById('save-note-btn');
-        const noteStatus = document.getElementById('note-status');
         const SECRET_CODE = "Janan"; 
 
         document.getElementById('current-date').innerText = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
         saveNoteBtn.addEventListener('click', () => {
-            const text = noteContent.value.trim();
-            if (text === SECRET_CODE) {
+            if (noteContent.value.trim() === SECRET_CODE) {
                 noteContent.value = ""; 
                 notesScreen.style.display = 'none';
                 if(auth.currentUser) {
                     document.getElementById('chat-screen').style.display = 'flex';
+                    markMessagesAsRead(); // Read receipts update
                 } else {
                     document.getElementById('login-screen').style.display = 'flex';
                 }
                 return;
             }
-            if (text === "") {
-                noteStatus.innerText = "Note khali hai!";
-                noteStatus.style.color = "red";
-            } else {
-                noteStatus.innerText = "Note Saved Successfully!";
-                noteStatus.style.color = "green";
-                noteContent.value = ""; 
-            }
-            setTimeout(() => { noteStatus.innerText = ""; }, 2000);
+            noteContent.value = "";
+            document.getElementById('note-status').innerText = "Note Saved Successfully!";
+            setTimeout(() => { document.getElementById('note-status').innerText = ""; }, 2000);
         });
 
-        // --- CHAT & STATUS LOGIC ---
+        // --- CHAT LOGIC ---
         const loginScreen = document.getElementById('login-screen');
         const chatScreen = document.getElementById('chat-screen');
-        const loginBtn = document.getElementById('login-btn');
-        const logoutBtn = document.getElementById('logout-btn');
-        const sendBtn = document.getElementById('send-btn');
-        const clearChatBtn = document.getElementById('clear-chat-btn');
         const messageInput = document.getElementById('message-input');
         const messagesContainer = document.getElementById('messages-container');
-        const loginError = document.getElementById('login-error');
-        const emojiBtn = document.getElementById('emoji-btn');
         const partnerStatus = document.getElementById('partner-status');
-
+        
         let isFirstLoad = true; 
         let typingTimeout;
+        let replyingToText = null; // Reply track karne ke liye
 
-        loginBtn.addEventListener('click', () => {
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            loginError.innerText = "Loading...";
-            loginError.style.color = "#d81b60";
-
-            signInWithEmailAndPassword(auth, email, password)
-                .then(() => { loginError.innerText = ""; })
-                .catch((error) => { 
-                    loginError.innerText = "Ghalat email ya password!";
-                    loginError.style.color = "#d32f2f";
-                });
+        // --- REPLY SWIPE LOGIC ---
+        const replyPreview = document.getElementById('reply-preview');
+        const replyText = document.getElementById('reply-text');
+        
+        document.getElementById('cancel-reply').addEventListener('click', () => {
+            replyingToText = null;
+            replyPreview.style.display = 'none';
         });
 
-        // Logout logic
-        logoutBtn.addEventListener('click', async () => { 
+        function setupSwipeToReply(element, text) {
+            let startX = 0;
+            element.addEventListener('touchstart', (e) => { startX = e.touches[0].clientX; }, {passive: true});
+            element.addEventListener('touchend', (e) => {
+                let endX = e.changedTouches[0].clientX;
+                if (endX - startX > 60) { // Agar 60px right swipe kiya
+                    replyingToText = text;
+                    replyText.innerText = text;
+                    replyPreview.style.display = 'flex';
+                    messageInput.focus();
+                }
+            }, {passive: true});
+        }
+
+        // --- AUTH & STATUS ---
+        document.getElementById('login-btn').addEventListener('click', () => {
+            signInWithEmailAndPassword(auth, document.getElementById('email').value, document.getElementById('password').value)
+            .then(() => document.getElementById('login-error').innerText = "")
+            .catch(() => {
+                document.getElementById('login-error').innerText = "Ghalat email ya password!";
+                document.getElementById('login-error').style.color = "#d32f2f";
+            });
+        });
+
+        document.getElementById('logout-btn').addEventListener('click', async () => { 
             if(auth.currentUser) {
-                await setDoc(doc(db, "status", auth.currentUser.uid), {
-                    online: false,
-                    typing: false,
-                    lastSeen: serverTimestamp()
-                }, { merge: true });
+                await setDoc(doc(db, "status", auth.currentUser.uid), { online: false, typing: false, lastSeen: serverTimestamp() }, { merge: true });
             }
             signOut(auth); 
             chatScreen.style.display = 'none';
             notesScreen.style.display = 'flex';
-            noteContent.value = "";
+            messageInput.value = "";
         });
 
-        // --- CLEAR CHAT LOGIC ---
-        clearChatBtn.addEventListener('click', async () => {
-            if(confirm("Kya aap waqai saari chat delete karna chahte hain? Yeh dono taraf se delete ho jayegi.")) {
-                try {
-                    const q = query(collection(db, "messages"));
-                    const snapshot = await getDocs(q);
-                    snapshot.forEach(async (document) => {
-                        await deleteDoc(doc(db, "messages", document.id));
-                    });
-                } catch(e) {
-                    console.error("Error deleting messages: ", e);
-                }
+        document.getElementById('clear-chat-btn').addEventListener('click', async () => {
+            if(confirm("Kya aap waqai saari chat delete karna chahte hain?")) {
+                const snapshot = await getDocs(query(collection(db, "messages")));
+                snapshot.forEach(async (document) => { await deleteDoc(doc(db, "messages", document.id)); });
             }
         });
 
-        // AUTH STATE & ONLINE STATUS
         onAuthStateChanged(auth, (user) => {
             if (user) {
-                setDoc(doc(db, "status", user.uid), {
-                    online: true,
-                    typing: false,
-                    lastSeen: serverTimestamp()
-                }, { merge: true });
+                setDoc(doc(db, "status", user.uid), { online: true, typing: false, lastSeen: serverTimestamp() }, { merge: true });
 
-                // Partner ka status sunne ke liye (Typing aur Last seen ke liye)
+                // Status Listener (Typing aur Online)
                 onSnapshot(collection(db, "status"), (snapshot) => {
                     snapshot.forEach((docSnap) => {
                         if (docSnap.id !== user.uid) {
                             const data = docSnap.data();
-                            
                             if (data.typing) {
                                 partnerStatus.innerText = "Typing... ✍️";
-                                partnerStatus.style.color = "#d81b60"; // Pink color
+                                partnerStatus.style.color = "#d81b60"; 
                             } else if (data.online) {
                                 partnerStatus.innerText = "Online 🟢";
                                 partnerStatus.style.color = "#4CAF50";
                             } else {
                                 if(data.lastSeen) {
-                                    const date = data.lastSeen.toDate();
-                                    partnerStatus.innerText = "Last seen: " + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                    partnerStatus.innerText = "Last seen: " + data.lastSeen.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                                 } else {
                                     partnerStatus.innerText = "Last seen: recently";
                                 }
@@ -250,71 +249,72 @@
             }
         });
 
-        // Background / Lock screen handle
         document.addEventListener("visibilitychange", () => {
             if (auth.currentUser) {
                 if (document.visibilityState === "hidden") {
-                    setDoc(doc(db, "status", auth.currentUser.uid), {
-                        online: false,
-                        typing: false,
-                        lastSeen: serverTimestamp()
-                    }, { merge: true });
+                    setDoc(doc(db, "status", auth.currentUser.uid), { online: false, typing: false, lastSeen: serverTimestamp() }, { merge: true });
                 } else {
-                    setDoc(doc(db, "status", auth.currentUser.uid), {
-                        online: true
-                    }, { merge: true });
+                    setDoc(doc(db, "status", auth.currentUser.uid), { online: true }, { merge: true });
+                    markMessagesAsRead(); // Wapas aane par read mark karein
                 }
             }
         });
 
-        // --- TYPING INDICATOR LOGIC ---
+        // --- TYPING INDICATOR ---
         messageInput.addEventListener('input', function() {
             this.style.height = 'auto';
             this.style.height = (this.scrollHeight) + 'px';
             if(this.value === '') this.style.height = 'auto';
 
             if (!auth.currentUser) return;
-
-            // Jab user type kare, toh status ko typing=true karein
             setDoc(doc(db, "status", auth.currentUser.uid), { typing: true }, { merge: true });
 
-            // Agar 1.5 second tak kuch na likhe, toh typing=false kar dein
             clearTimeout(typingTimeout);
             typingTimeout = setTimeout(() => {
                 setDoc(doc(db, "status", auth.currentUser.uid), { typing: false }, { merge: true });
-            }, 1500);
+            }, 2000); // 2 second baad typing off
         });
 
-        // --- SEND MESSAGE LOGIC ---
-        sendBtn.addEventListener('click', async () => {
+        // --- SEND MESSAGE ---
+        document.getElementById('send-btn').addEventListener('click', async () => {
             const text = messageInput.value.trim();
             if (text === "") return;
 
+            const msgData = {
+                text: text,
+                sender: auth.currentUser.uid,
+                read: false,
+                createdAt: serverTimestamp()
+            };
+
+            if (replyingToText) {
+                msgData.replyTo = replyingToText; // Reply save karein
+                replyingToText = null;
+                replyPreview.style.display = 'none';
+            }
+
             try {
-                await addDoc(collection(db, "messages"), {
-                    text: text,
-                    sender: auth.currentUser.uid,
-                    read: false, // Naya message hamesha unread hoga
-                    createdAt: serverTimestamp()
-                });
+                await addDoc(collection(db, "messages"), msgData);
                 messageInput.value = ""; 
                 messageInput.style.height = 'auto'; 
-                
-                // Message bhejne ke baad typing false kar dein
                 clearTimeout(typingTimeout);
                 setDoc(doc(db, "status", auth.currentUser.uid), { typing: false }, { merge: true });
-
-            } catch (e) {
-                console.error("Error: ", e);
-            }
+            } catch (e) { console.error("Error: ", e); }
         });
 
-        emojiBtn.addEventListener('click', () => {
-            messageInput.value += " ❤️ ";
-            messageInput.focus();
-        });
+        // --- READ RECEIPTS LOGIC (Mark as Read) ---
+        async function markMessagesAsRead() {
+            if (!auth.currentUser || chatScreen.style.display !== 'flex') return;
+            const snapshot = await getDocs(query(collection(db, "messages")));
+            snapshot.forEach(async (docSnap) => {
+                const data = docSnap.data();
+                if (data.sender !== auth.currentUser.uid && !data.read) {
+                    await updateDoc(doc(db, "messages", docSnap.id), { read: true });
+                }
+            });
+        }
 
-        // --- LOAD & READ RECEIPTS LOGIC ---
+        // --- LOAD MESSAGES ---
         function loadMessages(myUid) {
             const q = query(collection(db, "messages"), orderBy("createdAt", "asc"));
             
@@ -322,23 +322,14 @@
                 let hasNewMessage = false;
 
                 snapshot.docChanges().forEach((change) => {
-                    // Agar naya message aaya hai aur woh mera nahi hai
                     if (change.type === "added" && !isFirstLoad) {
-                        const data = change.doc.data();
-                        if (data.sender !== myUid) {
-                            hasNewMessage = true;
-                            
-                            // READ RECEIPT: Agar app khuli hai, toh message ko "read: true" mark kar dein
-                            if(chatScreen.style.display === 'flex') {
-                                updateDoc(doc(db, "messages", change.doc.id), { read: true });
-                            }
-                        }
+                        if (change.doc.data().sender !== myUid) hasNewMessage = true;
                     }
                 });
 
-                // Sound bajao agar naya message aaya hai
                 if (hasNewMessage && chatScreen.style.display === 'flex') {
                     playCutePop();
+                    markMessagesAsRead(); // Naya message aate hi read mark karein
                 }
 
                 isFirstLoad = false;
@@ -352,13 +343,16 @@
                         msgDiv.className = 'msg-bubble msg-sent';
                     } else {
                         msgDiv.className = 'msg-bubble msg-received';
-                        
-                        // Agar partner ka message hai aur maine nahi parha, toh jab chat khuli ho toh read mark karein
-                        if (!data.read && chatScreen.style.display === 'flex') {
-                            updateDoc(doc(db, "messages", docSnap.id), { read: true });
-                        }
                     }
                     
+                    // Reply Box Show Karein (Agar message reply hai)
+                    if (data.replyTo) {
+                        const replyBox = document.createElement('div');
+                        replyBox.className = 'msg-reply-box';
+                        replyBox.innerText = data.replyTo;
+                        msgDiv.appendChild(replyBox);
+                    }
+
                     const textSpan = document.createElement('span');
                     textSpan.innerText = data.text;
                     msgDiv.appendChild(textSpan);
@@ -374,20 +368,19 @@
                     timeSpan.className = 'msg-time';
                     timeSpan.style.margin = "0";
                     if (data.createdAt) {
-                        const date = data.createdAt.toDate();
-                        timeSpan.innerText = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        timeSpan.innerText = data.createdAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     }
                     metaDiv.appendChild(timeSpan);
 
-                    // READ RECEIPTS (Blue Ticks) - Sirf apne bheje hue message par
+                    // Read Receipts (Double Tick)
                     if (data.sender === myUid) {
                         const tickSpan = document.createElement('span');
                         tickSpan.style.fontSize = "12px";
                         if (data.read) {
-                            tickSpan.innerText = "✓✓"; // Blue ticks
-                            tickSpan.style.color = "#53bdeb"; // WhatsApp Blue
+                            tickSpan.innerText = "✓✓"; 
+                            tickSpan.style.color = "#53bdeb"; 
                         } else {
-                            tickSpan.innerText = "✓"; // Single grey tick
+                            tickSpan.innerText = "✓"; 
                             tickSpan.style.color = "rgba(255,255,255,0.7)";
                         }
                         metaDiv.appendChild(tickSpan);
@@ -395,6 +388,9 @@
 
                     msgDiv.appendChild(metaDiv);
                     messagesContainer.appendChild(msgDiv);
+                    
+                    // Har message par swipe to reply setup karein
+                    setupSwipeToReply(msgDiv, data.text);
                 });
                 
                 messagesContainer.scrollTop = messagesContainer.scrollHeight;
