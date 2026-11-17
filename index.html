@@ -7,7 +7,6 @@
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
     
-    <!-- REPLY PREVIEW & CHAT EXTRA CSS -->
     <style>
         #reply-preview {
             display: none; align-items: center; justify-content: space-between;
@@ -22,7 +21,7 @@
 </head>
 <body>
 
-    <!-- 1. NOTES SCREEN (DISGUISE) -->
+    <!-- 1. NOTES SCREEN -->
     <div id="notes-screen">
         <div class="notes-header">
             <h2>My Notes</h2>
@@ -76,7 +75,6 @@
         
         <div id="messages-container"></div>
         
-        <!-- REPLY PREVIEW AREA -->
         <div id="reply-preview">
             <span id="reply-text"></span>
             <button id="cancel-reply">✖</button>
@@ -110,19 +108,16 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // --- ROMANTIC CHIME SOUND (Web Audio API) ---
-        // Yeh ek soft aur pyari si ghanti ki awaaz banata hai
+        // --- ROMANTIC CHIME SOUND ---
         function playRomanticChime() {
             try {
                 const AudioContext = window.AudioContext || window.webkitAudioContext;
                 if (!AudioContext) return;
                 const ctx = new AudioContext();
-                
-                // Pehla Note (Soft C)
                 const osc1 = ctx.createOscillator();
                 const gain1 = ctx.createGain();
                 osc1.type = 'sine';
-                osc1.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+                osc1.frequency.setValueAtTime(523.25, ctx.currentTime);
                 gain1.gain.setValueAtTime(0.3, ctx.currentTime);
                 gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
                 osc1.connect(gain1);
@@ -130,20 +125,18 @@
                 osc1.start();
                 osc1.stop(ctx.currentTime + 0.8);
 
-                // Doosra Note (Soft E) - thoda delay ke sath
                 setTimeout(() => {
                     const osc2 = ctx.createOscillator();
                     const gain2 = ctx.createGain();
                     osc2.type = 'sine';
-                    osc2.frequency.setValueAtTime(659.25, ctx.currentTime); // E5
+                    osc2.frequency.setValueAtTime(659.25, ctx.currentTime);
                     gain2.gain.setValueAtTime(0.3, ctx.currentTime);
                     gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
                     osc2.connect(gain2);
                     gain2.connect(ctx.destination);
                     osc2.start();
                     osc2.stop(ctx.currentTime + 0.8);
-                }, 150); // 150ms ka gap
-
+                }, 150);
             } catch (e) { console.log("Sound error:", e); }
         }
 
@@ -183,7 +176,7 @@
         let typingTimeout;
         let replyingToText = null;
 
-        // --- REPLY SWIPE LOGIC ---
+        // --- REPLY SWIPE ---
         const replyPreview = document.getElementById('reply-preview');
         const replyText = document.getElementById('reply-text');
         
@@ -206,10 +199,16 @@
             }, {passive: true});
         }
 
-        // --- AUTH & STATUS ---
+        // --- LOGIN FIX ---
         document.getElementById('login-btn').addEventListener('click', () => {
             signInWithEmailAndPassword(auth, document.getElementById('email').value, document.getElementById('password').value)
-            .then(() => document.getElementById('login-error').innerText = "")
+            .then(() => {
+                document.getElementById('login-error').innerText = "";
+                // Login hote hi direct chat screen dikhao
+                loginScreen.style.display = 'none';
+                chatScreen.style.display = 'flex';
+                markMessagesAsRead();
+            })
             .catch(() => {
                 document.getElementById('login-error').innerText = "Ghalat email ya password!";
                 document.getElementById('login-error').style.color = "#d32f2f";
@@ -233,8 +232,12 @@
             }
         });
 
+        // --- AUTH STATE (Background Check) ---
         onAuthStateChanged(auth, (user) => {
             if (user) {
+                // Agar user pehle se login hai aur notes screen par hai, toh kuch na karo
+                // Jab woh secret code dale ga tab chat khulegi
+                
                 setDoc(doc(db, "status", user.uid), { online: true, typing: false, lastSeen: serverTimestamp() }, { merge: true });
 
                 onSnapshot(collection(db, "status"), (snapshot) => {
@@ -291,12 +294,11 @@
             }, 2000); 
         });
 
-        // --- SEND MESSAGE (With Romantic Sound) ---
+        // --- SEND MESSAGE ---
         document.getElementById('send-btn').addEventListener('click', async () => {
             const text = messageInput.value.trim();
             if (text === "") return;
 
-            // Bhejte waqt bhi pyari si awaaz bajao
             playRomanticChime();
 
             const msgData = {
@@ -321,11 +323,10 @@
             } catch (e) { console.error("Error: ", e); }
         });
 
-        // --- READ RECEIPTS LOGIC (FIXED) ---
+        // --- READ RECEIPTS ---
         async function markMessagesAsRead() {
             if (!auth.currentUser || chatScreen.style.display !== 'flex') return;
             try {
-                // Sirf un messages ko dhoondein jo mere nahi hain aur unread hain
                 const q = query(collection(db, "messages"), where("read", "==", false));
                 const snapshot = await getDocs(q);
                 snapshot.forEach(async (docSnap) => {
@@ -351,8 +352,8 @@
                 });
 
                 if (hasNewMessage && chatScreen.style.display === 'flex') {
-                    playRomanticChime(); // Naya message aane par sound
-                    markMessagesAsRead(); // Foran read mark karein taake samne wale ko double tick jaye
+                    playRomanticChime(); 
+                    markMessagesAsRead(); 
                 }
 
                 isFirstLoad = false;
@@ -394,13 +395,12 @@
                     }
                     metaDiv.appendChild(timeSpan);
 
-                    // Double Tick Logic
                     if (data.sender === myUid) {
                         const tickSpan = document.createElement('span');
                         tickSpan.style.fontSize = "12px";
                         if (data.read) {
                             tickSpan.innerText = "✓✓"; 
-                            tickSpan.style.color = "#53bdeb"; // Blue ticks
+                            tickSpan.style.color = "#53bdeb"; 
                         } else {
                             tickSpan.innerText = "✓"; 
                             tickSpan.style.color = "rgba(255,255,255,0.7)";
