@@ -1,10 +1,11 @@
-l@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+/* --- GOOGLE FONTS (Romantic aur Cute) --- */
+@import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600&family=Quicksand:wght@500;600&display=swap');
 
-* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Poppins', sans-serif; }
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Quicksand', sans-serif; }
 
 body { 
-    background-color: #fce4ec; 
-    color: #333; 
+    background-color: #fff0f5; 
+    color: #4a4a4a; 
     display: flex; 
     flex-direction: column; 
     height: 100vh; 
@@ -16,121 +17,96 @@ body {
 #login-screen { 
     display: flex; flex-direction: column; align-items: center; justify-content: center; 
     height: 100vh; height: 100dvh; padding: 20px; 
-    background: linear-gradient(135deg, #fce4ec, #f8bbd0);
-    position: relative; z-index: 10;
+    background: linear-gradient(135deg, #fff0f5, #ffd1dc);
 }
-#login-screen h2 { margin-bottom: 30px; color: #d81b60; font-size: 28px; font-weight: 600; }
+#login-screen h2 { 
+    margin-bottom: 30px; color: #d81b60; font-size: 36px; 
+    font-family: 'Dancing Script', cursive; 
+    text-shadow: 2px 2px 4px rgba(216, 27, 96, 0.1);
+}
 input { 
     width: 100%; max-width: 320px; padding: 15px; margin: 10px 0; 
-    border-radius: 15px; border: none; background: white; color: #333; 
-    outline: none; font-size: 15px; box-shadow: 0 4px 10px rgba(216, 27, 96, 0.1); 
+    border-radius: 20px; border: 2px solid #ffb6c1; background: white; color: #333; 
+    outline: none; font-size: 15px; font-weight: 600;
 }
 button { 
     padding: 15px; margin-top: 15px; background: #d81b60; color: white; 
-    border: none; border-radius: 15px; cursor: pointer; font-weight: 600; 
-    width: 100%; max-width: 320px; font-size: 16px; 
-    transition: 0.3s; box-shadow: 0 4px 15px rgba(216, 27, 96, 0.3);
+    border: none; border-radius: 20px; cursor: pointer; font-weight: 600; 
+    width: 100%; max-width: 320px; font-size: 16px; font-family: 'Quicksand', sans-serif;
+    transition: 0.3s; box-shadow: 0 6px 15px rgba(216, 27, 96, 0.3);
 }
 button:hover { background: #c2185b; transform: translateY(-2px); }
-.error { color: #d32f2f; margin-top: 15px; font-size: 14px; text-align: center; font-weight: 500; }
+.error { color: #d32f2f; margin-top: 15px; font-size: 14px; text-align: center; font-weight: 600; }
 
 /* --- CHAT SCREEN --- */
-#chat-screen { 
-    display: none; 
-    flex-direction: column; 
-    height: 100vh; 
-    height: 100dvh; 
-    background: #fdfafb; 
-    position: relative; /* Background layers ke liye zaroori hai */
-}
-
-/* Background Texture (Naam aur Emojis) */
-#bg-texture {
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    display: flex; 
-    flex-wrap: wrap; 
-    gap: 25px;
-    padding: 20px; 
-    justify-content: space-around; 
-    align-items: center;
-    opacity: 0.15; /* Isko 0.15 rakha hai taake messages saaf padhe jayein */
-    pointer-events: none; /* Taki background click hone se chat block na ho */
-    z-index: 0;
-    overflow: hidden;
-}
-.bg-text { font-size: 22px; font-weight: 700; color: #d81b60; white-space: nowrap; }
+#chat-screen { display: none; flex-direction: column; height: 100vh; height: 100dvh; }
 
 /* Header */
 header { 
-    background: white; padding: 15px 20px; display: flex; justify-content: space-between; 
-    align-items: center; box-shadow: 0 2px 15px rgba(0,0,0,0.05); 
-    z-index: 10; flex-shrink: 0; position: relative;
+    background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px);
+    padding: 15px 20px; display: flex; justify-content: space-between; 
+    align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.05); z-index: 10; flex-shrink: 0;
 }
-header h3 { color: #d81b60; font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
-header h3::before { content: '❤️'; font-size: 16px; }
+header h3 { 
+    color: #d81b60; font-size: 24px; font-family: 'Dancing Script', cursive; 
+    display: flex; align-items: center; gap: 8px; 
+}
 #logout-btn { 
-    background: #ffebee; padding: 8px 15px; width: auto; margin: 0; 
-    font-size: 13px; color: #d32f2f; border-radius: 10px; box-shadow: none; 
+    background: #ffe5ec; padding: 8px 15px; width: auto; margin: 0; 
+    font-size: 13px; color: #d81b60; border-radius: 15px; box-shadow: none; 
+    font-weight: 600;
 }
-#logout-btn:hover { background: #ffcdd2; }
 
-/* Messages Area */
+/* Messages Area - Romantic Background Pattern */
 #messages-container { 
-    flex: 1; 
-    min-height: 0; 
-    padding: 20px 15px; 
-    overflow-y: auto; 
-    display: flex; 
-    flex-direction: column; 
-    gap: 15px; 
-    z-index: 5; /* Taki messages background ke upar dikhein */
-    position: relative;
+    flex: 1; min-height: 0; padding: 20px 15px; overflow-y: auto; 
+    display: flex; flex-direction: column; gap: 15px; 
+    
+    /* Yeh raha naya seamless aur pyara background */
+    background-color: #fff5f7;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cg fill='%23d81b60' opacity='0.08' font-family='cursive' font-weight='bold'%3E%3Ctext x='20' y='40' font-size='22' transform='rotate(-15 20 40)'%3EJanan 💖 Mino%3C/text%3E%3Ctext x='250' y='90' font-size='18' transform='rotate(10 250 90)'%3EZargoo%3C/text%3E%3Ctext x='60' y='140' font-size='20' transform='rotate(20 60 140)'%3EMama 🧸%3C/text%3E%3Ctext x='280' y='180' font-size='18' transform='rotate(-10 280 180)'%3EJwandun%3C/text%3E%3Ctext x='30' y='240' font-size='20' transform='rotate(-5 30 240)'%3EKachocho 🐻%3C/text%3E%3Ctext x='200' y='280' font-size='18' transform='rotate(15 200 280)'%3EKatoto 🌸%3C/text%3E%3Ctext x='90' y='340' font-size='20' transform='rotate(-20 90 340)'%3EZra Sar ✨%3C/text%3E%3Ctext x='300' y='370' font-size='18' transform='rotate(5 300 370)'%3ESqaman%3C/text%3E%3Ctext x='150' y='60' font-size='18' transform='rotate(25 150 60)'%3EBacha 💕%3C/text%3E%3Ctext x='320' y='250' font-size='20' transform='rotate(-15 320 250)'%3ELove%3C/text%3E%3C/g%3E%3C/svg%3E");
+    background-size: 350px;
+    background-attachment: fixed;
 }
 
-/* Pyare Round Bubbles */
+/* Cute Round Bubbles */
 .msg-bubble { 
-    max-width: 80%; padding: 12px 18px; border-radius: 25px; font-size: 15px; 
-    line-height: 1.5; position: relative; word-wrap: break-word; 
-    display: flex; flex-direction: column; box-shadow: 0 3px 10px rgba(0,0,0,0.08); 
+    max-width: 80%; padding: 12px 18px; border-radius: 22px; font-size: 15px; 
+    line-height: 1.5; position: relative; word-wrap: break-word; font-weight: 500;
+    display: flex; flex-direction: column; box-shadow: 0 4px 12px rgba(0,0,0,0.05); 
 }
 .msg-sent { 
-    background: linear-gradient(135deg, #f06292, #d81b60); 
-    color: white; align-self: flex-end; border-bottom-right-radius: 5px; 
+    background: linear-gradient(135deg, #ff8fb1, #d81b60); color: white; 
+    align-self: flex-end; border-bottom-right-radius: 5px; 
 }
 .msg-received { 
     background: white; color: #333; align-self: flex-start; border-bottom-left-radius: 5px; 
+    border: 1px solid #ffe5ec;
 }
-.msg-time { font-size: 11px; opacity: 0.7; align-self: flex-end; margin-top: 5px; }
+.msg-time { font-size: 11px; opacity: 0.8; align-self: flex-end; margin-top: 5px; }
 
 /* Input Area (Keyboard fix ke sath) */
 #input-area { 
-    display: flex; padding: 10px 15px; background: white; gap: 10px; 
+    display: flex; padding: 12px 15px; background: rgba(255, 255, 255, 0.95); gap: 10px; 
     align-items: flex-end; padding-bottom: max(15px, env(safe-area-inset-bottom));
-    box-shadow: 0 -2px 15px rgba(0,0,0,0.05); border-radius: 30px 30px 0 0;
-    flex-shrink: 0; 
-    width: 100%;
-    z-index: 10; /* Button hamesha upar rahe */
-    position: relative;
+    box-shadow: 0 -4px 15px rgba(0,0,0,0.05); border-radius: 30px 30px 0 0;
+    flex-shrink: 0; width: 100%; z-index: 10;
 }
-
 .input-wrapper { 
-    flex: 1; display: flex; background: #f5f5f5; border-radius: 25px; 
-    padding: 5px 15px; align-items: center; border: 1px solid #eee;
+    flex: 1; display: flex; background: #fff0f5; border-radius: 25px; 
+    padding: 5px 15px; align-items: center; border: 2px solid #ffd1dc;
 }
 #message-input { 
     flex: 1; background: transparent; border: none; color: #333; 
-    padding: 12px 5px; font-size: 15px; resize: none; max-height: 100px; outline: none; margin: 0; 
+    padding: 12px 5px; font-size: 15px; resize: none; max-height: 100px; 
+    outline: none; margin: 0; font-weight: 500;
 }
-
 #send-btn { 
     width: 48px; height: 48px; border-radius: 50%; margin: 0; padding: 0; 
     display: flex; align-items: center; justify-content: center; font-size: 20px; 
     background: #d81b60; color: white; flex-shrink: 0; box-shadow: 0 4px 10px rgba(216, 27, 96, 0.3);
     min-width: 48px; 
 }
-#send-btn:hover { background: #c2185b; }
-
 .emoji-btn { 
     background: transparent; color: #f06292; font-size: 24px; 
     border: none; margin: 0; padding: 0 8px; width: auto; cursor: pointer; box-shadow: none; 
