@@ -8,7 +8,6 @@
     <link rel="manifest" href="manifest.json">
     
     <style>
-        /* Reply Preview CSS */
         #reply-preview {
             display: none; align-items: center; justify-content: space-between;
             background: #ffe5ec; padding: 10px 15px; border-radius: 10px; margin-bottom: 10px;
@@ -19,37 +18,22 @@
         .msg-reply-box { background: rgba(0,0,0,0.1); padding: 5px 8px; border-radius: 8px; margin-bottom: 6px; font-size: 12px; border-left: 3px solid #fff; opacity: 0.9; }
         .msg-received .msg-reply-box { border-left-color: #d81b60; background: rgba(216,27,96,0.1); }
 
-        /* WhatsApp Style Typing Indicator (Niche aur Blinking) */
+        /* WhatsApp Style Typing Indicator */
         #typing-indicator {
-            display: none; 
-            position: absolute;
-            bottom: 75px; /* Input area ke thoda upar */
-            left: 15px;
-            background: rgba(255, 255, 255, 0.95); 
-            padding: 12px 16px;
-            border-radius: 20px;
-            border-bottom-left-radius: 5px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-            border: 1px solid #ffe5ec;
-            z-index: 9;
-            align-items: center;
-            gap: 5px;
+            display: none; position: absolute; bottom: 75px; left: 15px;
+            background: rgba(255, 255, 255, 0.95); padding: 12px 16px;
+            border-radius: 20px; border-bottom-left-radius: 5px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #ffe5ec;
+            z-index: 9; align-items: center; gap: 5px;
         }
-        .typing-dot {
-            width: 8px; height: 8px; background: #d81b60; border-radius: 50%;
-            animation: typingBounce 1.4s infinite ease-in-out both;
-        }
+        .typing-dot { width: 8px; height: 8px; background: #d81b60; border-radius: 50%; animation: typingBounce 1.4s infinite ease-in-out both; }
         .typing-dot:nth-child(1) { animation-delay: -0.32s; }
         .typing-dot:nth-child(2) { animation-delay: -0.16s; }
-        @keyframes typingBounce {
-            0%, 80%, 100% { transform: scale(0); }
-            40% { transform: scale(1); }
-        }
+        @keyframes typingBounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
     </style>
 </head>
 <body>
 
-    <!-- 1. NOTES SCREEN -->
     <div id="notes-screen">
         <div class="notes-header">
             <h2>My Notes</h2>
@@ -62,7 +46,6 @@
         </div>
     </div>
 
-    <!-- 2. LOGIN SCREEN -->
     <div id="login-screen" style="display: none;">
         <h2>Humari Chat 💖</h2>
         <input type="email" id="email" placeholder="Email daalein..." required>
@@ -71,7 +54,6 @@
         <p id="login-error" class="error"></p>
     </div>
 
-    <!-- 3. CHAT SCREEN -->
     <div id="chat-screen" style="display: none;">
         <div id="love-background">
             <span class="bg-text" style="top: 5%; left: 5%;">Janan loves Mino 💕</span>
@@ -103,7 +85,6 @@
         
         <div id="messages-container"></div>
         
-        <!-- WhatsApp Style Typing Indicator -->
         <div id="typing-indicator">
             <div class="typing-dot"></div>
             <div class="typing-dot"></div>
@@ -124,7 +105,6 @@
         </div>
     </div>
 
-    <!-- FIREBASE SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
@@ -143,7 +123,6 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // --- ROMANTIC CHIME SOUND ---
         function playRomanticChime() {
             try {
                 const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -151,48 +130,30 @@
                 const ctx = new AudioContext();
                 const osc1 = ctx.createOscillator();
                 const gain1 = ctx.createGain();
-                osc1.type = 'sine';
-                osc1.frequency.setValueAtTime(523.25, ctx.currentTime);
-                gain1.gain.setValueAtTime(0.3, ctx.currentTime);
-                gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
-                osc1.connect(gain1);
-                gain1.connect(ctx.destination);
-                osc1.start();
-                osc1.stop(ctx.currentTime + 0.8);
-
+                osc1.type = 'sine'; osc1.frequency.setValueAtTime(523.25, ctx.currentTime);
+                gain1.gain.setValueAtTime(0.3, ctx.currentTime); gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
+                osc1.connect(gain1); gain1.connect(ctx.destination); osc1.start(); osc1.stop(ctx.currentTime + 0.8);
                 setTimeout(() => {
-                    const osc2 = ctx.createOscillator();
-                    const gain2 = ctx.createGain();
-                    osc2.type = 'sine';
-                    osc2.frequency.setValueAtTime(659.25, ctx.currentTime);
-                    gain2.gain.setValueAtTime(0.3, ctx.currentTime);
-                    gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
-                    osc2.connect(gain2);
-                    gain2.connect(ctx.destination);
-                    osc2.start();
-                    osc2.stop(ctx.currentTime + 0.8);
+                    const osc2 = ctx.createOscillator(); const gain2 = ctx.createGain();
+                    osc2.type = 'sine'; osc2.frequency.setValueAtTime(659.25, ctx.currentTime);
+                    gain2.gain.setValueAtTime(0.3, ctx.currentTime); gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
+                    osc2.connect(gain2); gain2.connect(ctx.destination); osc2.start(); osc2.stop(ctx.currentTime + 0.8);
                 }, 150);
             } catch (e) { console.log("Sound error:", e); }
         }
 
-        // --- NOTES APP (DISGUISE) ---
+        // --- NOTES APP ---
         const notesScreen = document.getElementById('notes-screen');
         const noteContent = document.getElementById('note-content');
-        const saveNoteBtn = document.getElementById('save-note-btn');
         const SECRET_CODE = "Janan"; 
 
         document.getElementById('current-date').innerText = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
-        saveNoteBtn.addEventListener('click', () => {
+        document.getElementById('save-note-btn').addEventListener('click', () => {
             if (noteContent.value.trim() === SECRET_CODE) {
-                noteContent.value = ""; 
-                notesScreen.style.display = 'none';
-                if(auth.currentUser) {
-                    document.getElementById('chat-screen').style.display = 'flex';
-                    markMessagesAsRead(); 
-                } else {
-                    document.getElementById('login-screen').style.display = 'flex';
-                }
+                noteContent.value = ""; notesScreen.style.display = 'none';
+                if(auth.currentUser) { document.getElementById('chat-screen').style.display = 'flex'; markMessagesAsRead(); } 
+                else { document.getElementById('login-screen').style.display = 'flex'; }
                 return;
             }
             noteContent.value = "";
@@ -206,19 +167,18 @@
         const messageInput = document.getElementById('message-input');
         const messagesContainer = document.getElementById('messages-container');
         const partnerStatus = document.getElementById('partner-status');
-        const typingIndicator = document.getElementById('typing-indicator'); // Naya element
+        const typingIndicator = document.getElementById('typing-indicator');
         
         let isFirstLoad = true; 
         let typingTimeout;
         let replyingToText = null;
+        let isTyping = false; // NAYA: Taki baar baar database write na ho
 
-        // --- REPLY SWIPE ---
         const replyPreview = document.getElementById('reply-preview');
         const replyText = document.getElementById('reply-text');
         
         document.getElementById('cancel-reply').addEventListener('click', () => {
-            replyingToText = null;
-            replyPreview.style.display = 'none';
+            replyingToText = null; replyPreview.style.display = 'none';
         });
 
         function setupSwipeToReply(element, text) {
@@ -227,22 +187,17 @@
             element.addEventListener('touchend', (e) => {
                 let endX = e.changedTouches[0].clientX;
                 if (endX - startX > 60) { 
-                    replyingToText = text;
-                    replyText.innerText = text;
-                    replyPreview.style.display = 'flex';
-                    messageInput.focus();
+                    replyingToText = text; replyText.innerText = text;
+                    replyPreview.style.display = 'flex'; messageInput.focus();
                 }
             }, {passive: true});
         }
 
-        // --- LOGIN FIX ---
         document.getElementById('login-btn').addEventListener('click', () => {
             signInWithEmailAndPassword(auth, document.getElementById('email').value, document.getElementById('password').value)
             .then(() => {
                 document.getElementById('login-error').innerText = "";
-                loginScreen.style.display = 'none';
-                chatScreen.style.display = 'flex';
-                markMessagesAsRead();
+                loginScreen.style.display = 'none'; chatScreen.style.display = 'flex'; markMessagesAsRead();
             })
             .catch(() => {
                 document.getElementById('login-error').innerText = "Ghalat email ya password!";
@@ -254,11 +209,8 @@
             if(auth.currentUser) {
                 await setDoc(doc(db, "status", auth.currentUser.uid), { online: false, typing: false, lastSeen: serverTimestamp() }, { merge: true });
             }
-            signOut(auth); 
-            chatScreen.style.display = 'none';
-            notesScreen.style.display = 'flex';
-            messageInput.value = "";
-            typingIndicator.style.display = 'none';
+            signOut(auth); chatScreen.style.display = 'none'; notesScreen.style.display = 'flex';
+            messageInput.value = ""; typingIndicator.style.display = 'none'; isTyping = false;
         });
 
         document.getElementById('clear-chat-btn').addEventListener('click', async () => {
@@ -268,7 +220,6 @@
             }
         });
 
-        // --- AUTH STATE ---
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 setDoc(doc(db, "status", user.uid), { online: true, typing: false, lastSeen: serverTimestamp() }, { merge: true });
@@ -277,42 +228,32 @@
                     snapshot.forEach((docSnap) => {
                         if (docSnap.id !== user.uid) {
                             const data = docSnap.data();
-                            
-                            // WhatsApp style typing check
                             if (data.typing) {
-                                typingIndicator.style.display = 'flex'; // Dots show karein
-                                partnerStatus.innerText = "Online 🟢"; // Header mein Online hi rahega
-                                partnerStatus.style.color = "#4CAF50";
+                                typingIndicator.style.display = 'flex';
+                                partnerStatus.innerText = "Online 🟢"; partnerStatus.style.color = "#4CAF50";
                             } else {
-                                typingIndicator.style.display = 'none'; // Dots hide karein
-                                
+                                typingIndicator.style.display = 'none';
                                 if (data.online) {
-                                    partnerStatus.innerText = "Online 🟢";
-                                    partnerStatus.style.color = "#4CAF50";
+                                    partnerStatus.innerText = "Online 🟢"; partnerStatus.style.color = "#4CAF50";
                                 } else {
                                     if(data.lastSeen) {
                                         partnerStatus.innerText = "Last seen: " + data.lastSeen.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                                    } else {
-                                        partnerStatus.innerText = "Last seen: recently";
-                                    }
+                                    } else { partnerStatus.innerText = "Last seen: recently"; }
                                     partnerStatus.style.color = "#888";
                                 }
                             }
                         }
                     });
                 });
-
                 loadMessages(user.uid);
-            } else {
-                messagesContainer.innerHTML = '';
-                typingIndicator.style.display = 'none';
-            }
+            } else { messagesContainer.innerHTML = ''; typingIndicator.style.display = 'none'; }
         });
 
         document.addEventListener("visibilitychange", () => {
             if (auth.currentUser) {
                 if (document.visibilityState === "hidden") {
                     setDoc(doc(db, "status", auth.currentUser.uid), { online: false, typing: false, lastSeen: serverTimestamp() }, { merge: true });
+                    isTyping = false;
                 } else {
                     setDoc(doc(db, "status", auth.currentUser.uid), { online: true }, { merge: true });
                     markMessagesAsRead(); 
@@ -320,19 +261,22 @@
             }
         });
 
-        // --- TYPING INDICATOR SEND LOGIC ---
+        // --- TYPING INDICATOR (OPTIMIZED) ---
         messageInput.addEventListener('input', function() {
-            this.style.height = 'auto';
-            this.style.height = (this.scrollHeight) + 'px';
+            this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px';
             if(this.value === '') this.style.height = 'auto';
-
             if (!auth.currentUser) return;
-            setDoc(doc(db, "status", auth.currentUser.uid), { typing: true }, { merge: true });
-
+            
+            // Agar pehle se typing nahi hai, tabhi database mein save karein (Limit bachane ke liye)
+            if (!isTyping) {
+                setDoc(doc(db, "status", auth.currentUser.uid), { typing: true }, { merge: true });
+                isTyping = true;
+            }
             clearTimeout(typingTimeout);
             typingTimeout = setTimeout(() => {
                 setDoc(doc(db, "status", auth.currentUser.uid), { typing: false }, { merge: true });
-            }, 2000); 
+                isTyping = false;
+            }, 1500); 
         });
 
         // --- SEND MESSAGE ---
@@ -343,28 +287,25 @@
             playRomanticChime();
 
             const msgData = {
-                text: text,
-                sender: auth.currentUser.uid,
-                read: false,
-                createdAt: serverTimestamp()
+                text: text, sender: auth.currentUser.uid, read: false, createdAt: serverTimestamp()
             };
 
             if (replyingToText) {
-                msgData.replyTo = replyingToText; 
-                replyingToText = null;
-                replyPreview.style.display = 'none';
+                msgData.replyTo = replyingToText; replyingToText = null; replyPreview.style.display = 'none';
             }
 
             try {
                 await addDoc(collection(db, "messages"), msgData);
-                messageInput.value = ""; 
-                messageInput.style.height = 'auto'; 
+                messageInput.value = ""; messageInput.style.height = 'auto'; 
                 clearTimeout(typingTimeout);
                 setDoc(doc(db, "status", auth.currentUser.uid), { typing: false }, { merge: true });
-            } catch (e) { console.error("Error: ", e); }
+                isTyping = false;
+            } catch (e) { 
+                console.error("Error: ", e); 
+                alert("Message send nahi ho saka! Error: " + e.message); // Alert lagaya hai taake masla pata chale
+            }
         });
 
-        // --- READ RECEIPTS ---
         async function markMessagesAsRead() {
             if (!auth.currentUser || chatScreen.style.display !== 'flex') return;
             try {
@@ -379,81 +320,48 @@
             } catch(e) { console.log("Read error", e); }
         }
 
-        // --- LOAD MESSAGES ---
         function loadMessages(myUid) {
             const q = query(collection(db, "messages"), orderBy("createdAt", "asc"));
-            
             onSnapshot(q, (snapshot) => {
                 let hasNewMessage = false;
-
                 snapshot.docChanges().forEach((change) => {
                     if (change.type === "added" && !isFirstLoad) {
                         if (change.doc.data().sender !== myUid) hasNewMessage = true;
                     }
                 });
-
                 if (hasNewMessage && chatScreen.style.display === 'flex') {
-                    playRomanticChime(); 
-                    markMessagesAsRead(); 
+                    playRomanticChime(); markMessagesAsRead(); 
                 }
-
-                isFirstLoad = false;
-                messagesContainer.innerHTML = ""; 
+                isFirstLoad = false; messagesContainer.innerHTML = ""; 
                 
                 snapshot.forEach((docSnap) => {
-                    const data = docSnap.data();
-                    const msgDiv = document.createElement('div');
-                    
-                    if (data.sender === myUid) {
-                        msgDiv.className = 'msg-bubble msg-sent';
-                    } else {
-                        msgDiv.className = 'msg-bubble msg-received';
-                    }
+                    const data = docSnap.data(); const msgDiv = document.createElement('div');
+                    if (data.sender === myUid) { msgDiv.className = 'msg-bubble msg-sent'; } 
+                    else { msgDiv.className = 'msg-bubble msg-received'; }
                     
                     if (data.replyTo) {
-                        const replyBox = document.createElement('div');
-                        replyBox.className = 'msg-reply-box';
-                        replyBox.innerText = data.replyTo;
-                        msgDiv.appendChild(replyBox);
+                        const replyBox = document.createElement('div'); replyBox.className = 'msg-reply-box';
+                        replyBox.innerText = data.replyTo; msgDiv.appendChild(replyBox);
                     }
 
-                    const textSpan = document.createElement('span');
-                    textSpan.innerText = data.text;
-                    msgDiv.appendChild(textSpan);
+                    const textSpan = document.createElement('span'); textSpan.innerText = data.text; msgDiv.appendChild(textSpan);
 
                     const metaDiv = document.createElement('div');
-                    metaDiv.style.display = "flex";
-                    metaDiv.style.alignItems = "center";
-                    metaDiv.style.justifyContent = "flex-end";
-                    metaDiv.style.gap = "5px";
-                    metaDiv.style.marginTop = "5px";
+                    metaDiv.style.display = "flex"; metaDiv.style.alignItems = "center";
+                    metaDiv.style.justifyContent = "flex-end"; metaDiv.style.gap = "5px"; metaDiv.style.marginTop = "5px";
 
-                    const timeSpan = document.createElement('span');
-                    timeSpan.className = 'msg-time';
-                    timeSpan.style.margin = "0";
-                    if (data.createdAt) {
-                        timeSpan.innerText = data.createdAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    }
+                    const timeSpan = document.createElement('span'); timeSpan.className = 'msg-time'; timeSpan.style.margin = "0";
+                    if (data.createdAt) { timeSpan.innerText = data.createdAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
                     metaDiv.appendChild(timeSpan);
 
                     if (data.sender === myUid) {
-                        const tickSpan = document.createElement('span');
-                        tickSpan.style.fontSize = "12px";
-                        if (data.read) {
-                            tickSpan.innerText = "✓✓"; 
-                            tickSpan.style.color = "#53bdeb"; 
-                        } else {
-                            tickSpan.innerText = "✓"; 
-                            tickSpan.style.color = "rgba(255,255,255,0.7)";
-                        }
+                        const tickSpan = document.createElement('span'); tickSpan.style.fontSize = "12px";
+                        if (data.read) { tickSpan.innerText = "✓✓"; tickSpan.style.color = "#53bdeb"; } 
+                        else { tickSpan.innerText = "✓"; tickSpan.style.color = "rgba(255,255,255,0.7)"; }
                         metaDiv.appendChild(tickSpan);
                     }
-
-                    msgDiv.appendChild(metaDiv);
-                    messagesContainer.appendChild(msgDiv);
-                    setupSwipeToReply(msgDiv, data.text);
+                    msgDiv.appendChild(metaDiv); messagesContainer.appendChild(msgDiv); setupSwipeToReply(msgDiv, data.text);
                 });
-                
                 messagesContainer.scrollTop = messagesContainer.scrollHeight;
             });
         }
