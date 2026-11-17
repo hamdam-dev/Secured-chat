@@ -1,5 +1,4 @@
-/* --- GOOGLE FONTS (Romantic aur Cute) --- */
-@import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&family=Quicksand:wght@500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&family=Quicksand:wght@500;600&family=Caveat:wght@500&display=swap');
 
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Quicksand', sans-serif; }
 
@@ -13,7 +12,68 @@ body {
     overflow: hidden; 
 }
 
-/* --- LOGIN SCREEN --- */
+/* =========================================
+   1. NOTES APP DESIGN (DISGUISE)
+   ========================================= */
+#notes-screen {
+    display: flex; flex-direction: column; height: 100vh; height: 100dvh;
+    background: #fff9c4; /* Notepad yellow color */
+    padding: 20px; 
+    background-image: repeating-linear-gradient(transparent, transparent 39px, #e0e0e0 39px, #e0e0e0 40px);
+    background-position: 0 80px; /* Text lines */
+}
+.notes-header {
+    border-bottom: 2px solid #ffb300;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.notes-header h2 {
+    font-family: 'Caveat', cursive; font-size: 32px; color: #333; font-weight: 700;
+}
+.notes-header .date {
+    font-size: 14px; color: #666; font-weight: 600;
+}
+#note-content {
+    flex: 1;
+    width: 100%;
+    background: transparent;
+    border: none;
+    font-family: 'Caveat', cursive;
+    font-size: 24px;
+    line-height: 40px; /* Matches the ruled lines */
+    color: #222;
+    resize: none;
+    outline: none;
+}
+.notes-footer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 20px;
+}
+#save-note-btn {
+    background: #ffb300;
+    color: #333;
+    font-weight: 700;
+    border: none;
+    padding: 15px;
+    border-radius: 10px;
+    width: 100%;
+    max-width: 300px;
+    font-size: 16px;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(255, 179, 0, 0.3);
+}
+#note-status {
+    margin-top: 10px; font-size: 14px; font-weight: 600;
+}
+
+/* =========================================
+   2. LOGIN SCREEN
+   ========================================= */
 #login-screen { 
     display: flex; flex-direction: column; align-items: center; justify-content: center; 
     height: 100vh; height: 100dvh; padding: 20px; 
@@ -29,19 +89,19 @@ input {
     border-radius: 20px; border: 2px solid #ffb6c1; background: white; color: #333; 
     outline: none; font-size: 15px; font-weight: 600;
 }
-button { 
+#login-btn { 
     padding: 15px; margin-top: 15px; background: #d81b60; color: white; 
     border: none; border-radius: 20px; cursor: pointer; font-weight: 600; 
     width: 100%; max-width: 320px; font-size: 16px; font-family: 'Quicksand', sans-serif;
     transition: 0.3s; box-shadow: 0 6px 15px rgba(216, 27, 96, 0.3);
 }
-button:hover { background: #c2185b; transform: translateY(-2px); }
 .error { color: #d32f2f; margin-top: 15px; font-size: 14px; text-align: center; font-weight: 600; }
 
-/* --- CHAT SCREEN --- */
+/* =========================================
+   3. CHAT SCREEN
+   ========================================= */
 #chat-screen { display: none; flex-direction: column; height: 100vh; height: 100dvh; position: relative; }
 
-/* Header */
 header { 
     background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px);
     padding: 15px 20px; display: flex; justify-content: space-between; 
@@ -57,46 +117,26 @@ header h3 {
     font-weight: 600;
 }
 
-/* Background Names and Emojis */
 #love-background {
     position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-    pointer-events: none; /* Taake chat block na ho */
-    z-index: 1;
-    overflow: hidden;
+    pointer-events: none; z-index: 1; overflow: hidden;
 }
-
 .bg-text {
-    position: absolute;
-    font-family: 'Dancing Script', cursive;
-    font-size: 22px;
-    font-weight: 700;
-    color: #f48fb1; /* Soft Pink */
-    opacity: 0.4; /* Halka sa transparent taake messages saaf dikhein */
-    transform: rotate(-15deg);
-    white-space: nowrap;
+    position: absolute; font-family: 'Dancing Script', cursive;
+    font-size: 22px; font-weight: 700; color: #f48fb1; 
+    opacity: 0.4; transform: rotate(-15deg); white-space: nowrap;
 }
-
-.bg-emoji {
-    position: absolute;
-    font-size: 26px;
-    opacity: 0.5;
-    transform: rotate(10deg);
-}
-
-/* Alag alag naamon ko alag rotation dena taake natural lage */
+.bg-emoji { position: absolute; font-size: 26px; opacity: 0.5; transform: rotate(10deg); }
 .bg-text:nth-child(even) { transform: rotate(15deg); color: #ce93d8; }
 .bg-text:nth-child(3n) { transform: rotate(-5deg); color: #f06292; }
 .bg-emoji:nth-child(even) { transform: rotate(-20deg); }
 
-/* Messages Area */
 #messages-container { 
     flex: 1; min-height: 0; padding: 20px 15px; overflow-y: auto; 
     display: flex; flex-direction: column; gap: 15px; 
-    z-index: 5; /* Messages background ke upar rahenge */
-    position: relative;
+    z-index: 5; position: relative;
 }
 
-/* Cute Round Bubbles */
 .msg-bubble { 
     max-width: 80%; padding: 12px 18px; border-radius: 22px; font-size: 15px; 
     line-height: 1.5; position: relative; word-wrap: break-word; font-weight: 600;
@@ -112,7 +152,6 @@ header h3 {
 }
 .msg-time { font-size: 11px; opacity: 0.8; align-self: flex-end; margin-top: 5px; font-weight: 500;}
 
-/* Input Area (Keyboard fix ke sath) */
 #input-area { 
     display: flex; padding: 12px 15px; background: rgba(255, 255, 255, 0.95); gap: 10px; 
     align-items: flex-end; padding-bottom: max(15px, env(safe-area-inset-bottom));
@@ -137,4 +176,5 @@ header h3 {
 .emoji-btn { 
     background: transparent; color: #f06292; font-size: 24px; 
     border: none; margin: 0; padding: 0 8px; width: auto; cursor: pointer; box-shadow: none; 
+}h: auto; cursor: pointer; box-shadow: none; 
 }
