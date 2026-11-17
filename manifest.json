@@ -1,0 +1,15 @@
+{
+  "name": "Notes",
+  "short_name": "Notes",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#fff9c4",
+  "theme_color": "#fff9c4",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2991/2991112.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
