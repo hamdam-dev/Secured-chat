@@ -8,7 +8,6 @@
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
         body { background-color: #121212; color: white; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         
-        /* Login Screen */
         #login-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; padding: 20px; }
         #login-screen h2 { margin-bottom: 20px; color: #4CAF50; }
         input { width: 100%; max-width: 300px; padding: 12px; margin: 8px 0; border-radius: 8px; border: 1px solid #333; background: #1e1e1e; color: white; outline: none; }
@@ -16,7 +15,6 @@
         button:hover { background: #45a049; }
         .error { color: #ff5252; margin-top: 10px; font-size: 14px; text-align: center; }
 
-        /* Chat Screen */
         #chat-screen { display: none; flex-direction: column; height: 100vh; }
         header { background: #1e1e1e; padding: 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; }
         header h3 { color: #4CAF50; font-size: 18px; }
@@ -35,7 +33,6 @@
 </head>
 <body>
 
-    <!-- LOGIN SCREEN -->
     <div id="login-screen">
         <h2>Secure Chat</h2>
         <input type="email" id="email" placeholder="Email (aapka ya gf ka)" required>
@@ -44,7 +41,6 @@
         <p id="login-error" class="error"></p>
     </div>
 
-    <!-- CHAT SCREEN -->
     <div id="chat-screen">
         <header>
             <h3>Humari Chat</h3>
@@ -57,29 +53,24 @@
         </div>
     </div>
 
-    <!-- FIREBASE SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
-        // Aapka Firebase Config yahan paste kiya gaya hai
         const firebaseConfig = {
             apiKey: "AIzaSyBxiEXvK-xeepTuYRYdizeFqNufzb--3Ac",
             authDomain: "chat-8e3ff.firebaseapp.com",
             projectId: "chat-8e3ff",
             storageBucket: "chat-8e3ff.firebasestorage.app",
             messagingSenderId: "576628137714",
-            appId: "1:576628137714:web:551e0f79bb8cd5df9b7a6b",
-            measurementId: "G-K5BK57RCR7"
+            appId: "1:576628137714:web:551e0f79bb8cd5df9b7a6b"
         };
 
-        // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // Elements
         const loginScreen = document.getElementById('login-screen');
         const chatScreen = document.getElementById('chat-screen');
         const loginBtn = document.getElementById('login-btn');
@@ -89,7 +80,6 @@
         const messagesContainer = document.getElementById('messages-container');
         const loginError = document.getElementById('login-error');
 
-        // LOGIN
         loginBtn.addEventListener('click', () => {
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
@@ -100,12 +90,10 @@
                 .catch((error) => { loginError.innerText = "Ghalat email ya password!"; });
         });
 
-        // LOGOUT
         logoutBtn.addEventListener('click', () => {
             signOut(auth);
         });
 
-        // AUTH STATE (Check karta hai ke user login hai ya nahi)
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 loginScreen.style.display = 'none';
@@ -118,7 +106,6 @@
             }
         });
 
-        // SEND MESSAGE
         sendBtn.addEventListener('click', async () => {
             const text = messageInput.value.trim();
             if (text === "") return;
@@ -135,22 +122,19 @@
             }
         });
 
-        // ENTER key se message send karna
         messageInput.addEventListener('keypress', function (e) {
             if (e.key === 'Enter') sendBtn.click();
         });
 
-        // LOAD MESSAGES (Realtime)
         function loadMessages(myUid) {
-            const q = query(collection(db, "messages"), orderBy("createdAt", "asc"));
+            const q = query(collection(db, "messages"), orderBy("createdAt"));
             
             onSnapshot(q, (snapshot) => {
-                messagesContainer.innerHTML = ""; // Pehle clear karein
+                messagesContainer.innerHTML = ""; 
                 snapshot.forEach((doc) => {
                     const data = doc.data();
                     const msgDiv = document.createElement('div');
                     
-                    // Check karein ke message maine bheja hai ya gf ne
                     if (data.sender === myUid) {
                         msgDiv.className = 'msg-bubble msg-sent';
                     } else {
@@ -161,7 +145,6 @@
                     messagesContainer.appendChild(msgDiv);
                 });
                 
-                // Hamesha neeche scroll rakhein
                 messagesContainer.scrollTop = messagesContainer.scrollHeight;
             });
         }
