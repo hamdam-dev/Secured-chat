@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
-    <title>Notes</title> <!-- Naam Notes rakha hai -->
+    <title>Notes</title> <!-- Disguise Name -->
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
 </head>
@@ -15,9 +15,7 @@
             <h2>My Notes</h2>
             <span class="date" id="current-date"></span>
         </div>
-        
         <textarea id="note-content" placeholder="Yahan apne notes likhein..."></textarea>
-        
         <div class="notes-footer">
             <button id="save-note-btn">Save Note</button>
             <p id="note-status"></p>
@@ -50,17 +48,17 @@
             <span class="bg-text" style="top: 50%; right: 40%;">Sqaman 💕</span>
             <span class="bg-text" style="top: 70%; left: 30%;">Jan 💖</span>
             <span class="bg-text" style="top: 90%; right: 30%;">Mino ❤️</span>
-            <span class="bg-emoji" style="top: 20%; left: 25%;">💕</span>
-            <span class="bg-emoji" style="top: 40%; right: 25%;">🥰</span>
-            <span class="bg-emoji" style="top: 60%; left: 35%;">🌸</span>
-            <span class="bg-emoji" style="top: 80%; right: 20%;">🧸</span>
-            <span class="bg-emoji" style="top: 15%; right: 35%;">✨</span>
-            <span class="bg-emoji" style="top: 65%; right: 45%;">💖</span>
         </div>
 
         <header>
-            <h3>❤️ Janan & Mino</h3>
-            <button id="logout-btn">Logout</button>
+            <div class="header-left">
+                <h3>❤️ Janan & Mino</h3>
+                <span id="partner-status">Offline</span> <!-- Online Status Yahan Dikhega -->
+            </div>
+            <div class="header-right">
+                <button id="clear-chat-btn" title="Clear Chat">🗑️</button> <!-- Clear Chat Button -->
+                <button id="logout-btn">Logout</button>
+            </div>
         </header>
         
         <div id="messages-container"></div>
@@ -74,11 +72,14 @@
         </div>
     </div>
 
+    <!-- CUTE SOUND AUDIO -->
+    <audio id="msg-sound" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_224f789c6d.mp3?filename=message-pop-109389.mp3" preload="auto"></audio>
+
     <!-- FIREBASE SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, setDoc, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBxiEXvK-xeepTuYRYdizeFqNufzb--3Ac",
@@ -98,22 +99,15 @@
         const noteContent = document.getElementById('note-content');
         const saveNoteBtn = document.getElementById('save-note-btn');
         const noteStatus = document.getElementById('note-status');
-        
-        // SECRET CODE YAHAN SET KAREIN (Jo aap note mein likhenge)
         const SECRET_CODE = "Janan"; 
 
-        // Aaj ki date dikhane ke liye
         document.getElementById('current-date').innerText = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
         saveNoteBtn.addEventListener('click', () => {
             const text = noteContent.value.trim();
-
-            // 1. Check if Secret Code is entered
             if (text === SECRET_CODE) {
-                noteContent.value = ""; // Clear notes
+                noteContent.value = ""; 
                 notesScreen.style.display = 'none';
-                
-                // Check if user is already logged in
                 if(auth.currentUser) {
                     document.getElementById('chat-screen').style.display = 'flex';
                 } else {
@@ -121,30 +115,37 @@
                 }
                 return;
             }
-
-            // 2. Normal Note Save Logic
             if (text === "") {
                 noteStatus.innerText = "Note khali hai!";
                 noteStatus.style.color = "red";
             } else {
                 noteStatus.innerText = "Note Saved Successfully!";
                 noteStatus.style.color = "green";
-                noteContent.value = ""; // Clear note
+                noteContent.value = ""; 
             }
-
             setTimeout(() => { noteStatus.innerText = ""; }, 2000);
         });
 
-        // --- CHAT LOGIC ---
+        // --- CHAT & STATUS LOGIC ---
         const loginScreen = document.getElementById('login-screen');
         const chatScreen = document.getElementById('chat-screen');
         const loginBtn = document.getElementById('login-btn');
         const logoutBtn = document.getElementById('logout-btn');
         const sendBtn = document.getElementById('send-btn');
+        const clearChatBtn = document.getElementById('clear-chat-btn');
         const messageInput = document.getElementById('message-input');
         const messagesContainer = document.getElementById('messages-container');
         const loginError = document.getElementById('login-error');
         const emojiBtn = document.getElementById('emoji-btn');
+        const partnerStatus = document.getElementById('partner-status');
+        const msgSound = document.getElementById('msg-sound');
+
+        let isFirstLoad = true; // Taki purane messages par sound na baje
+
+        // Audio unlock for mobile browsers (User interaction ke baad hi sound baj sakti hai)
+        document.body.addEventListener('click', () => {
+            msgSound.play().then(() => { msgSound.pause(); msgSound.currentTime = 0; }).catch(e => {});
+        }, { once: true });
 
         loginBtn.addEventListener('click', () => {
             const email = document.getElementById('email').value;
@@ -160,19 +161,80 @@
                 });
         });
 
-        logoutBtn.addEventListener('click', () => { 
+        // Logout aur Online Status Update
+        logoutBtn.addEventListener('click', async () => { 
+            if(auth.currentUser) {
+                await setDoc(doc(db, "status", auth.currentUser.uid), {
+                    online: false,
+                    lastSeen: serverTimestamp()
+                }, { merge: true });
+            }
             signOut(auth); 
-            // Logout hote hi wapas Notes screen par bhej dein
             chatScreen.style.display = 'none';
             notesScreen.style.display = 'flex';
             noteContent.value = "";
         });
 
+        // --- CLEAR CHAT LOGIC ---
+        clearChatBtn.addEventListener('click', async () => {
+            if(confirm("Kya aap waqai saari chat delete karna chahte hain? Yeh dono taraf se delete ho jayegi.")) {
+                try {
+                    const q = query(collection(db, "messages"));
+                    const snapshot = await getDocs(q);
+                    snapshot.forEach(async (document) => {
+                        await deleteDoc(doc(db, "messages", document.id));
+                    });
+                } catch(e) {
+                    console.error("Error deleting messages: ", e);
+                }
+            }
+        });
+
+        // AUTH STATE & ONLINE STATUS
         onAuthStateChanged(auth, (user) => {
             if (user) {
+                // 1. Apna status Online karein
+                setDoc(doc(db, "status", user.uid), {
+                    online: true,
+                    lastSeen: serverTimestamp()
+                }, { merge: true });
+
+                // 2. Partner ka status sunne ke liye
+                onSnapshot(collection(db, "status"), (snapshot) => {
+                    snapshot.forEach((doc) => {
+                        // Agar woh document meri ID ka nahi hai, toh woh partner ka hai
+                        if (doc.id !== user.uid) {
+                            const data = doc.data();
+                            if (data.online) {
+                                partnerStatus.innerText = "Online 🟢";
+                                partnerStatus.style.color = "#4CAF50";
+                            } else {
+                                if(data.lastSeen) {
+                                    const date = data.lastSeen.toDate();
+                                    partnerStatus.innerText = "Last seen: " + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                } else {
+                                    partnerStatus.innerText = "Offline";
+                                }
+                                partnerStatus.style.color = "#f44336";
+                            }
+                        }
+                    });
+                });
+
+                // 3. Messages Load karein
                 loadMessages(user.uid);
             } else {
                 messagesContainer.innerHTML = '';
+            }
+        });
+
+        // Close tab/logout pe offline mark karna
+        window.addEventListener('beforeunload', () => {
+            if(auth.currentUser) {
+                setDoc(doc(db, "status", auth.currentUser.uid), {
+                    online: false,
+                    lastSeen: serverTimestamp()
+                }, { merge: true });
             }
         });
 
@@ -208,7 +270,25 @@
             const q = query(collection(db, "messages"), orderBy("createdAt", "asc"));
             
             onSnapshot(q, (snapshot) => {
+                let hasNewMessage = false;
+
+                snapshot.docChanges().forEach((change) => {
+                    if (change.type === "added" && !isFirstLoad) {
+                        const data = change.doc.data();
+                        if (data.sender !== myUid) {
+                            hasNewMessage = true;
+                        }
+                    }
+                });
+
+                // Agar naya message aaya hai aur hum chat screen par hain, toh sound bajao
+                if (hasNewMessage && chatScreen.style.display === 'flex') {
+                    msgSound.play().catch(e => console.log("Audio play blocked"));
+                }
+
+                isFirstLoad = false;
                 messagesContainer.innerHTML = ""; 
+                
                 snapshot.forEach((doc) => {
                     const data = doc.data();
                     const msgDiv = document.createElement('div');
