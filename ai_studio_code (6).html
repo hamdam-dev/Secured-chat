@@ -1,0 +1,2540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
+    <title>Notes</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+
+    <style>
+        :root {
+            --bg-chat: linear-gradient(165deg, #fff0f5 0%, #ffe4ef 55%, #ffd8e8 100%);
+            --header-bg: rgba(255, 255, 255, 0.93);
+            --accent: #d81b60;
+            --accent-2: #ff8fb1;
+            --bubble-sent: linear-gradient(135deg, #ff8fb1, #d81b60);
+            --bubble-rec: rgba(255, 255, 255, 0.96);
+            --text-main: #333333;
+            --text-muted: #777777;
+            --input-bg: #fff5f8;
+            --border-soft: #ffd1dc;
+            --reply-bg: rgba(216, 27, 96, 0.1);
+            --bg-name-color: #f48fb1;
+        }
+
+        /* === 11 MOOD THEMES (LIGHT) === */
+        #chat-screen[data-mood="happy"]    { --bg-chat: linear-gradient(165deg, #fff0f5, #ffe0ec); --accent: #d81b60; --accent-2: #ff8fb1; --bubble-sent: linear-gradient(135deg, #ff8fb1, #d81b60); --input-bg: #fff5f8; --border-soft: #ffd1dc; --bg-name-color: #f48fb1; }
+        #chat-screen[data-mood="romantic"] { --bg-chat: linear-gradient(165deg, #ffe6f0, #fbcfe8 60%, #f9a8d4); --accent: #be185d; --accent-2: #ec4899; --bubble-sent: linear-gradient(135deg, #f472b6, #9d174d); --input-bg: #fff0f7; --border-soft: #f9a8d4; --bg-name-color: #db2777; }
+        #chat-screen[data-mood="missing"]  { --bg-chat: linear-gradient(165deg, #fff5ed, #ffe4d6 60%, #ffd3be); --accent: #e65100; --accent-2: #ff8a65; --bubble-sent: linear-gradient(135deg, #ffab91, #e64a19); --input-bg: #fff8f4; --border-soft: #ffccbc; --bg-name-color: #ff8a65; }
+        #chat-screen[data-mood="hug"]      { --bg-chat: linear-gradient(165deg, #f5f0ff, #ede7f6 60%, #e1d5f8); --accent: #7e57c2; --accent-2: #b39ddb; --bubble-sent: linear-gradient(135deg, #b39ddb, #673ab7); --input-bg: #f8f5ff; --border-soft: #d1c4e9; --bg-name-color: #9575cd; }
+        #chat-screen[data-mood="angry"]    { --bg-chat: linear-gradient(165deg, #fff1f0, #ffdad6 60%, #ffc2bc); --accent: #c62828; --accent-2: #ef5350; --bubble-sent: linear-gradient(135deg, #ef5350, #b71c1c); --input-bg: #fff5f5; --border-soft: #ef9a9a; --bg-name-color: #e57373; }
+        #chat-screen[data-mood="sad"]      { --bg-chat: linear-gradient(165deg, #eef5ff, #dbeafe 60%, #c7ddfa); --accent: #1e88e5; --accent-2: #64b5f6; --bubble-sent: linear-gradient(135deg, #64b5f6, #1565c0); --input-bg: #f4f8ff; --border-soft: #bbdefb; --bg-name-color: #64b5f6; }
+        #chat-screen[data-mood="upset"]    { --bg-chat: linear-gradient(165deg, #f3f0f8, #e4dff0 60%, #d4cce5); --accent: #5c6bc0; --accent-2: #9fa8da; --bubble-sent: linear-gradient(135deg, #9fa8da, #3949ab); --input-bg: #f7f6fb; --border-soft: #c5cae9; --bg-name-color: #7986cb; }
+        #chat-screen[data-mood="sleepy"]   { --bg-chat: linear-gradient(165deg, #f3effb, #e8e0f7 60%, #dcd0f2); --accent: #6a1b9a; --accent-2: #ab47bc; --bubble-sent: linear-gradient(135deg, #ba68c8, #6a1b9a); --input-bg: #f9f6fd; --border-soft: #e1bee7; --bg-name-color: #ab47bc; }
+        #chat-screen[data-mood="excited"]  { --bg-chat: linear-gradient(165deg, #fffbeb, #fef3c7 60%, #fde68a); --accent: #d97706; --accent-2: #fbbf24; --bubble-sent: linear-gradient(135deg, #fbbf24, #d97706); --input-bg: #fffdf5; --border-soft: #fcd34d; --bg-name-color: #f59e0b; }
+        #chat-screen[data-mood="busy"]     { --bg-chat: linear-gradient(165deg, #f0f9f8, #d9f2ee 60%, #c1e8e2); --accent: #00796b; --accent-2: #4db6ac; --bubble-sent: linear-gradient(135deg, #4db6ac, #00695c); --input-bg: #f4fbfa; --border-soft: #b2dfdb; --bg-name-color: #4db6ac; }
+        #chat-screen[data-mood="sick"]     { --bg-chat: linear-gradient(165deg, #f1fbf4, #dcf5e3 60%, #c6ecd1); --accent: #2e7d32; --accent-2: #66bb6a; --bubble-sent: linear-gradient(135deg, #81c784, #2e7d32); --input-bg: #f5fcf7; --border-soft: #c8e6c9; --bg-name-color: #66bb6a; }
+
+        /* === DARK MODE OVERRIDES === */
+        body.dark-chat #chat-screen {
+            --bg-chat: linear-gradient(165deg, #160c14 0%, #23101d 60%, #1b0a16 100%);
+            --header-bg: rgba(30, 16, 26, 0.95);
+            --bubble-rec: rgba(45, 25, 39, 0.96);
+            --text-main: #fce7f3;
+            --text-muted: #c09bb0;
+            --input-bg: #2a1624;
+            --border-soft: #4e2840;
+            --reply-bg: rgba(255, 255, 255, 0.09);
+        }
+        body.dark-chat #chat-screen[data-mood="angry"]   { --bg-chat: linear-gradient(165deg, #1c0b0b, #2b1010); --header-bg: rgba(34,13,13,0.95); --bubble-rec: #331616; --input-bg: #2e1313; --border-soft: #5c2626; }
+        body.dark-chat #chat-screen[data-mood="sad"]     { --bg-chat: linear-gradient(165deg, #0b1320, #122036); --header-bg: rgba(14,24,41,0.95); --bubble-rec: #192b47; --input-bg: #15253d; --border-soft: #274066; }
+        body.dark-chat #chat-screen[data-mood="upset"]   { --bg-chat: linear-gradient(165deg, #121221, #1c1d33); --header-bg: rgba(21,22,40,0.95); --bubble-rec: #242642; --input-bg: #1f213a; --border-soft: #363963; }
+        body.dark-chat #chat-screen[data-mood="sleepy"]  { --bg-chat: linear-gradient(165deg, #130d21, #201538); --header-bg: rgba(24,16,42,0.95); --bubble-rec: #2a1d47; --input-bg: #24183d; --border-soft: #432d6e; }
+        body.dark-chat #chat-screen[data-mood="hug"]     { --bg-chat: linear-gradient(165deg, #151024, #22193b); --header-bg: rgba(25,19,45,0.95); --bubble-rec: #2c214d; --input-bg: #251c42; --border-soft: #463578; }
+        body.dark-chat #chat-screen[data-mood="missing"] { --bg-chat: linear-gradient(165deg, #1e110b, #2e1a10); --header-bg: rgba(36,20,13,0.95); --bubble-rec: #382115; --input-bg: #301c12; --border-soft: #5c3724; }
+        body.dark-chat #chat-screen[data-mood="excited"] { --bg-chat: linear-gradient(165deg, #1c1608, #2b210b); --header-bg: rgba(34,27,10,0.95); --bubble-rec: #362a10; --input-bg: #2e240d; --border-soft: #59461a; }
+        body.dark-chat #chat-screen[data-mood="busy"]    { --bg-chat: linear-gradient(165deg, #0b1917, #112926); --header-bg: rgba(14,32,29,0.95); --bubble-rec: #173632; --input-bg: #132e2b; --border-soft: #25524c; }
+        body.dark-chat #chat-screen[data-mood="sick"]    { --bg-chat: linear-gradient(165deg, #0c1a10, #132919); --header-bg: rgba(15,32,20,0.95); --bubble-rec: #193621; --input-bg: #152e1c; --border-soft: #295434; }
+
+        /* === CORE CHAT & ADJUSTED CLEAN HEADER === */
+        #chat-screen { background: var(--bg-chat); transition: background 0.55s ease; overflow: hidden; }
+        .bg-text { color: var(--bg-name-color) !important; opacity: 0.24 !important; transition: color 0.5s ease; }
+        body.dark-chat .bg-text { opacity: 0.14 !important; }
+
+        header {
+            background: var(--header-bg) !important;
+            border-bottom: 1px solid var(--border-soft);
+            padding: 8px 10px !important;
+            gap: 6px;
+            transition: background 0.4s ease, border-color 0.4s ease;
+        }
+        .header-left { min-width: 0; flex: 1; }
+        header h3 {
+            color: var(--accent) !important;
+            font-size: 19px !important;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .status-row { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+        #partner-status { font-size: 10.5px; font-weight: 600; color: var(--text-muted); }
+        #partner-mood-badge {
+            display: none;
+            font-size: 10px; font-weight: 700;
+            padding: 1.5px 6px; border-radius: 10px;
+            background: var(--reply-bg); color: var(--accent);
+            border: 1px solid var(--border-soft);
+        }
+        .header-right { display: flex; align-items: center; gap: 5px !important; flex-shrink: 0; }
+        .hdr-icon-btn {
+            background: var(--input-bg);
+            color: var(--accent);
+            border: 1px solid var(--border-soft);
+            width: 33px; height: 33px;
+            border-radius: 11px; font-size: 15px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; padding: 0; margin: 0;
+            transition: transform 0.15s ease, background 0.3s ease;
+        }
+        .hdr-icon-btn:active { transform: scale(0.9); }
+
+        /* Dropdown Menus (Call & More) */
+        .hdr-dropdown {
+            display: none;
+            position: absolute;
+            top: 54px;
+            right: 10px;
+            background: var(--header-bg);
+            border: 1.5px solid var(--border-soft);
+            border-radius: 16px;
+            padding: 6px;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.2);
+            backdrop-filter: blur(14px);
+            z-index: 40;
+            min-width: 168px;
+            flex-direction: column;
+            gap: 4px;
+            animation: popIn 0.18s ease;
+        }
+        .hdr-drop-item {
+            background: transparent;
+            border: none;
+            color: var(--text-main);
+            padding: 10px 12px;
+            border-radius: 11px;
+            font-size: 13.5px;
+            font-weight: 700;
+            text-align: left;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .hdr-drop-item:active { background: var(--reply-bg); }
+        .hdr-drop-item.danger { color: #e53935; }
+
+        /* === MESSAGES & PAGINATION === */
+        #messages-container { padding: 12px 12px !important; gap: 10px !important; }
+        #load-older-bar {
+            display: none;
+            align-self: center;
+            margin: 2px 0 8px 0;
+        }
+        #load-older-btn {
+            background: var(--header-bg);
+            color: var(--accent);
+            border: 1.5px solid var(--border-soft);
+            border-radius: 18px;
+            padding: 6px 14px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.06);
+        }
+        #load-older-btn:disabled { opacity: 0.65; cursor: default; }
+
+        .date-divider {
+            align-self: center;
+            background: var(--header-bg);
+            color: var(--text-muted);
+            font-size: 11px; font-weight: 700;
+            padding: 4px 12px; border-radius: 14px;
+            border: 1px solid var(--border-soft);
+            margin: 4px 0;
+        }
+        .msg-bubble {
+            max-width: 82% !important;
+            padding: 10px 14px !important;
+            border-radius: 20px !important;
+            font-size: 14.5px !important;
+            transition: transform 0.15s ease, background 0.4s ease;
+            user-select: none; -webkit-user-select: none;
+            touch-action: pan-y;
+        }
+        .msg-sent { background: var(--bubble-sent) !important; color: #fff !important; border-bottom-right-radius: 5px !important; }
+        .msg-received { background: var(--bubble-rec) !important; color: var(--text-main) !important; border: 1px solid var(--border-soft) !important; border-bottom-left-radius: 5px !important; }
+        .msg-reply-box { background: rgba(0,0,0,0.12); padding: 5px 8px; border-radius: 8px; margin-bottom: 6px; font-size: 12px; border-left: 3px solid #fff; opacity: 0.92; }
+        .msg-received .msg-reply-box { border-left-color: var(--accent); background: var(--reply-bg); color: var(--text-main); }
+
+        .call-log-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            font-weight: 700;
+            padding: 2px 0;
+        }
+        .call-log-pill.missed { color: #ffeb3b; }
+        .msg-received .call-log-pill.missed { color: #e53935; }
+
+        /* Photos, Audio, Gifts, Reactions */
+        .chat-img { max-width: 220px; max-height: 260px; border-radius: 14px; object-fit: cover; cursor: pointer; margin-bottom: 4px; display: block; }
+        .view-once-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 14px; border: 1.5px dashed rgba(255,255,255,0.65); background: rgba(0,0,0,0.16); color: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+        .msg-received .view-once-btn { border-color: var(--accent); background: var(--reply-bg); color: var(--accent); }
+        .view-once-opened { font-size: 12.5px; font-style: italic; opacity: 0.78; display: inline-flex; align-items: center; gap: 5px; }
+        .voice-audio { width: 205px; max-width: 100%; height: 36px; margin-bottom: 2px; border-radius: 18px; }
+
+        .gift-box-closed {
+            display: flex; flex-direction: column; align-items: center; gap: 6px;
+            padding: 14px 18px; border-radius: 16px;
+            background: linear-gradient(135deg, rgba(255,255,255,0.22), rgba(255,255,255,0.08));
+            border: 2px dashed rgba(255,255,255,0.75);
+            cursor: pointer; text-align: center;
+            animation: giftWiggle 2.4s ease-in-out infinite;
+        }
+        .msg-received .gift-box-closed { background: linear-gradient(135deg, #fff0f6, #ffe0ec); border: 2px dashed var(--accent); color: var(--accent); }
+        body.dark-chat .msg-received .gift-box-closed { background: linear-gradient(135deg, #3b1c32, #291223); color: #ff9ec4; }
+        .gift-icon-big { font-size: 34px; line-height: 1; }
+        .gift-title { font-size: 13.5px; font-weight: 700; }
+        .gift-sub { font-size: 11px; opacity: 0.85; }
+        @keyframes giftWiggle { 0%, 100% { transform: scale(1) rotate(0deg); } 15% { transform: scale(1.03) rotate(-1.5deg); } 30% { transform: scale(1.03) rotate(1.5deg); } 45% { transform: scale(1) rotate(0deg); } }
+        .gift-opened-wrap { display: flex; flex-direction: column; gap: 4px; animation: giftReveal 0.45s cubic-bezier(0.22, 1, 0.36, 1); }
+        .gift-opened-tag { font-size: 11px; font-weight: 700; opacity: 0.9; }
+        @keyframes giftReveal { 0% { opacity: 0; transform: scale(0.8); } 60% { transform: scale(1.05); } 100% { opacity: 1; transform: scale(1); } }
+
+        .msg-reaction-badge {
+            position: absolute; bottom: -10px; right: 10px;
+            background: var(--header-bg); border: 1.5px solid var(--border-soft);
+            border-radius: 14px; padding: 1px 7px; font-size: 13px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15); z-index: 2;
+            animation: popIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .msg-received .msg-reaction-badge { right: auto; left: 10px; }
+        .msg-bubble.has-reaction { margin-bottom: 10px; }
+        @keyframes popIn { 0% { transform: scale(0); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+
+        #reaction-popup {
+            display: none; position: fixed; z-index: 60;
+            background: var(--header-bg); border: 1.5px solid var(--border-soft);
+            border-radius: 30px; padding: 6px 10px; gap: 6px; align-items: center;
+            box-shadow: 0 10px 28px rgba(0,0,0,0.22); backdrop-filter: blur(12px);
+        }
+        .react-opt { background: transparent; border: none; font-size: 22px; cursor: pointer; padding: 3px; }
+        .react-reply-opt { font-size: 12px; font-weight: 700; color: var(--accent); background: var(--reply-bg); border-radius: 14px; padding: 5px 9px; border: none; cursor: pointer; }
+
+        /* Typing & Scroll Bottom */
+        #typing-indicator {
+            display: none; position: absolute; bottom: 76px; left: 14px;
+            background: var(--header-bg); padding: 10px 14px; border-radius: 18px;
+            border-bottom-left-radius: 5px; border: 1px solid var(--border-soft);
+            z-index: 9; align-items: center; gap: 5px;
+        }
+        .typing-dot { width: 7px; height: 7px; background: var(--accent); border-radius: 50%; animation: typingBounce 1.4s infinite ease-in-out both; }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes typingBounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+
+        #scroll-bottom-btn {
+            display: none; position: absolute; bottom: 82px; right: 14px;
+            width: 36px; height: 36px; border-radius: 50%;
+            background: var(--header-bg); color: var(--accent);
+            border: 1.5px solid var(--border-soft); font-size: 17px; font-weight: 700;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.16); cursor: pointer; z-index: 12;
+            align-items: center; justify-content: center;
+        }
+
+        #reply-preview {
+            display: none; align-items: center; justify-content: space-between;
+            background: var(--header-bg); padding: 8px 14px;
+            border-left: 4px solid var(--accent); border-top: 1px solid var(--border-soft);
+            width: 100%; z-index: 10;
+        }
+        #reply-preview span { font-size: 13px; color: var(--text-main); max-width: 85%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+        #cancel-reply { background: none; border: none; color: var(--accent); font-size: 16px; cursor: pointer; padding: 2px 6px; }
+
+        /* === INPUT AREA + ANIMATED COLLAPSING SIDEBAR === */
+        #input-area {
+            display: flex;
+            padding: 10px 10px max(12px, env(safe-area-inset-bottom)) 10px !important;
+            background: var(--header-bg) !important; gap: 8px !important;
+            align-items: flex-end !important; border-top: 1px solid var(--border-soft);
+            border-radius: 24px 24px 0 0 !important;
+        }
+        .input-wrapper {
+            flex: 1; min-width: 0; display: flex;
+            background: var(--input-bg) !important; border: 1.5px solid var(--border-soft) !important;
+            border-radius: 24px !important; padding: 4px 8px !important;
+            align-items: center !important; gap: 3px; overflow: hidden;
+        }
+        #media-actions-bar {
+            display: flex; align-items: center; gap: 2px;
+            max-width: 145px; opacity: 1; transform: translateX(0) scale(1);
+            transform-origin: left center; overflow: hidden; flex-shrink: 0;
+            transition: max-width 0.32s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.22s ease, transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        #input-area.typing-collapsed #media-actions-bar { max-width: 0 !important; opacity: 0 !important; transform: translateX(-22px) scale(0.75) !important; pointer-events: none; }
+        #expand-media-btn {
+            display: flex; align-items: center; justify-content: center;
+            max-width: 0; width: 0; height: 30px; opacity: 0; padding: 0; margin: 0;
+            overflow: hidden; border: none; border-radius: 50%;
+            background: var(--reply-bg); color: var(--accent);
+            font-size: 16px; font-weight: 700; cursor: pointer; flex-shrink: 0;
+            pointer-events: none; transform: translateX(-10px) scale(0.7);
+            transition: max-width 0.28s cubic-bezier(0.4, 0, 0.2, 1), width 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.22s ease, transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        #input-area.typing-collapsed #expand-media-btn { max-width: 30px; width: 30px; opacity: 1; pointer-events: auto; transform: translateX(0) scale(1); margin-right: 2px; }
+        .media-action-btn, .emoji-btn {
+            background: transparent !important; border: none !important;
+            width: 30px !important; height: 32px !important; min-width: 30px;
+            padding: 0 !important; margin: 0 !important; font-size: 19px !important;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; border-radius: 50%; flex-shrink: 0;
+        }
+        #message-input { flex: 1; min-width: 0; color: var(--text-main) !important; padding: 9px 4px !important; font-size: 14.5px !important; line-height: 1.35; }
+        #message-input::placeholder { color: var(--text-muted); opacity: 0.75; }
+        #send-btn { width: 44px !important; height: 44px !important; min-width: 44px !important; background: var(--accent) !important; font-size: 18px !important; }
+
+        #recording-bar {
+            display: none; flex: 1; align-items: center; justify-content: space-between;
+            background: #ffebee; border: 1.5px solid #ef9a9a; border-radius: 24px;
+            padding: 6px 12px; color: #c62828; font-weight: 700; font-size: 14px;
+        }
+        body.dark-chat #recording-bar { background: #3b1518; border-color: #7f292e; color: #ff8a80; }
+        .rec-dot { width: 10px; height: 10px; border-radius: 50%; background: #e53935; display: inline-block; margin-right: 7px; animation: pulseDot 1s infinite; }
+        @keyframes pulseDot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.75); } }
+        .rec-cancel-btn { background: transparent; border: none; color: inherit; font-weight: 700; font-size: 13px; cursor: pointer; padding: 4px 8px; }
+
+        /* === PICKERS & MODALS === */
+        #emoji-picker, #mood-picker {
+            display: none; position: absolute; left: 10px; right: 10px;
+            background: var(--header-bg); border: 1.5px solid var(--border-soft);
+            border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+            backdrop-filter: blur(14px); z-index: 35; padding: 10px;
+        }
+        #emoji-picker { bottom: 72px; }
+        #mood-picker { top: 56px; right: 10px; left: auto; width: min(330px, calc(100vw - 20px)); }
+        .mood-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+        .mood-opt { background: var(--input-bg); color: var(--text-main); border: 1.5px solid var(--border-soft); border-radius: 12px; padding: 8px 5px; font-size: 12px; font-weight: 700; cursor: pointer; text-align: center; }
+        .mood-opt.active { border-color: var(--accent); background: var(--reply-bg); color: var(--accent); }
+        .emoji-tabs { display: flex; gap: 6px; margin-bottom: 8px; border-bottom: 1px solid var(--border-soft); padding-bottom: 6px; }
+        .emoji-tab { flex: 1; background: transparent; border: none; padding: 5px; border-radius: 10px; font-size: 12px; font-weight: 700; color: var(--text-muted); cursor: pointer; }
+        .emoji-tab.active { background: var(--reply-bg); color: var(--accent); }
+        #emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; max-height: 175px; overflow-y: auto; }
+        .emoji-cell { background: transparent; border: none; font-size: 22px; padding: 5px 0; cursor: pointer; border-radius: 8px; }
+
+        .custom-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.74); backdrop-filter: blur(6px); z-index: 80; align-items: center; justify-content: center; padding: 20px; }
+        .modal-card { background: var(--header-bg); color: var(--text-main); border: 1.5px solid var(--border-soft); border-radius: 22px; padding: 18px; width: 100%; max-width: 340px; display: flex; flex-direction: column; gap: 12px; }
+        .modal-card h4 { margin: 0; color: var(--accent); font-size: 18px; text-align: center; }
+        #preview-img { max-width: 100%; max-height: 260px; border-radius: 14px; object-fit: contain; background: rgba(0,0,0,0.08); }
+        .view-once-row { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; font-weight: 700; cursor: pointer; }
+        #photo-input, #camera-input { display: none !important; }
+        #view-once-checkbox { width: 20px !important; height: 20px !important; max-width: 20px !important; padding: 0 !important; margin: 0 !important; accent-color: var(--accent); }
+        #gift-input { width: 100%; min-height: 85px; border-radius: 14px; border: 1.5px solid var(--border-soft); background: var(--input-bg); color: var(--text-main); padding: 10px 12px; font-size: 14.5px; resize: none; outline: none; font-family: inherit; }
+        .modal-btns { display: flex; gap: 10px; }
+        .modal-btn { flex: 1; padding: 11px; border-radius: 14px; border: none; font-weight: 700; font-size: 14px; cursor: pointer; }
+        .modal-btn.cancel { background: var(--input-bg); color: var(--text-muted); border: 1px solid var(--border-soft); }
+        .modal-btn.confirm { background: var(--accent); color: #fff; }
+        #viewer-img { max-width: 95vw; max-height: 82vh; border-radius: 14px; object-fit: contain; }
+        #close-viewer-btn { position: absolute; top: 18px; right: 18px; background: rgba(255,255,255,0.2); color: #fff; border: none; width: 38px; height: 38px; border-radius: 50%; font-size: 20px; cursor: pointer; }
+
+        /* === CALL OVERLAY (VIDEO, AUDIO, AR FILTERS, SCREEN SHARE, LIVE FX) === */
+        #call-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 90;
+            background: radial-gradient(circle at top, #2e1026 0%, #12060f 70%, #090307 100%);
+            color: #fff;
+            flex-direction: column;
+            justify-content: space-between;
+            overflow: hidden;
+        }
+        #remote-video {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 1;
+            background: #10050d;
+        }
+        #call-overlay.audio-only #remote-video {
+            opacity: 0;
+            width: 1px;
+            height: 1px;
+            pointer-events: none;
+        }
+        #audio-call-stage {
+            display: none;
+            position: absolute;
+            inset: 0;
+            z-index: 2;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            padding: 20px;
+        }
+        #call-overlay.audio-only #audio-call-stage { display: flex; }
+        .call-avatar-ring {
+            width: 126px; height: 126px; border-radius: 50%;
+            background: linear-gradient(135deg, #ff8fb1, #d81b60);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 52px;
+            box-shadow: 0 0 0 0 rgba(255, 105, 160, 0.55);
+            animation: ringPulse 2s infinite;
+        }
+        @keyframes ringPulse {
+            0% { box-shadow: 0 0 0 0 rgba(255, 105, 160, 0.6); }
+            70% { box-shadow: 0 0 0 32px rgba(255, 105, 160, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 105, 160, 0); }
+        }
+
+        .call-top-bar {
+            position: relative;
+            z-index: 5;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: max(16px, env(safe-area-inset-top)) 16px 12px 16px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.65), transparent);
+        }
+        .call-peer-info h3 { margin: 0; font-size: 22px; font-family: 'Dancing Script', cursive; color: #ff9ec4; }
+        .call-status-line { font-size: 12.5px; color: #fce7f3; opacity: 0.9; margin-top: 2px; display: flex; align-items: center; gap: 8px; }
+        .call-badge {
+            font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 10px;
+            background: rgba(255,255,255,0.16); backdrop-filter: blur(8px);
+        }
+        #face-status-badge { display: none; background: rgba(216, 27, 96, 0.72); }
+
+        #local-video {
+            position: absolute;
+            top: 86px;
+            right: 14px;
+            width: 104px;
+            height: 146px;
+            border-radius: 16px;
+            object-fit: cover;
+            border: 2px solid rgba(255, 158, 196, 0.85);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+            z-index: 6;
+            background: #000;
+            transform: scaleX(-1);
+        }
+        #call-overlay.audio-only #local-video { display: none; }
+        #local-video.no-mirror { transform: none; }
+
+        /* AR Filter Tray inside Call */
+        #call-filter-tray {
+            display: none;
+            position: relative;
+            z-index: 7;
+            gap: 8px;
+            padding: 8px 12px;
+            margin: 0 auto 8px auto;
+            background: rgba(20, 8, 16, 0.78);
+            border: 1px solid rgba(255, 158, 196, 0.35);
+            border-radius: 22px;
+            backdrop-filter: blur(12px);
+            overflow-x: auto;
+            max-width: calc(100vw - 24px);
+        }
+        .filter-chip {
+            background: rgba(255,255,255,0.12);
+            color: #fff;
+            border: 1px solid transparent;
+            border-radius: 16px;
+            padding: 6px 11px;
+            font-size: 12px;
+            font-weight: 700;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+        .filter-chip.active { background: #d81b60; border-color: #ff9ec4; }
+
+        /* Call Reactions Bar */
+        #call-react-bar {
+            position: relative;
+            z-index: 7;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .call-react-btn {
+            background: rgba(255,255,255,0.14);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,0.22);
+            width: 38px; height: 38px; border-radius: 50%;
+            font-size: 18px; cursor: pointer;
+            transition: transform 0.15s;
+        }
+        .call-react-btn:active { transform: scale(1.3); }
+
+        .call-bottom-area {
+            position: relative;
+            z-index: 7;
+            padding: 10px 12px max(20px, env(safe-area-inset-bottom)) 12px;
+            background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .call-controls-grid {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            max-width: 360px;
+        }
+        .call-ctrl-btn {
+            width: 48px; height: 48px; border-radius: 50%;
+            border: 1px solid rgba(255,255,255,0.22);
+            background: rgba(255,255,255,0.16);
+            color: #fff; font-size: 20px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; backdrop-filter: blur(10px);
+        }
+        .call-ctrl-btn.active { background: #fff; color: #d81b60; }
+        .call-ctrl-btn.end { background: #e53935; border-color: #ff8a80; width: 56px; }
+        .call-ctrl-btn.accept { background: #43a047; border-color: #a5d6a7; width: 58px; height: 58px; font-size: 24px; }
+
+        #incoming-actions { display: none; gap: 36px; align-items: center; margin-top: 10px; }
+        #active-call-controls { display: flex; flex-direction: column; align-items: center; width: 100%; }
+
+        /* Hidden elements for MediaPipe processing */
+        #raw-cam-video, #ar-process-canvas {
+            position: fixed;
+            left: -9999px;
+            top: -9999px;
+            width: 480px;
+            height: 640px;
+            pointer-events: none;
+        }
+
+        /* Floating FX */
+        #fx-layer { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 98; }
+        .float-heart { position: absolute; bottom: 70px; font-size: 24px; animation: floatUp 2.6s ease-out forwards; }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(0.7); } 50% { opacity: 0.95; transform: translateY(-180px) scale(1.2); } 100% { opacity: 0; transform: translateY(-380px) scale(0.9); } }
+        .confetti-piece { position: fixed; font-size: 18px; animation: confettiBurst 1.1s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes confettiBurst { 0% { opacity: 1; transform: translate(0, 0) scale(0.6) rotate(0deg); } 100% { opacity: 0; transform: translate(var(--tx), var(--ty)) scale(1.2) rotate(var(--rot)); } }
+    </style>
+</head>
+<body>
+
+    <div id="notes-screen">
+        <div class="notes-header">
+            <h2>My Notes</h2>
+            <span class="date" id="current-date"></span>
+        </div>
+        <textarea id="note-content" placeholder="Yahan apne notes likhein..."></textarea>
+        <div class="notes-footer">
+            <button id="save-note-btn">Save Note</button>
+            <p id="note-status"></p>
+        </div>
+    </div>
+
+    <div id="login-screen" style="display: none;">
+        <h2>Humari Chat 💖</h2>
+        <input type="email" id="email" placeholder="Email daalein..." required>
+        <input type="password" id="password" placeholder="Password daalein..." required>
+        <button id="login-btn">Login Karein</button>
+        <p id="login-error" class="error"></p>
+    </div>
+
+    <div id="chat-screen" data-mood="happy" style="display: none;">
+        <div id="love-background">
+            <span class="bg-text" style="top: 4%; left: 5%;">Janan loves Mino 💕</span>
+            <span class="bg-text" style="top: 12%; right: 6%;">Mino loves Janan ❤️</span>
+            <span class="bg-text" style="top: 21%; left: 10%;">Zargoo 🥰</span>
+            <span class="bg-text" style="top: 29%; right: 12%;">Jwandun 🧸</span>
+            <span class="bg-text" style="top: 38%; left: 6%;">Guley 🌸</span>
+            <span class="bg-text" style="top: 46%; right: 8%;">Zra Me 💖</span>
+            <span class="bg-text" style="top: 54%; left: 14%;">Kachocho 🐻</span>
+            <span class="bg-text" style="top: 62%; right: 10%;">Katoto ✨</span>
+            <span class="bg-text" style="top: 70%; left: 8%;">Zra Sar 😘</span>
+            <span class="bg-text" style="top: 78%; right: 6%;">Mera Chand 🌙</span>
+            <span class="bg-text" style="top: 86%; left: 12%;">Zargiya 💞</span>
+            <span class="bg-text" style="top: 9%; left: 44%;">Bacha 💕</span>
+            <span class="bg-text" style="top: 26%; left: 48%;">Kachocha ❤️</span>
+            <span class="bg-text" style="top: 43%; right: 42%;">Sqaman 💓</span>
+            <span class="bg-text" style="top: 60%; left: 38%;">Mama 🌸</span>
+            <span class="bg-text" style="top: 75%; left: 35%;">Jaanu 💘</span>
+            <span class="bg-text" style="top: 91%; right: 28%;">Hamesha ❤️</span>
+        </div>
+
+        <header>
+            <div class="header-left">
+                <h3>❤️ Janan & Mino</h3>
+                <div class="status-row">
+                    <span id="partner-status">Offline</span>
+                    <span id="partner-mood-badge"></span>
+                </div>
+            </div>
+            <div class="header-right">
+                <button type="button" class="hdr-icon-btn" id="my-mood-btn" title="My Mood">❤️</button>
+                <button type="button" class="hdr-icon-btn" id="call-menu-btn" title="Audio / Video Call">📞</button>
+                <button type="button" class="hdr-icon-btn" id="pulse-btn" title="Miss U Heartbeat">💓</button>
+                <button type="button" class="hdr-icon-btn" id="theme-btn" title="Dark Mode">🌙</button>
+                <button type="button" class="hdr-icon-btn" id="hide-btn" title="Quick Hide">🙈</button>
+                <button type="button" class="hdr-icon-btn" id="more-menu-btn" title="Menu">⋮</button>
+            </div>
+        </header>
+
+        <!-- Call Chooser Menu -->
+        <div id="call-menu" class="hdr-dropdown">
+            <button type="button" class="hdr-drop-item" id="start-audio-call-btn">📞 Audio Call</button>
+            <button type="button" class="hdr-drop-item" id="start-video-call-btn">📹 Video Call</button>
+        </div>
+
+        <!-- More Menu (Clear / Logout) -->
+        <div id="more-menu" class="hdr-dropdown">
+            <button type="button" class="hdr-drop-item" id="clear-chat-btn">🗑️ Clear Chat</button>
+            <button type="button" class="hdr-drop-item danger" id="logout-btn">🚪 Logout</button>
+        </div>
+
+        <!-- Mood Picker -->
+        <div id="mood-picker">
+            <div class="mood-grid" id="mood-grid"></div>
+        </div>
+
+        <div id="messages-container">
+            <div id="load-older-bar">
+                <button type="button" id="load-older-btn">⬆️ Purane Messages Load Karein</button>
+            </div>
+        </div>
+
+        <button type="button" id="scroll-bottom-btn" title="Bottom">↓</button>
+
+        <div id="typing-indicator">
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+        </div>
+
+        <div id="reply-preview">
+            <span id="reply-text"></span>
+            <button type="button" id="cancel-reply">✖</button>
+        </div>
+
+        <!-- Emoji Picker -->
+        <div id="emoji-picker">
+            <div class="emoji-tabs">
+                <button type="button" class="emoji-tab active" data-cat="love">❤️ Love</button>
+                <button type="button" class="emoji-tab" data-cat="faces">😊 Faces</button>
+                <button type="button" class="emoji-tab" data-cat="moods">🥺 Moods</button>
+                <button type="button" class="emoji-tab" data-cat="cute">✨ Cute</button>
+            </div>
+            <div id="emoji-grid"></div>
+        </div>
+
+        <input type="file" id="camera-input" accept="image/*" capture="environment">
+        <input type="file" id="photo-input" accept="image/*">
+
+        <div id="input-area">
+            <div class="input-wrapper" id="input-wrapper">
+                <button type="button" id="expand-media-btn" title="Camera & Mic Options">❯</button>
+                <div id="media-actions-bar">
+                    <button type="button" class="media-action-btn" id="camera-btn" title="Camera Photo">📸</button>
+                    <button type="button" class="media-action-btn" id="photo-btn" title="Gallery Photo">🖼️</button>
+                    <button type="button" class="media-action-btn" id="mic-btn" title="Voice Note">🎤</button>
+                    <button type="button" class="media-action-btn" id="gift-btn" title="Gift Message">🎁</button>
+                </div>
+                <button type="button" class="emoji-btn" id="emoji-btn" title="Emojis">😊</button>
+                <textarea id="message-input" rows="1" placeholder="Yahan likhein..."></textarea>
+            </div>
+
+            <div id="recording-bar">
+                <span><span class="rec-dot"></span><span id="rec-timer">0:00</span> / 0:20</span>
+                <button type="button" class="rec-cancel-btn" id="cancel-rec-btn">Cancel ✖</button>
+            </div>
+
+            <button type="button" id="send-btn" title="Send">➤</button>
+        </div>
+    </div>
+
+    <!-- FULLSCREEN CALL OVERLAY -->
+    <div id="call-overlay">
+        <video id="remote-video" autoplay playsinline></video>
+        <video id="local-video" autoplay playsinline muted></video>
+        <video id="raw-cam-video" autoplay playsinline muted></video>
+        <canvas id="ar-process-canvas"></canvas>
+
+        <div id="audio-call-stage">
+            <div class="call-avatar-ring" id="call-avatar-ring">💖</div>
+            <h2 style="font-family:'Dancing Script',cursive;font-size:32px;color:#ff9ec4;margin:0;">Janan & Mino</h2>
+            <p id="audio-stage-sub" style="font-size:14px;opacity:0.85;margin:0;">Connecting...</p>
+        </div>
+
+        <div class="call-top-bar">
+            <div class="call-peer-info">
+                <h3>Janan & Mino ❤️</h3>
+                <div class="call-status-line">
+                    <span id="call-state-text">Calling...</span>
+                    <span class="call-badge" id="call-signal-badge">📶 ...</span>
+                    <span class="call-badge" id="face-status-badge">😊 Face AI</span>
+                </div>
+            </div>
+            <button type="button" class="hdr-icon-btn" id="call-quick-hide-btn" title="Quick Hide" style="background:rgba(255,255,255,0.16);color:#fff;border-color:rgba(255,255,255,0.25);">🙈</button>
+        </div>
+
+        <div class="call-bottom-area">
+            <div id="incoming-actions">
+                <button type="button" class="call-ctrl-btn end" id="decline-call-btn" title="Decline" style="width:58px;height:58px;font-size:24px;">✖</button>
+                <button type="button" class="call-ctrl-btn accept" id="accept-call-btn" title="Accept">📞</button>
+            </div>
+
+            <div id="active-call-controls">
+                <div id="call-filter-tray">
+                    <button type="button" class="filter-chip active" data-filter="none">Normal</button>
+                    <button type="button" class="filter-chip" data-filter="glow">✨ Soft Glow</button>
+                    <button type="button" class="filter-chip" data-filter="hearts">😍 Heart Eyes</button>
+                    <button type="button" class="filter-chip" data-filter="crown">👑 Crown</button>
+                    <button type="button" class="filter-chip" data-filter="bunny">🐰 Bunny</button>
+                    <button type="button" class="filter-chip" data-filter="aura">💘 Love Aura</button>
+                </div>
+
+                <div id="call-react-bar">
+                    <button type="button" class="call-react-btn" data-creact="❤️">❤️</button>
+                    <button type="button" class="call-react-btn" data-creact="😘">😘</button>
+                    <button type="button" class="call-react-btn" data-creact="🥰">🥰</button>
+                    <button type="button" class="call-react-btn" data-creact="😂">😂</button>
+                    <button type="button" class="call-react-btn" data-creact="🔥">🔥</button>
+                    <button type="button" class="call-react-btn" data-creact="💋">💋</button>
+                </div>
+
+                <div class="call-controls-grid">
+                    <button type="button" class="call-ctrl-btn" id="call-mute-btn" title="Mute Mic">🎙️</button>
+                    <button type="button" class="call-ctrl-btn" id="call-cam-btn" title="Camera On/Off">📷</button>
+                    <button type="button" class="call-ctrl-btn" id="call-flip-btn" title="Flip Camera">🔄</button>
+                    <button type="button" class="call-ctrl-btn" id="call-filter-btn" title="Face Detection Filters">✨</button>
+                    <button type="button" class="call-ctrl-btn" id="call-screen-btn" title="Screen Share">🖥️</button>
+                    <button type="button" class="call-ctrl-btn" id="call-lowdata-btn" title="Low Signal Mode">📶</button>
+                    <button type="button" class="call-ctrl-btn" id="call-snap-btn" title="Snapshot">📸</button>
+                    <button type="button" class="call-ctrl-btn end" id="end-call-btn" title="End Call">🔴</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reaction Popup -->
+    <div id="reaction-popup">
+        <button type="button" class="react-opt" data-emoji="❤️">❤️</button>
+        <button type="button" class="react-opt" data-emoji="😘">😘</button>
+        <button type="button" class="react-opt" data-emoji="🥰">🥰</button>
+        <button type="button" class="react-opt" data-emoji="😂">😂</button>
+        <button type="button" class="react-opt" data-emoji="🥺">🥺</button>
+        <button type="button" class="react-opt" data-emoji="😡">😡</button>
+        <button type="button" class="react-opt" data-emoji="🔥">🔥</button>
+        <button type="button" class="react-reply-opt" id="popup-reply-btn">↩️</button>
+    </div>
+
+    <!-- Photo Preview Modal -->
+    <div id="photo-preview-modal" class="custom-modal">
+        <div class="modal-card">
+            <h4>Photo Bhejein 📸</h4>
+            <img id="preview-img" src="" alt="Preview">
+            <label class="view-once-row">
+                <input type="checkbox" id="view-once-checkbox">
+                <span>🔥 View Once (Dekhne ke baad delete)</span>
+            </label>
+            <div class="modal-btns">
+                <button type="button" class="modal-btn cancel" id="cancel-photo-btn">Cancel</button>
+                <button type="button" class="modal-btn confirm" id="send-photo-btn">Send ➤</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gift Composer Modal -->
+    <div id="gift-modal" class="custom-modal">
+        <div class="modal-card">
+            <h4>🎁 Gift Surprise Message</h4>
+            <textarea id="gift-input" placeholder="Apna pyara sa surprise message likhein..."></textarea>
+            <div class="modal-btns">
+                <button type="button" class="modal-btn cancel" id="cancel-gift-btn">Cancel</button>
+                <button type="button" class="modal-btn confirm" id="send-gift-btn">Send Gift 🎁</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fullscreen Image Viewer -->
+    <div id="image-viewer-modal" class="custom-modal">
+        <button type="button" id="close-viewer-btn">✖</button>
+        <img id="viewer-img" src="" alt="Photo">
+    </div>
+
+    <div id="fx-layer"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+        import {
+            getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+            collection, addDoc, query, orderBy, limit, onSnapshot, serverTimestamp, Timestamp,
+            doc, setDoc, getDocs, deleteDoc, updateDoc, where
+        } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBxiEXvK-xeepTuYRYdizeFqNufzb--3Ac",
+            authDomain: "chat-8e3ff.firebaseapp.com",
+            projectId: "chat-8e3ff",
+            storageBucket: "chat-8e3ff.firebasestorage.app",
+            messagingSenderId: "576628137714",
+            appId: "1:576628137714:web:551e0f79bb8cd5df9b7a6b"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        let db;
+        try {
+            db = initializeFirestore(app, {
+                localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+            });
+        } catch {
+            db = getFirestore(app);
+        }
+
+        const SECRET_CODE = "Janan";
+        const CACHE_KEY = "sc_msg_cache_v1";
+        const OPENED_ONCE_KEY = "sc_opened_once_v1";
+        const DARK_MODE_KEY = "sc_dark_mode_v1";
+        const MY_MOOD_KEY = "sc_my_mood_v1";
+        const MAX_CACHE = 50;
+        const PAGE_SIZE = 25;
+
+        const ICE_SERVERS = {
+            iceServers: [
+                { urls: "stun:stun.l.google.com:19302" },
+                { urls: "stun:stun1.l.google.com:19302" },
+                { urls: "stun:stun2.l.google.com:19302" },
+                { urls: "stun:stun.cloudflare.com:3478" }
+            ],
+            iceCandidatePoolSize: 6
+        };
+
+        const MOODS = [
+            { id: "happy",    icon: "❤️", label: "Happy" },
+            { id: "romantic", icon: "💘", label: "Romantic" },
+            { id: "missing",  icon: "🥰", label: "Missing U" },
+            { id: "hug",      icon: "🥺", label: "Need Hug" },
+            { id: "angry",    icon: "😡", label: "Angry" },
+            { id: "sad",      icon: "😢", label: "Sad" },
+            { id: "upset",    icon: "😔", label: "Upset" },
+            { id: "sleepy",   icon: "😴", label: "Sleepy" },
+            { id: "excited",  icon: "🤩", label: "Excited" },
+            { id: "busy",     icon: "💼", label: "Busy" },
+            { id: "sick",     icon: "🤒", label: "Not Well" }
+        ];
+
+        const EMOJI_CATS = {
+            love:  ["❤️","💖","💕","💘","💝","💓","💗","💞","😍","🥰","😘","💋","🌹","💐","🧸","💍","🫶","🫂"],
+            faces: ["😊","😁","😂","🤣","😉","😌","🥹","🤗","🤭","🤫","😏","🙃","😜","🤪","🤩","🥳","😎","🤠"],
+            moods: ["🥺","😢","😭","😔","😞","😡","🤬","😤","😴","🥱","🤒","🤕","😵‍💫","🫠","😬","🙄","😐","🫤"],
+            cute:  ["✨","🌙","⭐","🌸","🌺","🦋","🌈","🔥","🎁","🍫","🍓","☕","🎵","🫶🏻","🤞🏻","👏🏻","🙌🏻","🎉"]
+        };
+
+        // === E2EE CRYPTO ===
+        let aesKeyPromise = null;
+        function getAesKey() {
+            if (aesKeyPromise) return aesKeyPromise;
+            aesKeyPromise = (async () => {
+                const enc = new TextEncoder();
+                const baseKey = await crypto.subtle.importKey("raw", enc.encode(SECRET_CODE), "PBKDF2", false, ["deriveKey"]);
+                return crypto.subtle.deriveKey(
+                    { name: "PBKDF2", salt: enc.encode("JananMino-E2EE-Salt-v1"), iterations: 100000, hash: "SHA-256" },
+                    baseKey,
+                    { name: "AES-GCM", length: 256 },
+                    false,
+                    ["encrypt", "decrypt"]
+                );
+            })();
+            return aesKeyPromise;
+        }
+        function bufToB64(buf) {
+            const bytes = new Uint8Array(buf);
+            let bin = "";
+            for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+            return btoa(bin);
+        }
+        function b64ToBuf(b64) {
+            const bin = atob(b64);
+            const bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            return bytes.buffer;
+        }
+        async function encryptText(plain) {
+            if (!plain) return "";
+            const key = await getAesKey();
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(plain));
+            return `E2EE:1:${bufToB64(iv)}:${bufToB64(ct)}`;
+        }
+        async function decryptText(val) {
+            if (!val || typeof val !== "string") return "";
+            if (!val.startsWith("E2EE:1:")) return val;
+            try {
+                const [, , ivB64, ctB64] = val.split(":");
+                const key = await getAesKey();
+                const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(b64ToBuf(ivB64)) }, key, b64ToBuf(ctB64));
+                return new TextDecoder().decode(pt);
+            } catch {
+                return "🔒 Encrypted message";
+            }
+        }
+
+        // === SHARED AUDIO ENGINE ===
+        let sharedAudioCtx = null;
+        function getAudioCtx() {
+            const Ctx = window.AudioContext || window.webkitAudioContext;
+            if (!Ctx) return null;
+            if (!sharedAudioCtx) sharedAudioCtx = new Ctx();
+            if (sharedAudioCtx.state === "suspended") sharedAudioCtx.resume().catch(() => {});
+            return sharedAudioCtx;
+        }
+        function playTone(freq, delay, dur, type = "sine", vol = 0.2) {
+            const ctx = getAudioCtx();
+            if (!ctx) return;
+            const now = ctx.currentTime + delay;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, now);
+            gain.gain.setValueAtTime(0.001, now);
+            gain.gain.exponentialRampToValueAtTime(vol, now + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.start(now); osc.stop(now + dur + 0.02);
+        }
+        function playMoodSound(moodId) {
+            try {
+                switch (moodId) {
+                    case "romantic": playTone(523.25, 0, 0.45, "sine", 0.2); playTone(659.25, 0.11, 0.45, "sine", 0.2); playTone(783.99, 0.22, 0.6, "sine", 0.22); break;
+                    case "angry":    playTone(220, 0, 0.14, "triangle", 0.24); playTone(185, 0.12, 0.22, "triangle", 0.24); break;
+                    case "sad":      playTone(440, 0, 0.4, "sine", 0.15); playTone(349.23, 0.18, 0.55, "sine", 0.14); break;
+                    case "upset":    playTone(392, 0, 0.3, "triangle", 0.14); playTone(329.63, 0.16, 0.45, "triangle", 0.12); break;
+                    case "sleepy":   playTone(329.63, 0, 0.55, "sine", 0.11); playTone(261.63, 0.25, 0.7, "sine", 0.1); break;
+                    case "excited":  playTone(587.33, 0, 0.18, "sine", 0.2); playTone(783.99, 0.09, 0.2, "sine", 0.2); playTone(1046.5, 0.18, 0.35, "sine", 0.22); break;
+                    case "missing":  playTone(493.88, 0, 0.35, "sine", 0.18); playTone(587.33, 0.15, 0.5, "sine", 0.18); break;
+                    case "hug":      playTone(392, 0, 0.45, "sine", 0.16); playTone(493.88, 0.1, 0.5, "sine", 0.16); break;
+                    case "busy":     playTone(660, 0, 0.12, "sine", 0.15); break;
+                    case "sick":     playTone(349.23, 0, 0.4, "sine", 0.13); playTone(440, 0.16, 0.45, "sine", 0.13); break;
+                    default:         playTone(523.25, 0, 0.35, "sine", 0.2); playTone(659.25, 0.13, 0.45, "sine", 0.2);
+                }
+            } catch {}
+        }
+        function playGiftFanfare() {
+            try {
+                playTone(523.25, 0, 0.2, "triangle", 0.22); playTone(659.25, 0.09, 0.2, "triangle", 0.22);
+                playTone(783.99, 0.18, 0.25, "triangle", 0.24); playTone(1046.5, 0.28, 0.55, "sine", 0.26);
+            } catch {}
+        }
+        function playLovePulseSound() {
+            try {
+                playTone(150, 0, 0.14, "sine", 0.28); playTone(180, 0.16, 0.22, "sine", 0.26); playTone(659.25, 0.28, 0.4, "sine", 0.15);
+            } catch {}
+        }
+
+        // === DOM REFS ===
+        const notesScreen = document.getElementById('notes-screen');
+        const noteContent = document.getElementById('note-content');
+        const loginScreen = document.getElementById('login-screen');
+        const chatScreen = document.getElementById('chat-screen');
+        const messagesContainer = document.getElementById('messages-container');
+        const loadOlderBar = document.getElementById('load-older-bar');
+        const loadOlderBtn = document.getElementById('load-older-btn');
+        const partnerStatus = document.getElementById('partner-status');
+        const partnerMoodBadge = document.getElementById('partner-mood-badge');
+        const typingIndicator = document.getElementById('typing-indicator');
+        const replyPreview = document.getElementById('reply-preview');
+        const replyText = document.getElementById('reply-text');
+        const inputArea = document.getElementById('input-area');
+        const inputWrapper = document.getElementById('input-wrapper');
+        const expandMediaBtn = document.getElementById('expand-media-btn');
+        const messageInput = document.getElementById('message-input');
+        const sendBtn = document.getElementById('send-btn');
+        const emojiPicker = document.getElementById('emoji-picker');
+        const emojiGrid = document.getElementById('emoji-grid');
+        const moodPicker = document.getElementById('mood-picker');
+        const moodGrid = document.getElementById('mood-grid');
+        const myMoodBtn = document.getElementById('my-mood-btn');
+        const callMenu = document.getElementById('call-menu');
+        const moreMenu = document.getElementById('more-menu');
+        const scrollBottomBtn = document.getElementById('scroll-bottom-btn');
+        const cameraInput = document.getElementById('camera-input');
+        const photoInput = document.getElementById('photo-input');
+        const photoPreviewModal = document.getElementById('photo-preview-modal');
+        const previewImg = document.getElementById('preview-img');
+        const viewOnceCheckbox = document.getElementById('view-once-checkbox');
+        const imageViewerModal = document.getElementById('image-viewer-modal');
+        const viewerImg = document.getElementById('viewer-img');
+        const giftModal = document.getElementById('gift-modal');
+        const giftInput = document.getElementById('gift-input');
+        const recordingBar = document.getElementById('recording-bar');
+        const recTimer = document.getElementById('rec-timer');
+        const reactionPopup = document.getElementById('reaction-popup');
+        const fxLayer = document.getElementById('fx-layer');
+
+        // Call DOM Refs
+        const callOverlay = document.getElementById('call-overlay');
+        const remoteVideo = document.getElementById('remote-video');
+        const localVideo = document.getElementById('local-video');
+        const rawCamVideo = document.getElementById('raw-cam-video');
+        const arCanvas = document.getElementById('ar-process-canvas');
+        const arCtx = arCanvas.getContext('2d');
+        const callStateText = document.getElementById('call-state-text');
+        const audioStageSub = document.getElementById('audio-stage-sub');
+        const callSignalBadge = document.getElementById('call-signal-badge');
+        const faceStatusBadge = document.getElementById('face-status-badge');
+        const incomingActions = document.getElementById('incoming-actions');
+        const activeCallControls = document.getElementById('active-call-controls');
+        const callFilterTray = document.getElementById('call-filter-tray');
+
+        // === CHAT STATE ===
+        let isChatUnlocked = false, listenersStarted = false;
+        let unsubStatus = null, unsubMsgs = null, currentUserUid = null;
+        let replyingToText = null, isTyping = false, typingTimeout = null, partnerTypingTimeout = null;
+        let partnerLastReadMs = 0;
+        let lastLocalClearedMs = Number(localStorage.getItem("sc_cleared_ms_v1") || 0);
+        let lastHandledPulseAt = 0, lastHandledReactionAt = 0, lastHandledGiftOpenedAt = 0;
+        let currentThemeMood = localStorage.getItem(MY_MOOD_KEY) || "happy";
+
+        let msgMap = new Map();
+        let hasMoreOlder = true;
+        let isLoadingOlder = false;
+        let isFirstSnapshot = true;
+
+        let pendingPhotoDataUrl = null;
+        let mediaForceOpen = false, blurSidebarTimer = null;
+        let isRecording = false, mediaRecorder = null, audioChunks = [], recInterval = null, recSeconds = 0, recCancelled = false;
+        let activeReactionMsgId = null, activeReactionReplyText = "";
+
+        document.getElementById('current-date').innerText = new Date().toLocaleDateString('en-GB', {
+            day: 'numeric', month: 'short', year: 'numeric'
+        });
+
+        // === DARK MODE & MOOD ===
+        function applyDarkMode(on) {
+            document.body.classList.toggle('dark-chat', on);
+            document.getElementById('theme-btn').innerText = on ? '☀️' : '🌙';
+            localStorage.setItem(DARK_MODE_KEY, on ? '1' : '0');
+        }
+        applyDarkMode(localStorage.getItem(DARK_MODE_KEY) === '1');
+        document.getElementById('theme-btn').addEventListener('click', () => applyDarkMode(!document.body.classList.contains('dark-chat')));
+
+        function setThemeMood(moodId) {
+            if (!MOODS.some(m => m.id === moodId)) moodId = "happy";
+            currentThemeMood = moodId;
+            chatScreen.setAttribute('data-mood', moodId);
+        }
+        function renderMoodGrid(activeId) {
+            moodGrid.innerHTML = "";
+            MOODS.forEach(m => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'mood-opt' + (m.id === activeId ? ' active' : '');
+                btn.innerText = `${m.icon} ${m.label}`;
+                btn.addEventListener('click', () => {
+                    myMoodBtn.innerText = m.icon;
+                    localStorage.setItem(MY_MOOD_KEY, m.id);
+                    setThemeMood(m.id);
+                    renderMoodGrid(m.id);
+                    moodPicker.style.display = 'none';
+                    playMoodSound(m.id);
+                    if (auth.currentUser) setDoc(doc(db, "status", auth.currentUser.uid), { mood: m.id }, { merge: true }).catch(() => {});
+                });
+                moodGrid.appendChild(btn);
+            });
+        }
+        {
+            const savedMood = MOODS.find(m => m.id === currentThemeMood) || MOODS[0];
+            myMoodBtn.innerText = savedMood.icon;
+            setThemeMood(savedMood.id);
+            renderMoodGrid(savedMood.id);
+        }
+
+        // Header Popovers
+        function closeAllHeaderPopovers() {
+            moodPicker.style.display = 'none';
+            callMenu.style.display = 'none';
+            moreMenu.style.display = 'none';
+        }
+        myMoodBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const open = moodPicker.style.display === 'block';
+            closeAllHeaderPopovers(); emojiPicker.style.display = 'none';
+            moodPicker.style.display = open ? 'none' : 'block';
+        });
+        document.getElementById('call-menu-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            const open = callMenu.style.display === 'flex';
+            closeAllHeaderPopovers(); emojiPicker.style.display = 'none';
+            callMenu.style.display = open ? 'none' : 'flex';
+        });
+        document.getElementById('more-menu-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            const open = moreMenu.style.display === 'flex';
+            closeAllHeaderPopovers(); emojiPicker.style.display = 'none';
+            moreMenu.style.display = open ? 'none' : 'flex';
+        });
+
+        // === EMOJI PICKER ===
+        function renderEmojiCat(cat) {
+            emojiGrid.innerHTML = "";
+            (EMOJI_CATS[cat] || EMOJI_CATS.love).forEach(em => {
+                const b = document.createElement('button');
+                b.type = 'button'; b.className = 'emoji-cell'; b.innerText = em;
+                b.addEventListener('click', () => {
+                    const start = messageInput.selectionStart ?? messageInput.value.length;
+                    const end = messageInput.selectionEnd ?? messageInput.value.length;
+                    messageInput.value = messageInput.value.slice(0, start) + em + messageInput.value.slice(end);
+                    messageInput.focus();
+                    messageInput.setSelectionRange(start + em.length, start + em.length);
+                    messageInput.dispatchEvent(new Event('input'));
+                });
+                emojiGrid.appendChild(b);
+            });
+        }
+        renderEmojiCat('love');
+        document.querySelectorAll('.emoji-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.emoji-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                renderEmojiCat(tab.dataset.cat);
+            });
+        });
+        document.getElementById('emoji-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeAllHeaderPopovers();
+            emojiPicker.style.display = emojiPicker.style.display === 'block' ? 'none' : 'block';
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!emojiPicker.contains(e.target) && e.target.id !== 'emoji-btn') emojiPicker.style.display = 'none';
+            if (!moodPicker.contains(e.target) && e.target.id !== 'my-mood-btn') moodPicker.style.display = 'none';
+            if (!callMenu.contains(e.target) && e.target.id !== 'call-menu-btn') callMenu.style.display = 'none';
+            if (!moreMenu.contains(e.target) && e.target.id !== 'more-menu-btn') moreMenu.style.display = 'none';
+            if (!reactionPopup.contains(e.target)) reactionPopup.style.display = 'none';
+        });
+
+        // === ANIMATED MEDIA SIDEBAR ===
+        function updateMediaSidebar() {
+            if (isRecording) { inputArea.classList.remove('typing-collapsed'); return; }
+            const hasText = messageInput.value.trim().length > 0;
+            const isFocused = document.activeElement === messageInput;
+            if (!mediaForceOpen && (isFocused || hasText)) inputArea.classList.add('typing-collapsed');
+            else inputArea.classList.remove('typing-collapsed');
+        }
+        messageInput.addEventListener('focus', () => { clearTimeout(blurSidebarTimer); mediaForceOpen = false; updateMediaSidebar(); });
+        messageInput.addEventListener('blur', () => {
+            clearTimeout(blurSidebarTimer);
+            blurSidebarTimer = setTimeout(() => {
+                if (messageInput.value.trim().length === 0) mediaForceOpen = false;
+                updateMediaSidebar();
+            }, 150);
+        });
+        expandMediaBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); clearTimeout(blurSidebarTimer);
+            mediaForceOpen = true; inputArea.classList.remove('typing-collapsed');
+        });
+
+        // === FX ===
+        function spawnFloatingHearts(count = 6, customList = null) {
+            const hearts = customList || ["❤️", "💕", "💖", "💘", "🥰"];
+            for (let i = 0; i < count; i++) {
+                setTimeout(() => {
+                    const el = document.createElement('div');
+                    el.className = 'float-heart';
+                    el.innerText = hearts[Math.floor(Math.random() * hearts.length)];
+                    el.style.left = (12 + Math.random() * 76) + '%';
+                    fxLayer.appendChild(el);
+                    setTimeout(() => el.remove(), 2700);
+                }, i * 95);
+            }
+        }
+        function spawnConfettiBurst(x, y) {
+            const items = ["🎉", "✨", "💖", "🎁", "💕", "🌹"];
+            for (let i = 0; i < 16; i++) {
+                const el = document.createElement('div');
+                el.className = 'confetti-piece';
+                el.innerText = items[i % items.length];
+                el.style.left = x + 'px'; el.style.top = y + 'px';
+                const angle = (Math.PI * 2 * i) / 16, dist = 55 + Math.random() * 75;
+                el.style.setProperty('--tx', Math.round(Math.cos(angle) * dist) + 'px');
+                el.style.setProperty('--ty', Math.round(Math.sin(angle) * dist - 20) + 'px');
+                el.style.setProperty('--rot', Math.round((Math.random() - 0.5) * 360) + 'deg');
+                fxLayer.appendChild(el);
+                setTimeout(() => el.remove(), 1150);
+            }
+        }
+
+        // === DISGUISE & QUICK HIDE ===
+        function hideToNotes() {
+            if (activeCall) endActiveCall("completed");
+            chatScreen.style.display = 'none';
+            loginScreen.style.display = 'none';
+            notesScreen.style.display = 'flex';
+            closeAllHeaderPopovers();
+            emojiPicker.style.display = 'none';
+            reactionPopup.style.display = 'none';
+            isChatUnlocked = false;
+            stopRealtimeListeners();
+            if (auth.currentUser) {
+                setDoc(doc(db, "status", auth.currentUser.uid), {
+                    online: false, typing: false, lastSeen: serverTimestamp()
+                }, { merge: true }).catch(() => {});
+            }
+        }
+        document.getElementById('hide-btn').addEventListener('click', hideToNotes);
+        document.getElementById('call-quick-hide-btn').addEventListener('click', hideToNotes);
+
+        document.getElementById('save-note-btn').addEventListener('click', () => {
+            getAudioCtx();
+            if (noteContent.value.trim() === SECRET_CODE) {
+                noteContent.value = "";
+                notesScreen.style.display = 'none';
+                isChatUnlocked = true;
+                if (auth.currentUser) {
+                    chatScreen.style.display = 'flex';
+                    startRealtimeListeners(auth.currentUser);
+                    markReadViaStatus();
+                    updateMediaSidebar();
+                } else {
+                    loginScreen.style.display = 'flex';
+                }
+                return;
+            }
+            noteContent.value = "";
+            document.getElementById('note-status').innerText = "Note Saved Successfully!";
+            setTimeout(() => { document.getElementById('note-status').innerText = ""; }, 2000);
+        });
+
+        // === AUTH ===
+        document.getElementById('login-btn').addEventListener('click', () => {
+            getAudioCtx();
+            signInWithEmailAndPassword(auth, document.getElementById('email').value.trim(), document.getElementById('password').value)
+                .then((cred) => {
+                    document.getElementById('login-error').innerText = "";
+                    loginScreen.style.display = 'none';
+                    isChatUnlocked = true;
+                    chatScreen.style.display = 'flex';
+                    startRealtimeListeners(cred.user);
+                    markReadViaStatus();
+                    updateMediaSidebar();
+                })
+                .catch((err) => { document.getElementById('login-error').innerText = "Error: " + err.message; });
+        });
+
+        document.getElementById('logout-btn').addEventListener('click', async () => {
+            if (activeCall) endActiveCall("completed");
+            if (auth.currentUser) {
+                await setDoc(doc(db, "status", auth.currentUser.uid), {
+                    online: false, typing: false, lastSeen: serverTimestamp(), callSignal: null
+                }, { merge: true }).catch(() => {});
+            }
+            stopRealtimeListeners();
+            await signOut(auth);
+            hideToNotes();
+            messageInput.value = "";
+            typingIndicator.style.display = 'none';
+            isTyping = false;
+        });
+
+        onAuthStateChanged(auth, (user) => {
+            currentUserUid = user ? user.uid : null;
+            if (user && isChatUnlocked) startRealtimeListeners(user);
+            else if (!user) {
+                stopRealtimeListeners();
+                msgMap.clear();
+                clearBubblesKeepLoader();
+            }
+        });
+
+        document.addEventListener("visibilitychange", () => {
+            if (!auth.currentUser || !isChatUnlocked) return;
+            if (document.visibilityState === "hidden") {
+                setDoc(doc(db, "status", auth.currentUser.uid), {
+                    online: false, typing: false, lastSeen: serverTimestamp()
+                }, { merge: true }).catch(() => {});
+                isTyping = false;
+            } else {
+                setDoc(doc(db, "status", auth.currentUser.uid), { online: true }, { merge: true }).catch(() => {});
+                markReadViaStatus();
+            }
+        });
+
+        function markReadViaStatus() {
+            if (!auth.currentUser || !isChatUnlocked || chatScreen.style.display !== 'flex') return;
+            setDoc(doc(db, "status", auth.currentUser.uid), { online: true, lastReadAt: serverTimestamp() }, { merge: true }).catch(() => {});
+        }
+        function refreshTicksInPlace() {
+            document.querySelectorAll('.tick-mark').forEach(el => {
+                const msgMs = Number(el.dataset.msgMs || 0);
+                if (partnerLastReadMs >= msgMs && msgMs > 0) { el.innerText = "✓✓"; el.style.color = "#53bdeb"; }
+                else { el.innerText = "✓"; el.style.color = "rgba(255,255,255,0.72)"; }
+            });
+        }
+
+        // === REALTIME LISTENERS ===
+        function stopRealtimeListeners() {
+            if (unsubStatus) { unsubStatus(); unsubStatus = null; }
+            if (unsubMsgs) { unsubMsgs(); unsubMsgs = null; }
+            listenersStarted = false;
+        }
+
+        function startRealtimeListeners(user) {
+            if (listenersStarted) return;
+            listenersStarted = true;
+
+            setDoc(doc(db, "status", user.uid), {
+                online: true, typing: false, lastSeen: serverTimestamp(), mood: currentThemeMood
+            }, { merge: true }).catch(() => {});
+
+            unsubStatus = onSnapshot(collection(db, "status"), (snapshot) => {
+                snapshot.forEach((docSnap) => {
+                    if (docSnap.id === user.uid) return;
+                    const data = docSnap.data();
+
+                    if (data.typing) {
+                        typingIndicator.style.display = 'flex';
+                        partnerStatus.innerText = "Typing..."; partnerStatus.style.color = "#4CAF50";
+                        clearTimeout(partnerTypingTimeout);
+                        partnerTypingTimeout = setTimeout(() => { typingIndicator.style.display = 'none'; }, 3500);
+                    } else {
+                        typingIndicator.style.display = 'none';
+                        if (data.online) { partnerStatus.innerText = "Online 🟢"; partnerStatus.style.color = "#4CAF50"; }
+                        else if (data.lastSeen) {
+                            partnerStatus.innerText = "Last seen: " + data.lastSeen.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                            partnerStatus.style.color = "var(--text-muted)";
+                        } else { partnerStatus.innerText = "Offline"; partnerStatus.style.color = "var(--text-muted)"; }
+                    }
+
+                    if (data.mood) {
+                        const mObj = MOODS.find(m => m.id === data.mood);
+                        if (mObj) {
+                            partnerMoodBadge.style.display = 'inline-block';
+                            partnerMoodBadge.innerText = `${mObj.icon} ${mObj.label}`;
+                            setThemeMood(mObj.id);
+                        }
+                    }
+
+                    if (data.lastReadAt) { partnerLastReadMs = data.lastReadAt.toMillis(); refreshTicksInPlace(); }
+
+                    if (data.clearedAt) {
+                        const cMs = data.clearedAt.toMillis();
+                        if (cMs > lastLocalClearedMs) {
+                            lastLocalClearedMs = cMs;
+                            localStorage.setItem("sc_cleared_ms_v1", String(cMs));
+                            wipeLocalChat();
+                        }
+                    }
+
+                    if (data.lovePulseAt && data.lovePulseAt > lastHandledPulseAt) {
+                        if (lastHandledPulseAt !== 0 && chatScreen.style.display === 'flex') {
+                            playLovePulseSound(); spawnFloatingHearts(10);
+                        }
+                        lastHandledPulseAt = data.lovePulseAt;
+                    }
+
+                    if (data.lastReaction && data.lastReaction.at > lastHandledReactionAt) {
+                        lastHandledReactionAt = data.lastReaction.at;
+                        applyReactionLocally(data.lastReaction.msgId, data.lastReaction.emoji);
+                    }
+
+                    if (data.lastGiftOpened && data.lastGiftOpened.at > lastHandledGiftOpenedAt) {
+                        lastHandledGiftOpenedAt = data.lastGiftOpened.at;
+                        const rec = msgMap.get(data.lastGiftOpened.msgId);
+                        if (rec && !rec.giftOpened) { rec.giftOpened = true; saveMsgCache(); renderSingleMessage(rec); }
+                    }
+
+                    // CALL SIGNAL HANDLER
+                    if (data.callSignal) handlePartnerCallSignal(data.callSignal);
+                });
+            });
+
+            loadMessagesWithCache(user.uid);
+        }
+
+        // === CACHE & PAGINATION ===
+        function loadMsgCache() {
+            try {
+                const arr = JSON.parse(localStorage.getItem(CACHE_KEY) || "[]");
+                return Array.isArray(arr) ? arr : [];
+            } catch { return []; }
+        }
+        function saveMsgCache() {
+            let list = Array.from(msgMap.values())
+                .filter(m => m.sec > 0)
+                .sort((a, b) => (a.sec - b.sec) || (a.ns - b.ns))
+                .slice(-MAX_CACHE);
+            while (list.length >= 0) {
+                try { localStorage.setItem(CACHE_KEY, JSON.stringify(list)); break; }
+                catch { if (list.length === 0) break; list.shift(); }
+            }
+        }
+        function getOpenedOnceSet() {
+            try { return new Set(JSON.parse(localStorage.getItem(OPENED_ONCE_KEY) || "[]")); } catch { return new Set(); }
+        }
+        function markOpenedOnceLocal(id) {
+            const set = getOpenedOnceSet(); set.add(id);
+            localStorage.setItem(OPENED_ONCE_KEY, JSON.stringify(Array.from(set).slice(-100)));
+        }
+        function clearBubblesKeepLoader() {
+            Array.from(messagesContainer.children).forEach(ch => { if (ch !== loadOlderBar) ch.remove(); });
+        }
+        function wipeLocalChat() {
+            msgMap.clear();
+            clearBubblesKeepLoader();
+            localStorage.removeItem(CACHE_KEY);
+            hasMoreOlder = false;
+            updateOlderBarUI();
+        }
+        function updateOlderBarUI() {
+            if (msgMap.size === 0) { loadOlderBar.style.display = 'none'; return; }
+            loadOlderBar.style.display = 'block';
+            if (!hasMoreOlder) {
+                loadOlderBtn.innerText = "✨ Chat ki shuruat yahin se hui thi";
+                loadOlderBtn.disabled = true;
+            } else {
+                loadOlderBtn.innerText = isLoadingOlder ? "⏳ Load ho rahe hain..." : "⬆️ Purane Messages Load Karein";
+                loadOlderBtn.disabled = isLoadingOlder;
+            }
+        }
+
+        function docToRecord(docSnap) {
+            const d = docSnap.data();
+            const ts = d.createdAt;
+            return {
+                id: docSnap.id,
+                sender: d.sender,
+                text: d.text || "",
+                replyTo: d.replyTo || "",
+                image: d.image || null,
+                audio: d.audio || null,
+                viewOnce: !!d.viewOnce,
+                openedOnce: !!d.openedOnce,
+                isGift: !!d.isGift,
+                giftOpened: !!d.giftOpened,
+                isCallLog: !!d.isCallLog,
+                callOutcome: d.callOutcome || "",
+                reaction: d.reaction || "",
+                sec: ts ? ts.seconds : Math.floor(Date.now() / 1000),
+                ns: ts ? ts.nanoseconds : 0,
+                pending: !ts
+            };
+        }
+
+        async function rebuildSortedMessages(preserveScrollFromOlderLoad = false) {
+            const prevScrollHeight = messagesContainer.scrollHeight;
+            const prevScrollTop = messagesContainer.scrollTop;
+
+            clearBubblesKeepLoader();
+            const sorted = Array.from(msgMap.values()).sort((a, b) => (a.sec - b.sec) || (a.ns - b.ns));
+            for (const rec of sorted) {
+                await renderSingleMessage(rec, false);
+            }
+            updateOlderBarUI();
+
+            if (preserveScrollFromOlderLoad) {
+                const diff = messagesContainer.scrollHeight - prevScrollHeight;
+                messagesContainer.scrollTop = prevScrollTop + diff;
+            }
+        }
+
+        loadOlderBtn.addEventListener('click', async () => {
+            if (!hasMoreOlder || isLoadingOlder || msgMap.size === 0) return;
+            isLoadingOlder = true;
+            updateOlderBarUI();
+            try {
+                const sorted = Array.from(msgMap.values()).sort((a, b) => (a.sec - b.sec) || (a.ns - b.ns));
+                const oldest = sorted[0];
+                const oldestTs = new Timestamp(oldest.sec, oldest.ns);
+                const qOlder = query(
+                    collection(db, "messages"),
+                    where("createdAt", "<", oldestTs),
+                    orderBy("createdAt", "desc"),
+                    limit(PAGE_SIZE)
+                );
+                const snap = await getDocs(qOlder);
+                if (snap.docs.length < PAGE_SIZE) hasMoreOlder = false;
+                snap.docs.forEach(docSnap => {
+                    const rec = docToRecord(docSnap);
+                    if (rec.sec * 1000 >= lastLocalClearedMs) msgMap.set(rec.id, rec);
+                });
+                await rebuildSortedMessages(true);
+            } catch (e) {
+                console.error("Load older error:", e);
+            } finally {
+                isLoadingOlder = false;
+                updateOlderBarUI();
+            }
+        });
+
+        async function loadMessagesWithCache(myUid) {
+            isFirstSnapshot = true;
+            hasMoreOlder = true;
+            msgMap.clear();
+            clearBubblesKeepLoader();
+
+            const cached = loadMsgCache();
+            let lastSec = 0, lastNs = 0;
+            for (const item of cached) {
+                msgMap.set(item.id, item);
+                if (item.sec > lastSec || (item.sec === lastSec && item.ns > lastNs)) {
+                    lastSec = item.sec; lastNs = item.ns;
+                }
+            }
+            if (cached.length > 0) {
+                await rebuildSortedMessages(false);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+
+            const q = lastSec > 0
+                ? query(collection(db, "messages"), where("createdAt", ">", new Timestamp(lastSec, lastNs)), orderBy("createdAt", "asc"))
+                : query(collection(db, "messages"), orderBy("createdAt", "desc"), limit(30));
+
+            unsubMsgs = onSnapshot(q, async (snapshot) => {
+                let docs = snapshot.docs;
+                if (lastSec === 0 && isFirstSnapshot) {
+                    if (docs.length < 30) hasMoreOlder = false;
+                    docs = [...docs].reverse();
+                }
+
+                let incomingPartnerMsg = false;
+                snapshot.docChanges().forEach(ch => {
+                    if (ch.type === "added" && !isFirstSnapshot && ch.doc.data().sender !== myUid) incomingPartnerMsg = true;
+                });
+
+                for (const docSnap of docs) {
+                    const rec = docToRecord(docSnap);
+                    if (rec.sec * 1000 < lastLocalClearedMs && !rec.pending) continue;
+                    msgMap.set(rec.id, rec);
+                    await renderSingleMessage(rec, true);
+                }
+
+                saveMsgCache();
+                updateOlderBarUI();
+
+                if (incomingPartnerMsg && chatScreen.style.display === 'flex') {
+                    playMoodSound(currentThemeMood);
+                    spawnFloatingHearts(3);
+                    markReadViaStatus();
+                }
+                isFirstSnapshot = false;
+                scrollToBottomIfNear();
+            });
+        }
+
+        function formatDateLabel(ms) {
+            const d = new Date(ms), today = new Date(), yest = new Date();
+            yest.setDate(today.getDate() - 1);
+            if (d.toDateString() === today.toDateString()) return "Today";
+            if (d.toDateString() === yest.toDateString()) return "Yesterday";
+            return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+        }
+
+        async function renderSingleMessage(rec, autoScroll = false) {
+            const myUid = currentUserUid;
+            const msgMs = rec.sec * 1000;
+            const dateKey = new Date(msgMs).toDateString();
+
+            const existingEl = document.getElementById(`msg-${rec.id}`);
+            if (!existingEl && !document.querySelector(`.date-divider[data-date="${dateKey}"]`)) {
+                const div = document.createElement('div');
+                div.className = 'date-divider';
+                div.dataset.date = dateKey;
+                div.innerText = formatDateLabel(msgMs);
+                messagesContainer.appendChild(div);
+            }
+
+            const msgDiv = existingEl || document.createElement('div');
+            msgDiv.id = `msg-${rec.id}`;
+            msgDiv.className = `msg-bubble ${rec.sender === myUid ? 'msg-sent' : 'msg-received'}`;
+            if (rec.reaction) msgDiv.classList.add('has-reaction');
+            msgDiv.innerHTML = "";
+
+            const plainReply = rec.replyTo ? await decryptText(rec.replyTo) : "";
+            const plainText = rec.text ? await decryptText(rec.text) : "";
+
+            if (plainReply) {
+                const replyBox = document.createElement('div');
+                replyBox.className = 'msg-reply-box';
+                replyBox.innerText = plainReply;
+                msgDiv.appendChild(replyBox);
+            }
+
+            if (rec.isCallLog) {
+                const span = document.createElement('span');
+                span.className = 'call-log-pill' + (rec.callOutcome === 'missed' || rec.callOutcome === 'declined' ? ' missed' : '');
+                span.innerText = plainText;
+                msgDiv.appendChild(span);
+            } else if (rec.isGift) {
+                if (!rec.giftOpened && rec.sender !== myUid) {
+                    const box = document.createElement('div');
+                    box.className = 'gift-box-closed';
+                    box.innerHTML = `<div class="gift-icon-big">🎁</div><div class="gift-title">Special Surprise!</div><div class="gift-sub">Tap to unwrap ✨</div>`;
+                    box.addEventListener('click', async (e) => {
+                        e.stopPropagation();
+                        const r = box.getBoundingClientRect();
+                        spawnConfettiBurst(r.left + r.width / 2, r.top + r.height / 2);
+                        playGiftFanfare();
+                        rec.giftOpened = true;
+                        saveMsgCache();
+                        await renderSingleMessage(rec);
+                        updateDoc(doc(db, "messages", rec.id), { giftOpened: true }).catch(() => {});
+                        if (auth.currentUser) {
+                            setDoc(doc(db, "status", auth.currentUser.uid), {
+                                lastGiftOpened: { msgId: rec.id, at: Date.now() }
+                            }, { merge: true }).catch(() => {});
+                        }
+                    });
+                    msgDiv.appendChild(box);
+                } else if (!rec.giftOpened && rec.sender === myUid) {
+                    const box = document.createElement('div');
+                    box.className = 'gift-box-closed'; box.style.animation = 'none';
+                    box.innerHTML = `<div class="gift-icon-big">🎁</div><div class="gift-title">Gift Sent</div><div class="gift-sub">Tap to peek your note</div>`;
+                    box.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        box.outerHTML = `<div class="gift-opened-wrap"><div class="gift-opened-tag">🎁 Gift (Waiting to open):</div><div>${escapeHtml(plainText)}</div></div>`;
+                    });
+                    msgDiv.appendChild(box);
+                } else {
+                    const wrap = document.createElement('div');
+                    wrap.className = 'gift-opened-wrap';
+                    wrap.innerHTML = `<div class="gift-opened-tag">🎁 Gift Message ✨</div><span>${escapeHtml(plainText)}</span>`;
+                    msgDiv.appendChild(wrap);
+                }
+            } else {
+                if (rec.viewOnce) {
+                    const openedLocally = getOpenedOnceSet().has(rec.id);
+                    if (rec.openedOnce || openedLocally || !rec.image) {
+                        const span = document.createElement('span'); span.className = 'view-once-opened';
+                        span.innerText = "🔥 Photo opened & deleted"; msgDiv.appendChild(span);
+                    } else if (rec.sender === myUid) {
+                        const span = document.createElement('span'); span.className = 'view-once-opened';
+                        span.innerText = "🔥 View Once Photo Sent"; msgDiv.appendChild(span);
+                    } else {
+                        const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'view-once-btn';
+                        btn.innerText = "🔥 View Once Photo (Tap)";
+                        btn.addEventListener('click', async (e) => {
+                            e.stopPropagation();
+                            const imgData = await decryptText(rec.image);
+                            if (!imgData.startsWith("data:image")) return;
+                            viewerImg.src = imgData; imageViewerModal.style.display = 'flex';
+                            rec.openedOnce = true; rec.image = null;
+                            markOpenedOnceLocal(rec.id); saveMsgCache();
+                            renderSingleMessage(rec);
+                            updateDoc(doc(db, "messages", rec.id), { image: null, openedOnce: true }).catch(() => {});
+                        });
+                        msgDiv.appendChild(btn);
+                    }
+                } else if (rec.image) {
+                    const imgSrc = await decryptText(rec.image);
+                    if (imgSrc.startsWith("data:image")) {
+                        const img = document.createElement('img'); img.className = 'chat-img'; img.src = imgSrc;
+                        img.addEventListener('click', (e) => { e.stopPropagation(); viewerImg.src = imgSrc; imageViewerModal.style.display = 'flex'; });
+                        msgDiv.appendChild(img);
+                    }
+                }
+                if (rec.audio) {
+                    const audioSrc = await decryptText(rec.audio);
+                    if (audioSrc.startsWith("data:audio")) {
+                        const a = document.createElement('audio'); a.className = 'voice-audio'; a.controls = true; a.preload = 'none'; a.src = audioSrc;
+                        msgDiv.appendChild(a);
+                    }
+                }
+                if (plainText) {
+                    const ts = document.createElement('span'); ts.innerText = plainText; msgDiv.appendChild(ts);
+                }
+            }
+
+            const metaDiv = document.createElement('div');
+            metaDiv.style.cssText = "display:flex;align-items:center;justify-content:flex-end;gap:5px;margin-top:4px;";
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'msg-time'; timeSpan.style.margin = '0';
+            timeSpan.innerText = new Date(msgMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            metaDiv.appendChild(timeSpan);
+
+            if (rec.sender === myUid) {
+                const tickSpan = document.createElement('span');
+                tickSpan.className = 'tick-mark'; tickSpan.dataset.msgMs = String(msgMs); tickSpan.style.fontSize = '11.5px';
+                if (partnerLastReadMs >= msgMs && !rec.pending) { tickSpan.innerText = "✓✓"; tickSpan.style.color = "#53bdeb"; }
+                else { tickSpan.innerText = "✓"; tickSpan.style.color = "rgba(255,255,255,0.72)"; }
+                metaDiv.appendChild(tickSpan);
+            }
+            msgDiv.appendChild(metaDiv);
+
+            if (rec.reaction) {
+                const badge = document.createElement('span');
+                badge.className = 'msg-reaction-badge'; badge.innerText = rec.reaction;
+                msgDiv.appendChild(badge);
+            }
+
+            if (!existingEl) {
+                messagesContainer.appendChild(msgDiv);
+                const replySummary = plainText || (rec.isGift ? "🎁 Gift" : rec.audio ? "🎤 Voice Note" : (rec.image || rec.viewOnce) ? "📷 Photo" : "");
+                setupBubbleGestures(msgDiv, rec.id, replySummary);
+            }
+            if (autoScroll) scrollToBottomIfNear(true);
+        }
+
+        function escapeHtml(s) {
+            return s.replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+        }
+
+        // === BUBBLE GESTURES ===
+        function setupBubbleGestures(el, msgId, replySummary) {
+            let startX = 0, startY = 0, moved = false, longTimer = null, lastTap = 0;
+            const openPopup = (cx, cy) => {
+                activeReactionMsgId = msgId; activeReactionReplyText = replySummary;
+                reactionPopup.style.display = 'flex';
+                reactionPopup.style.left = Math.min(Math.max(10, cx - 130), window.innerWidth - 295) + 'px';
+                reactionPopup.style.top = Math.max(60, cy - 58) + 'px';
+            };
+            el.addEventListener('touchstart', (e) => {
+                startX = e.touches[0].clientX; startY = e.touches[0].clientY; moved = false;
+                longTimer = setTimeout(() => { if (!moved) openPopup(startX, startY); }, 460);
+            }, { passive: true });
+            el.addEventListener('touchmove', (e) => {
+                const dx = e.touches[0].clientX - startX, dy = e.touches[0].clientY - startY;
+                if (Math.abs(dx) > 10 || Math.abs(dy) > 10) { moved = true; clearTimeout(longTimer); }
+                if (dx > 12 && Math.abs(dy) < 30) el.style.transform = `translateX(${Math.min(dx * 0.45, 42)}px)`;
+            }, { passive: true });
+            el.addEventListener('touchend', (e) => {
+                clearTimeout(longTimer); el.style.transform = '';
+                const endX = e.changedTouches[0].clientX, endY = e.changedTouches[0].clientY;
+                const dx = endX - startX, dy = endY - startY;
+                if (dx > 60 && Math.abs(dy) < 45) { triggerReply(replySummary); return; }
+                if (!moved && !e.target.closest('button, img, audio, .gift-box-closed')) {
+                    const now = Date.now();
+                    if (now - lastTap < 300) { openPopup(endX, endY); lastTap = 0; }
+                    else lastTap = now;
+                }
+            }, { passive: true });
+            el.addEventListener('dblclick', (e) => {
+                if (!e.target.closest('button, img, audio, .gift-box-closed')) openPopup(e.clientX, e.clientY);
+            });
+        }
+
+        function triggerReply(txt) {
+            if (!txt) return;
+            replyingToText = txt; replyText.innerText = txt;
+            replyPreview.style.display = 'flex'; messageInput.focus();
+        }
+        document.getElementById('cancel-reply').addEventListener('click', () => { replyingToText = null; replyPreview.style.display = 'none'; });
+
+        async function applyReactionLocally(msgId, emoji) {
+            const rec = msgMap.get(msgId);
+            if (!rec) return;
+            rec.reaction = rec.reaction === emoji ? "" : emoji;
+            saveMsgCache(); await renderSingleMessage(rec);
+        }
+        document.querySelectorAll('.react-opt').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const emoji = btn.dataset.emoji;
+                reactionPopup.style.display = 'none';
+                if (!activeReactionMsgId) return;
+                const id = activeReactionMsgId, rec = msgMap.get(id);
+                const nextEmoji = (rec && rec.reaction === emoji) ? "" : emoji;
+                if (rec) { rec.reaction = nextEmoji; saveMsgCache(); await renderSingleMessage(rec); }
+                updateDoc(doc(db, "messages", id), { reaction: nextEmoji }).catch(() => {});
+                if (auth.currentUser) setDoc(doc(db, "status", auth.currentUser.uid), { lastReaction: { msgId: id, emoji, at: Date.now() } }, { merge: true }).catch(() => {});
+            });
+        });
+        document.getElementById('popup-reply-btn').addEventListener('click', (e) => {
+            e.stopPropagation(); reactionPopup.style.display = 'none'; triggerReply(activeReactionReplyText);
+        });
+
+        // === SCROLL ===
+        function scrollToBottomIfNear(force = false) {
+            const dist = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight;
+            if (force || dist < 160) { messagesContainer.scrollTop = messagesContainer.scrollHeight; scrollBottomBtn.style.display = 'none'; }
+            else scrollBottomBtn.style.display = 'flex';
+        }
+        messagesContainer.addEventListener('scroll', () => {
+            const dist = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight;
+            scrollBottomBtn.style.display = dist > 180 ? 'flex' : 'none';
+        });
+        scrollBottomBtn.addEventListener('click', () => messagesContainer.scrollTo({ top: messagesContainer.scrollHeight, behavior: 'smooth' }));
+
+        // === TYPING + SEND ===
+        messageInput.addEventListener('input', function () {
+            this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+            if (this.value === '') this.style.height = 'auto';
+            mediaForceOpen = false; updateMediaSidebar();
+            if (!auth.currentUser) return;
+            if (!isTyping) { setDoc(doc(db, "status", auth.currentUser.uid), { typing: true }, { merge: true }).catch(() => {}); isTyping = true; }
+            clearTimeout(typingTimeout);
+            typingTimeout = setTimeout(() => { setDoc(doc(db, "status", auth.currentUser.uid), { typing: false }, { merge: true }).catch(() => {}); isTyping = false; }, 1500);
+        });
+
+        async function sendTextMessage() {
+            const text = messageInput.value.trim();
+            if (!text || !auth.currentUser) return;
+            getAudioCtx(); playMoodSound(currentThemeMood);
+            const msgData = { text: await encryptText(text), sender: auth.currentUser.uid, read: false, createdAt: serverTimestamp() };
+            if (replyingToText) { msgData.replyTo = await encryptText(replyingToText); replyingToText = null; replyPreview.style.display = 'none'; }
+            messageInput.value = ""; messageInput.style.height = 'auto';
+            emojiPicker.style.display = 'none'; mediaForceOpen = false; updateMediaSidebar();
+            try {
+                await addDoc(collection(db, "messages"), msgData);
+                clearTimeout(typingTimeout);
+                setDoc(doc(db, "status", auth.currentUser.uid), { typing: false }, { merge: true }).catch(() => {});
+                isTyping = false; scrollToBottomIfNear(true);
+            } catch (e) { alert("Message send error: " + e.message); }
+        }
+        sendBtn.addEventListener('click', () => { if (isRecording) stopAndSendVoice(); else sendTextMessage(); });
+
+        // === CAMERA & GALLERY ===
+        document.getElementById('camera-btn').addEventListener('click', () => cameraInput.click());
+        document.getElementById('photo-btn').addEventListener('click', () => photoInput.click());
+
+        function compressImage(file, maxDim = 900) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader(); reader.onerror = reject;
+                reader.onload = () => {
+                    const img = new Image(); img.onerror = reject;
+                    img.onload = () => {
+                        let { width, height } = img;
+                        if (width > maxDim || height > maxDim) {
+                            const r = Math.min(maxDim / width, maxDim / height);
+                            width = Math.round(width * r); height = Math.round(height * r);
+                        }
+                        const c = document.createElement('canvas'); c.width = width; c.height = height;
+                        c.getContext('2d').drawImage(img, 0, 0, width, height);
+                        let q = 0.72, out = c.toDataURL('image/jpeg', q);
+                        while (out.length > 420000 && q > 0.3) { q -= 0.14; out = c.toDataURL('image/jpeg', q); }
+                        resolve(out);
+                    };
+                    img.src = reader.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+        async function handleSelectedImage(e) {
+            const file = e.target.files?.[0]; e.target.value = ""; if (!file) return;
+            try {
+                pendingPhotoDataUrl = await compressImage(file);
+                previewImg.src = pendingPhotoDataUrl; viewOnceCheckbox.checked = false;
+                photoPreviewModal.style.display = 'flex';
+            } catch { alert("Photo load nahi ho saki."); }
+        }
+        cameraInput.addEventListener('change', handleSelectedImage);
+        photoInput.addEventListener('change', handleSelectedImage);
+        document.getElementById('cancel-photo-btn').addEventListener('click', () => { pendingPhotoDataUrl = null; photoPreviewModal.style.display = 'none'; });
+        document.getElementById('send-photo-btn').addEventListener('click', async () => {
+            if (!pendingPhotoDataUrl || !auth.currentUser) return;
+            const d = pendingPhotoDataUrl, vo = viewOnceCheckbox.checked;
+            pendingPhotoDataUrl = null; photoPreviewModal.style.display = 'none'; playMoodSound(currentThemeMood);
+            await addDoc(collection(db, "messages"), { image: await encryptText(d), viewOnce: vo, openedOnce: false, sender: auth.currentUser.uid, read: false, createdAt: serverTimestamp() }).catch(e => alert(e.message));
+            scrollToBottomIfNear(true);
+        });
+        document.getElementById('close-viewer-btn').addEventListener('click', () => { imageViewerModal.style.display = 'none'; viewerImg.src = ""; });
+
+        // === VOICE NOTES ===
+        document.getElementById('mic-btn').addEventListener('click', async () => {
+            if (isRecording || !auth.currentUser) return;
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', ''].find(m => m === '' || (window.MediaRecorder && MediaRecorder.isTypeSupported(m)));
+                mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType, audioBitsPerSecond: 20000 }) : new MediaRecorder(stream);
+                audioChunks = []; recCancelled = false; recSeconds = 0; isRecording = true;
+                inputWrapper.style.display = 'none'; recordingBar.style.display = 'flex'; recTimer.innerText = "0:00";
+                mediaRecorder.ondataavailable = (ev) => { if (ev.data && ev.data.size > 0) audioChunks.push(ev.data); };
+                mediaRecorder.onstop = async () => {
+                    stream.getTracks().forEach(t => t.stop()); clearInterval(recInterval);
+                    isRecording = false; recordingBar.style.display = 'none'; inputWrapper.style.display = 'flex'; updateMediaSidebar();
+                    if (recCancelled || audioChunks.length === 0) return;
+                    const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+                    if (blob.size > 500000) { alert("Voice note bohot lamba hai."); return; }
+                    const reader = new FileReader();
+                    reader.onloadend = async () => {
+                        if (!auth.currentUser) return;
+                        playMoodSound(currentThemeMood);
+                        await addDoc(collection(db, "messages"), { audio: await encryptText(reader.result), sender: auth.currentUser.uid, read: false, createdAt: serverTimestamp() }).catch(() => {});
+                        scrollToBottomIfNear(true);
+                    };
+                    reader.readAsDataURL(blob);
+                };
+                mediaRecorder.start();
+                recInterval = setInterval(() => { recSeconds++; recTimer.innerText = `0:${String(recSeconds).padStart(2, '0')}`; if (recSeconds >= 20) stopAndSendVoice(); }, 1000);
+            } catch { alert("Mic permission allow karein!"); }
+        });
+        function stopAndSendVoice() { if (mediaRecorder && mediaRecorder.state === "recording") { recCancelled = false; mediaRecorder.stop(); } }
+        document.getElementById('cancel-rec-btn').addEventListener('click', () => { if (mediaRecorder && mediaRecorder.state === "recording") { recCancelled = true; mediaRecorder.stop(); } });
+
+        // === GIFT & PULSE & CLEAR ===
+        document.getElementById('gift-btn').addEventListener('click', () => { giftInput.value = ""; giftModal.style.display = 'flex'; giftInput.focus(); });
+        document.getElementById('cancel-gift-btn').addEventListener('click', () => { giftModal.style.display = 'none'; });
+        document.getElementById('send-gift-btn').addEventListener('click', async () => {
+            const txt = giftInput.value.trim(); if (!txt || !auth.currentUser) return;
+            giftModal.style.display = 'none'; getAudioCtx(); playGiftFanfare();
+            await addDoc(collection(db, "messages"), { text: await encryptText(txt), isGift: true, giftOpened: false, sender: auth.currentUser.uid, read: false, createdAt: serverTimestamp() }).catch(e => alert(e.message));
+            scrollToBottomIfNear(true);
+        });
+        document.getElementById('pulse-btn').addEventListener('click', () => {
+            getAudioCtx(); playLovePulseSound(); spawnFloatingHearts(10);
+            if (auth.currentUser) setDoc(doc(db, "status", auth.currentUser.uid), { lovePulseAt: Date.now() }, { merge: true }).catch(() => {});
+        });
+        document.getElementById('clear-chat-btn').addEventListener('click', async () => {
+            moreMenu.style.display = 'none';
+            if (!confirm("Kya aap waqai saari chat delete karna chahte hain?")) return;
+            try {
+                const nowMs = Date.now(); lastLocalClearedMs = nowMs;
+                localStorage.setItem("sc_cleared_ms_v1", String(nowMs));
+                if (auth.currentUser) await setDoc(doc(db, "status", auth.currentUser.uid), { clearedAt: serverTimestamp() }, { merge: true });
+                const snap = await getDocs(collection(db, "messages"));
+                await Promise.all(snap.docs.map(d => deleteDoc(doc(db, "messages", d.id))));
+                wipeLocalChat();
+            } catch (e) { alert("Delete Error: " + e.message); }
+        });
+
+        // ============================================================
+        // === WEBRTC AUDIO/VIDEO CALL + AI FACE FILTERS + DATA CHAN ===
+        // ============================================================
+        let activeCall = null; // { callId, role, mode, isMuted, isCamOff, facing, lowData, isScreen, durationSec, timerInt, statsInt, ringInt, timeoutInt }
+        let peerConn = null;
+        let dataChan = null;
+        let rawLocalStream = null;
+        let processedStream = null;
+        let screenStream = null;
+        let localIceList = [];
+        let addedRemoteIceKeys = new Set();
+        let lastIncomingHandledCallId = "";
+        let pendingIncomingSig = null;
+
+        // Face Detection & AR Filter state
+        let faceDetector = null;
+        let faceDetectorLoading = false;
+        let activeFilter = "none";
+        let arLoopRaf = null;
+        let lastDetections = [];
+        let lastVideoTimeSeen = -1;
+
+        async function ensureFaceDetector() {
+            if (faceDetector) return faceDetector;
+            if (faceDetectorLoading) return null;
+            faceDetectorLoading = true;
+            faceStatusBadge.style.display = 'inline-block';
+            faceStatusBadge.innerText = "⏳ Loading Face AI...";
+            try {
+                const visionMod = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3");
+                const vision = await visionMod.FilesetResolver.forVisionTasks(
+                    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
+                );
+                const modelPath = "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite";
+                try {
+                    faceDetector = await visionMod.FaceDetector.createFromOptions(vision, {
+                        baseOptions: { modelAssetPath: modelPath, delegate: "GPU" },
+                        runningMode: "VIDEO",
+                        minDetectionConfidence: 0.45
+                    });
+                } catch {
+                    faceDetector = await visionMod.FaceDetector.createFromOptions(vision, {
+                        baseOptions: { modelAssetPath: modelPath, delegate: "CPU" },
+                        runningMode: "VIDEO",
+                        minDetectionConfidence: 0.45
+                    });
+                }
+                faceStatusBadge.innerText = "😊 Face AI Ready";
+                return faceDetector;
+            } catch (e) {
+                console.warn("Face AI fallback:", e);
+                faceStatusBadge.innerText = "✨ Glow Mode";
+                return null;
+            } finally {
+                faceDetectorLoading = false;
+            }
+        }
+
+        function stopArPipeline() {
+            if (arLoopRaf) { cancelAnimationFrame(arLoopRaf); arLoopRaf = null; }
+            if (processedStream) { processedStream.getTracks().forEach(t => t.stop()); processedStream = null; }
+            faceStatusBadge.style.display = 'none';
+        }
+
+        async function applyCallFilter(filterName) {
+            activeFilter = filterName;
+            document.querySelectorAll('.filter-chip').forEach(c => c.classList.toggle('active', c.dataset.filter === filterName));
+            if (!activeCall || activeCall.mode !== 'video' || !rawLocalStream) return;
+
+            const vSender = peerConn?.getSenders().find(s => s.track && s.track.kind === 'video');
+            if (filterName === "none") {
+                stopArPipeline();
+                const rawTrack = rawLocalStream.getVideoTracks()[0];
+                if (rawTrack) {
+                    localVideo.srcObject = rawLocalStream;
+                    if (vSender) await vSender.replaceTrack(rawTrack).catch(() => {});
+                }
+                return;
+            }
+
+            if (["hearts", "crown", "bunny", "aura"].includes(filterName)) {
+                ensureFaceDetector();
+            }
+
+            rawCamVideo.srcObject = rawLocalStream;
+            await rawCamVideo.play().catch(() => {});
+            arCanvas.width = 480;
+            arCanvas.height = 640;
+
+            if (!arLoopRaf) {
+                const drawFrame = () => {
+                    if (!activeCall || activeFilter === "none") return;
+                    const w = arCanvas.width, h = arCanvas.height;
+                    arCtx.save();
+                    if (activeFilter === "glow") arCtx.filter = "brightness(1.08) contrast(0.95) saturate(1.18)";
+                    else if (activeFilter === "aura") arCtx.filter = "saturate(1.22) brightness(1.04)";
+                    else arCtx.filter = "none";
+
+                    if (rawCamVideo.readyState >= 2) {
+                        const vw = rawCamVideo.videoWidth || 480, vh = rawCamVideo.videoHeight || 640;
+                        const scale = Math.max(w / vw, h / vh);
+                        const dw = vw * scale, dh = vh * scale;
+                        arCtx.drawImage(rawCamVideo, (w - dw) / 2, (h - dh) / 2, dw, dh);
+                    }
+                    arCtx.restore();
+
+                    if (faceDetector && rawCamVideo.readyState >= 2 && rawCamVideo.currentTime !== lastVideoTimeSeen) {
+                        lastVideoTimeSeen = rawCamVideo.currentTime;
+                        try {
+                            const res = faceDetector.detectForVideo(rawCamVideo, performance.now());
+                            lastDetections = res.detections || [];
+                            faceStatusBadge.style.display = 'inline-block';
+                            faceStatusBadge.innerText = lastDetections.length > 0 ? "😊 Face Locked" : "🔍 Finding Face";
+                        } catch {}
+                    }
+
+                    // Draw AR Stickers using detected face keypoints
+                    if (lastDetections.length > 0) {
+                        const det = lastDetections[0];
+                        const box = det.boundingBox;
+                        const kps = det.keypoints || [];
+                        const vw = rawCamVideo.videoWidth || 480, vh = rawCamVideo.videoHeight || 640;
+                        const scale = Math.max(w / vw, h / vh);
+                        const ox = (w - vw * scale) / 2, oy = (h - vh * scale) / 2;
+
+                        const rightEye = kps[0] ? { x: ox + kps[0].x * vw * scale, y: oy + kps[0].y * vh * scale } : null;
+                        const leftEye  = kps[1] ? { x: ox + kps[1].x * vw * scale, y: oy + kps[1].y * vh * scale } : null;
+                        const nose     = kps[2] ? { x: ox + kps[2].x * vw * scale, y: oy + kps[2].y * vh * scale } : null;
+                        const faceW = box ? box.width * scale : 180;
+                        const topX = box ? ox + (box.originX + box.width / 2) * scale : w / 2;
+                        const topY = box ? oy + box.originY * scale : h * 0.25;
+
+                        arCtx.textAlign = "center";
+                        arCtx.textBaseline = "middle";
+
+                        if (activeFilter === "hearts" && rightEye && leftEye) {
+                            const sz = Math.max(26, faceW * 0.24);
+                            arCtx.font = `${sz}px sans-serif`;
+                            arCtx.fillText("💖", rightEye.x, rightEye.y);
+                            arCtx.fillText("💖", leftEye.x, leftEye.y);
+                        } else if (activeFilter === "crown") {
+                            const sz = Math.max(46, faceW * 0.48);
+                            arCtx.font = `${sz}px sans-serif`;
+                            arCtx.fillText("👑", topX, topY - sz * 0.35);
+                        } else if (activeFilter === "bunny") {
+                            const sz = Math.max(44, faceW * 0.52);
+                            arCtx.font = `${sz}px sans-serif`;
+                            arCtx.fillText("🐰", topX, topY - sz * 0.35);
+                            if (nose) {
+                                arCtx.font = `${Math.max(20, faceW * 0.16)}px sans-serif`;
+                                arCtx.fillText("💗", nose.x, nose.y);
+                            }
+                        } else if (activeFilter === "aura" && box) {
+                            arCtx.save();
+                            arCtx.strokeStyle = "rgba(255, 105, 180, 0.7)";
+                            arCtx.lineWidth = 6;
+                            arCtx.shadowColor = "#ff4081";
+                            arCtx.shadowBlur = 18;
+                            arCtx.beginPath();
+                            arCtx.arc(topX, oy + (box.originY + box.height * 0.5) * scale, faceW * 0.65, 0, Math.PI * 2);
+                            arCtx.stroke();
+                            arCtx.restore();
+                        }
+                    }
+
+                    if (activeFilter === "aura") {
+                        arCtx.fillStyle = "rgba(255, 140, 190, 0.12)";
+                        arCtx.fillRect(0, 0, w, h);
+                    }
+                    arLoopRaf = requestAnimationFrame(drawFrame);
+                };
+                arLoopRaf = requestAnimationFrame(drawFrame);
+            }
+
+            processedStream = arCanvas.captureStream(24);
+            const procTrack = processedStream.getVideoTracks()[0];
+            if (procTrack) {
+                localVideo.srcObject = processedStream;
+                if (vSender) await vSender.replaceTrack(procTrack).catch(() => {});
+            }
+        }
+
+        // Ringtone Loop
+        function startRingtone(outgoing = false) {
+            stopRingtone();
+            const playBeat = () => {
+                if (outgoing) {
+                    playTone(440, 0, 0.35, "sine", 0.14);
+                } else {
+                    playTone(523.25, 0, 0.25, "sine", 0.22);
+                    playTone(659.25, 0.18, 0.25, "sine", 0.22);
+                    playTone(783.99, 0.36, 0.4, "sine", 0.22);
+                    if (navigator.vibrate) navigator.vibrate([250, 150, 250]);
+                }
+            };
+            playBeat();
+            if (activeCall) activeCall.ringInt = setInterval(playBeat, 2100);
+        }
+        function stopRingtone() {
+            if (activeCall?.ringInt) { clearInterval(activeCall.ringInt); activeCall.ringInt = null; }
+            if (navigator.vibrate) navigator.vibrate(0);
+        }
+
+        async function getCallMedia(mode, facing = "user") {
+            const constraints = {
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+                video: mode === "video" ? { facingMode: facing, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 24, max: 30 } } : false
+            };
+            return navigator.mediaDevices.getUserMedia(constraints);
+        }
+
+        function attachDataChannel(ch) {
+            dataChan = ch;
+            ch.onmessage = (ev) => {
+                try {
+                    const msg = JSON.parse(ev.data);
+                    if (msg.type === "react") {
+                        playMoodSound("romantic");
+                        spawnFloatingHearts(7, [msg.emoji, "💖"]);
+                    }
+                } catch {}
+            };
+        }
+
+        async function flushCallSignal(extra = {}) {
+            if (!auth.currentUser || !activeCall) return;
+            const payload = {
+                callId: activeCall.callId,
+                role: activeCall.role,
+                mode: activeCall.mode,
+                state: activeCall.state,
+                ice: localIceList.slice(-20),
+                at: Date.now(),
+                ...extra
+            };
+            await setDoc(doc(db, "status", auth.currentUser.uid), { callSignal: payload }, { merge: true }).catch(() => {});
+        }
+
+        function createCallPeerConnection() {
+            peerConn = new RTCPeerConnection(ICE_SERVERS);
+            localIceList = [];
+            addedRemoteIceKeys = new Set();
+
+            let iceFlushTimer = null;
+            peerConn.onicecandidate = (e) => {
+                if (e.candidate && activeCall) {
+                    localIceList.push(e.candidate.toJSON());
+                    clearTimeout(iceFlushTimer);
+                    iceFlushTimer = setTimeout(() => { flushCallSignal(); }, 250);
+                }
+            };
+
+            peerConn.ontrack = (e) => {
+                if (e.streams && e.streams[0]) remoteVideo.srcObject = e.streams[0];
+            };
+
+            peerConn.onconnectionstatechange = () => {
+                if (!peerConn || !activeCall) return;
+                if (peerConn.connectionState === "connected") {
+                    stopRingtone();
+                    startCallTimer();
+                } else if (["failed", "closed"].includes(peerConn.connectionState)) {
+                    endActiveCall("completed");
+                }
+            };
+        }
+
+        function startCallTimer() {
+            if (!activeCall || activeCall.timerInt) return;
+            activeCall.durationSec = 0;
+            callStateText.innerText = "00:00";
+            audioStageSub.innerText = "Connected • 00:00";
+            activeCall.timerInt = setInterval(() => {
+                if (!activeCall) return;
+                activeCall.durationSec++;
+                const mm = String(Math.floor(activeCall.durationSec / 60)).padStart(2, '0');
+                const ss = String(activeCall.durationSec % 60).padStart(2, '0');
+                callStateText.innerText = `${mm}:${ss}`;
+                audioStageSub.innerText = `Connected • ${mm}:${ss}`;
+            }, 1000);
+
+            // Live Signal Quality Monitor
+            activeCall.statsInt = setInterval(async () => {
+                if (!peerConn || !activeCall) return;
+                try {
+                    const stats = await peerConn.getStats();
+                    let rttMs = 0;
+                    stats.forEach(rep => {
+                        if (rep.type === "candidate-pair" && rep.state === "succeeded" && rep.currentRoundTripTime) {
+                            rttMs = Math.round(rep.currentRoundTripTime * 1000);
+                        }
+                    });
+                    if (rttMs === 0) callSignalBadge.innerText = "📶 Connected";
+                    else if (rttMs < 150) callSignalBadge.innerText = `📶 HD (${rttMs}ms)`;
+                    else if (rttMs < 350) callSignalBadge.innerText = `📶 Fair (${rttMs}ms)`;
+                    else {
+                        callSignalBadge.innerText = `📶 Weak (${rttMs}ms)`;
+                        if (!activeCall.lowData && activeCall.mode === "video") toggleLowDataMode(true);
+                    }
+                } catch {}
+            }, 3000);
+        }
+
+        async function toggleLowDataMode(forceOn = null) {
+            if (!activeCall || !peerConn) return;
+            activeCall.lowData = forceOn !== null ? forceOn : !activeCall.lowData;
+            document.getElementById('call-lowdata-btn').classList.toggle('active', activeCall.lowData);
+            const vSender = peerConn.getSenders().find(s => s.track && s.track.kind === 'video');
+            if (vSender) {
+                try {
+                    const params = vSender.getParameters();
+                    if (!params.encodings || params.encodings.length === 0) params.encodings = [{}];
+                    params.encodings[0].maxBitrate = activeCall.lowData ? 180000 : 900000;
+                    params.encodings[0].scaleResolutionDownBy = activeCall.lowData ? 2.0 : 1.0;
+                    await vSender.setParameters(params);
+                } catch {}
+            }
+        }
+
+        async function logCallHistory(mode, outcome, durationSec) {
+            if (!auth.currentUser) return;
+            const icon = mode === "video" ? "📹" : "📞";
+            const label = mode === "video" ? "Video Call" : "Audio Call";
+            let txt = "";
+            if (outcome === "missed") txt = `${icon} Missed ${label}`;
+            else if (outcome === "declined") txt = `${icon} ${label} Declined`;
+            else {
+                const mm = String(Math.floor(durationSec / 60)).padStart(2, '0');
+                const ss = String(durationSec % 60).padStart(2, '0');
+                txt = `${icon} ${label} • ${mm}:${ss}`;
+            }
+            await addDoc(collection(db, "messages"), {
+                text: await encryptText(txt),
+                isCallLog: true,
+                callOutcome: outcome,
+                sender: auth.currentUser.uid,
+                read: false,
+                createdAt: serverTimestamp()
+            }).catch(() => {});
+        }
+
+        async function startOutgoingCall(mode) {
+            if (activeCall || !auth.currentUser) return;
+            callMenu.style.display = 'none';
+            getAudioCtx();
+            try {
+                rawLocalStream = await getCallMedia(mode, "user");
+            } catch {
+                alert("Call ke liye Camera / Mic permission allow karein!");
+                return;
+            }
+
+            const callId = Date.now() + "_" + Math.random().toString(36).slice(2, 7);
+            activeCall = {
+                callId, role: "caller", mode, state: "ringing",
+                isMuted: false, isCamOff: false, facing: "user",
+                lowData: false, isScreen: false, durationSec: 0
+            };
+
+            callOverlay.style.display = 'flex';
+            callOverlay.classList.toggle('audio-only', mode === 'audio');
+            incomingActions.style.display = 'none';
+            activeCallControls.style.display = 'flex';
+            callFilterTray.style.display = 'none';
+            callStateText.innerText = "Calling...";
+            audioStageSub.innerText = "Ringing...";
+            callSignalBadge.innerText = "📶 Connecting";
+            localVideo.srcObject = rawLocalStream;
+            localVideo.classList.remove('no-mirror');
+
+            createCallPeerConnection();
+            attachDataChannel(peerConn.createDataChannel("fun"));
+            rawLocalStream.getTracks().forEach(t => peerConn.addTrack(t, rawLocalStream));
+
+            const offer = await peerConn.createOffer();
+            await peerConn.setLocalDescription(offer);
+            await flushCallSignal({ sdp: { type: offer.type, sdp: offer.sdp } });
+            startRingtone(true);
+
+            activeCall.timeoutInt = setTimeout(() => {
+                if (activeCall && activeCall.state === "ringing") endActiveCall("missed");
+            }, 35000);
+        }
+
+        document.getElementById('start-audio-call-btn').addEventListener('click', () => startOutgoingCall('audio'));
+        document.getElementById('start-video-call-btn').addEventListener('click', () => startOutgoingCall('video'));
+
+        async function handlePartnerCallSignal(sig) {
+            if (!sig || !sig.callId) return;
+            const ageMs = Date.now() - (sig.at || 0);
+
+            // 1. Incoming Ringing
+            if (sig.role === "caller" && sig.state === "ringing") {
+                if (ageMs > 60000) return;
+                if (!activeCall && lastIncomingHandledCallId !== sig.callId) {
+                    lastIncomingHandledCallId = sig.callId;
+                    pendingIncomingSig = sig;
+                    activeCall = {
+                        callId: sig.callId, role: "callee", mode: sig.mode || "audio",
+                        state: "ringing_in", isMuted: false, isCamOff: false,
+                        facing: "user", lowData: false, isScreen: false, durationSec: 0
+                    };
+                    callOverlay.style.display = 'flex';
+                    callOverlay.classList.toggle('audio-only', sig.mode === 'audio');
+                    incomingActions.style.display = 'flex';
+                    activeCallControls.style.display = 'none';
+                    callStateText.innerText = sig.mode === "video" ? "Incoming Video Call..." : "Incoming Audio Call...";
+                    audioStageSub.innerText = "Incoming Call 💖";
+                    startRingtone(false);
+                }
+            }
+
+            // 2. Caller receives Answer
+            if (activeCall && activeCall.callId === sig.callId && activeCall.role === "caller" && sig.state === "accepted" && sig.sdp && peerConn && !peerConn.remoteDescription) {
+                activeCall.state = "connected";
+                clearTimeout(activeCall.timeoutInt);
+                stopRingtone();
+                await peerConn.setRemoteDescription(new RTCSessionDescription(sig.sdp)).catch(() => {});
+            }
+
+            // 3. Trickle ICE from Partner
+            if (activeCall && activeCall.callId === sig.callId && Array.isArray(sig.ice) && peerConn && peerConn.remoteDescription) {
+                for (const c of sig.ice) {
+                    const key = JSON.stringify(c);
+                    if (!addedRemoteIceKeys.has(key)) {
+                        addedRemoteIceKeys.add(key);
+                        await peerConn.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
+                    }
+                }
+            }
+
+            // 4. Partner Declined or Ended
+            if (activeCall && activeCall.callId === sig.callId && (sig.state === "ended" || sig.state === "declined")) {
+                const outcome = (activeCall.role === "caller" && activeCall.durationSec === 0)
+                    ? (sig.state === "declined" ? "declined" : "missed")
+                    : "completed";
+                await endActiveCall(outcome, false);
+            }
+        }
+
+        document.getElementById('accept-call-btn').addEventListener('click', async () => {
+            if (!pendingIncomingSig || !activeCall) return;
+            getAudioCtx();
+            stopRingtone();
+            const sig = pendingIncomingSig;
+            try {
+                rawLocalStream = await getCallMedia(sig.mode || "audio", "user");
+            } catch {
+                alert("Call uthane ke liye Camera/Mic allow karein!");
+                return;
+            }
+            activeCall.state = "accepted";
+            incomingActions.style.display = 'none';
+            activeCallControls.style.display = 'flex';
+            callFilterTray.style.display = 'none';
+            callStateText.innerText = "Connecting...";
+            localVideo.srcObject = rawLocalStream;
+
+            createCallPeerConnection();
+            peerConn.ondatachannel = (ev) => attachDataChannel(ev.channel);
+            rawLocalStream.getTracks().forEach(t => peerConn.addTrack(t, rawLocalStream));
+
+            await peerConn.setRemoteDescription(new RTCSessionDescription(sig.sdp));
+            if (Array.isArray(sig.ice)) {
+                for (const c of sig.ice) {
+                    const key = JSON.stringify(c);
+                    if (!addedRemoteIceKeys.has(key)) {
+                        addedRemoteIceKeys.add(key);
+                        await peerConn.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
+                    }
+                }
+            }
+            const answer = await peerConn.createAnswer();
+            await peerConn.setLocalDescription(answer);
+            await flushCallSignal({ sdp: { type: answer.type, sdp: answer.sdp } });
+        });
+
+        document.getElementById('decline-call-btn').addEventListener('click', async () => {
+            if (!activeCall) return;
+            activeCall.state = "declined";
+            await flushCallSignal();
+            await endActiveCall("declined", false);
+        });
+
+        document.getElementById('end-call-btn').addEventListener('click', () => {
+            if (!activeCall) return;
+            const outcome = activeCall.durationSec > 0 ? "completed" : "missed";
+            endActiveCall(outcome, true);
+        });
+
+        async function endActiveCall(outcome = "completed", notifyPartner = true) {
+            if (!activeCall) return;
+            const callSnap = { ...activeCall };
+            stopRingtone();
+            clearTimeout(activeCall.timeoutInt);
+            clearInterval(activeCall.timerInt);
+            clearInterval(activeCall.statsInt);
+            stopArPipeline();
+            activeFilter = "none";
+            document.querySelectorAll('.filter-chip').forEach(c => c.classList.toggle('active', c.dataset.filter === "none"));
+
+            if (notifyPartner && auth.currentUser) {
+                activeCall.state = "ended";
+                await flushCallSignal();
+            }
+
+            if (callSnap.role === "caller") {
+                await logCallHistory(callSnap.mode, outcome, callSnap.durationSec);
+            }
+
+            if (rawLocalStream) { rawLocalStream.getTracks().forEach(t => t.stop()); rawLocalStream = null; }
+            if (screenStream) { screenStream.getTracks().forEach(t => t.stop()); screenStream = null; }
+            if (peerConn) { peerConn.close(); peerConn = null; }
+            dataChan = null;
+            remoteVideo.srcObject = null;
+            localVideo.srcObject = null;
+            pendingIncomingSig = null;
+            activeCall = null;
+            callOverlay.style.display = 'none';
+
+            if (auth.currentUser) {
+                setTimeout(() => {
+                    if (!activeCall && auth.currentUser) {
+                        setDoc(doc(db, "status", auth.currentUser.uid), { callSignal: null }, { merge: true }).catch(() => {});
+                    }
+                }, 1800);
+            }
+        }
+
+        // === IN-CALL CONTROLS ===
+        document.getElementById('call-mute-btn').addEventListener('click', (e) => {
+            if (!activeCall || !rawLocalStream) return;
+            activeCall.isMuted = !activeCall.isMuted;
+            rawLocalStream.getAudioTracks().forEach(t => t.enabled = !activeCall.isMuted);
+            e.currentTarget.innerText = activeCall.isMuted ? "🔇" : "🎙️";
+            e.currentTarget.classList.toggle('active', activeCall.isMuted);
+        });
+
+        document.getElementById('call-cam-btn').addEventListener('click', (e) => {
+            if (!activeCall || !rawLocalStream) return;
+            activeCall.isCamOff = !activeCall.isCamOff;
+            rawLocalStream.getVideoTracks().forEach(t => t.enabled = !activeCall.isCamOff);
+            e.currentTarget.classList.toggle('active', activeCall.isCamOff);
+        });
+
+        document.getElementById('call-flip-btn').addEventListener('click', async () => {
+            if (!activeCall || activeCall.mode !== "video" || activeCall.isScreen) return;
+            activeCall.facing = activeCall.facing === "user" ? "environment" : "user";
+            try {
+                const newStream = await getCallMedia("video", activeCall.facing);
+                const newVTrack = newStream.getVideoTracks()[0];
+                const newATrack = newStream.getAudioTracks()[0];
+                if (rawLocalStream) rawLocalStream.getTracks().forEach(t => t.stop());
+                rawLocalStream = newStream;
+                localVideo.classList.toggle('no-mirror', activeCall.facing === "environment");
+                const aSender = peerConn?.getSenders().find(s => s.track && s.track.kind === 'audio');
+                if (aSender && newATrack) await aSender.replaceTrack(newATrack).catch(() => {});
+                if (activeFilter !== "none") await applyCallFilter(activeFilter);
+                else {
+                    localVideo.srcObject = rawLocalStream;
+                    const vSender = peerConn?.getSenders().find(s => s.track && s.track.kind === 'video');
+                    if (vSender && newVTrack) await vSender.replaceTrack(newVTrack).catch(() => {});
+                }
+            } catch { alert("Camera switch nahi ho saka."); }
+        });
+
+        document.getElementById('call-filter-btn').addEventListener('click', () => {
+            if (!activeCall || activeCall.mode !== "video") {
+                alert("Face filters Video Call mein kaam karte hain!");
+                return;
+            }
+            callFilterTray.style.display = callFilterTray.style.display === 'flex' ? 'none' : 'flex';
+        });
+        document.querySelectorAll('.filter-chip').forEach(chip => {
+            chip.addEventListener('click', () => applyCallFilter(chip.dataset.filter));
+        });
+
+        document.getElementById('call-lowdata-btn').addEventListener('click', () => toggleLowDataMode());
+
+        document.getElementById('call-screen-btn').addEventListener('click', async (e) => {
+            if (!activeCall || !peerConn) return;
+            if (!navigator.mediaDevices || typeof navigator.mediaDevices.getDisplayMedia !== 'function') {
+                alert("Aapke phone browser mein Screen Share support nahi hai (PC Chrome ya naye Android par chalega).");
+                return;
+            }
+            const btn = e.currentTarget;
+            if (activeCall.isScreen) {
+                if (screenStream) { screenStream.getTracks().forEach(t => t.stop()); screenStream = null; }
+                activeCall.isScreen = false; btn.classList.remove('active');
+                localVideo.classList.remove('no-mirror');
+                if (rawLocalStream) {
+                    const camTrack = rawLocalStream.getVideoTracks()[0];
+                    const vSender = peerConn.getSenders().find(s => s.track && s.track.kind === 'video');
+                    if (vSender && camTrack) await vSender.replaceTrack(camTrack).catch(() => {});
+                    localVideo.srcObject = rawLocalStream;
+                }
+                return;
+            }
+            try {
+                screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                const sTrack = screenStream.getVideoTracks()[0];
+                const vSender = peerConn.getSenders().find(s => s.track && s.track.kind === 'video');
+                if (!vSender) { alert("Video Call mein Screen Share start karein."); screenStream.getTracks().forEach(t => t.stop()); return; }
+                stopArPipeline();
+                await vSender.replaceTrack(sTrack);
+                localVideo.srcObject = screenStream;
+                localVideo.classList.add('no-mirror');
+                activeCall.isScreen = true; btn.classList.add('active');
+                sTrack.onended = () => { if (activeCall?.isScreen) btn.click(); };
+            } catch {
+                alert("Screen Share cancel ho gaya ya browser support nahi karta.");
+            }
+        });
+
+        document.getElementById('call-snap-btn').addEventListener('click', () => {
+            if (!activeCall || activeCall.mode !== "video" || remoteVideo.readyState < 2) return;
+            const c = document.createElement('canvas');
+            c.width = remoteVideo.videoWidth || 480; c.height = remoteVideo.videoHeight || 640;
+            c.getContext('2d').drawImage(remoteVideo, 0, 0, c.width, c.height);
+            pendingPhotoDataUrl = c.toDataURL('image/jpeg', 0.78);
+            previewImg.src = pendingPhotoDataUrl;
+            viewOnceCheckbox.checked = false;
+            photoPreviewModal.style.display = 'flex';
+        });
+
+        document.querySelectorAll('.call-react-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const em = btn.dataset.creact;
+                spawnFloatingHearts(6, [em, "✨"]);
+                playMoodSound("romantic");
+                if (dataChan && dataChan.readyState === "open") {
+                    dataChan.send(JSON.stringify({ type: "react", emoji: em }));
+                }
+            });
+        });
+    </script>
+</body>
+</html>
