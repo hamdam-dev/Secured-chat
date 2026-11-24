@@ -1,0 +1,45 @@
+name: Build My Notes APK
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - name: Prepare Web Files
+        run: |
+          mkdir -p www
+          cp index.html www/
+          cp style.css www/
+          cp manifest.json www/ || true
+      - name: Install & Build Android
+        run: |
+          npm install
+          npx cap add android
+          cp android-custom/MainActivity.java android/app/src/main/java/com/mynotes/offline/MainActivity.java
+          python3 - << 'EOF'
+          p = "android/app/src/main/AndroidManifest.xml"
+          txt = open(p).read()
+          perms = """    <uses-permission android:name="android.permission.CAMERA" />
+              <uses-permission android:name="android.permission.RECORD_AUDIO" />
+              <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+              <uses-permission android:name="android.permission.WAKE_LOCK" />"""
+          txt = txt.replace('<uses-permission android:name="android.permission.INTERNET" />', '<uses-permission android:name="android.permission.INTERNET" />\n' + perms)
+          open(p, "w").write(txt)
+          EOF
+          npx cap sync android
+          cd android && chmod +x gradlew && ./gradlew assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MyNotes-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
