@@ -86,9 +86,16 @@ jobs:
         run: |
           npm install
           npx cap add android
-          cp android-custom/MainActivity.java android/app/src/main/java/com/notes/app/MainActivity.java
+
+          TARGET_MAIN=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
+          if [ -n "$TARGET_MAIN" ] && [ -f "android-custom/MainActivity.java" ]; then
+            PKG=$(grep '^package ' "$TARGET_MAIN" | head -n 1)
+            cp android-custom/MainActivity.java "$TARGET_MAIN"
+            sed -i "s/^package .*/$PKG/" "$TARGET_MAIN"
+          fi
 
           RES_DIR="android/app/src/main/res"
+          mkdir -p $RES_DIR/mipmap-mdpi $RES_DIR/mipmap-hdpi $RES_DIR/mipmap-xhdpi $RES_DIR/mipmap-xxhdpi $RES_DIR/mipmap-xxxhdpi $RES_DIR/values
           rsvg-convert -w 48 -h 48 notes-icon-full.svg -o $RES_DIR/mipmap-mdpi/ic_launcher.png
           rsvg-convert -w 48 -h 48 notes-icon-full.svg -o $RES_DIR/mipmap-mdpi/ic_launcher_round.png
           rsvg-convert -w 72 -h 72 notes-icon-full.svg -o $RES_DIR/mipmap-hdpi/ic_launcher.png
