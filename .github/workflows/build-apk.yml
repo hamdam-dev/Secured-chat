@@ -1,7 +1,8 @@
 name: Build My Notes APK
+
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -9,38 +10,116 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 20
+
       - uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
-      - name: Prepare Web Files
+          distribution: temurin
+          java-version: 17
+
+      - name: Install SVG converter
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y librsvg2-bin
+
+      - name: Generate Notes App Icons
         run: |
           mkdir -p www
-          cp index.html www/
-          cp style.css www/
-          cp manifest.json www/ || true
+
+          cat << 'EOF' > notes-icon-full.svg
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+            <rect width="512" height="512" rx="110" fill="#FFB300"/>
+            <rect x="96" y="88" width="320" height="352" rx="34" fill="#FFFDF5"/>
+            <rect x="96" y="88" width="320" height="72" rx="34" fill="#FFA000"/>
+            <rect x="96" y="130" width="320" height="30" fill="#FFA000"/>
+            <circle cx="164" cy="88" r="16" fill="#5D4037"/>
+            <circle cx="256" cy="88" r="16" fill="#5D4037"/>
+            <circle cx="348" cy="88" r="16" fill="#5D4037"/>
+            <rect x="136" y="202" width="240" height="14" rx="7" fill="#E6D5A9"/>
+            <rect x="136" y="252" width="240" height="14" rx="7" fill="#E6D5A9"/>
+            <rect x="136" y="302" width="180" height="14" rx="7" fill="#E6D5A9"/>
+            <rect x="136" y="352" width="140" height="14" rx="7" fill="#E6D5A9"/>
+            <g transform="translate(338 308) rotate(38)">
+              <rect x="-18" y="-75" width="36" height="115" rx="8" fill="#FF7043"/>
+              <rect x="-18" y="-75" width="36" height="24" rx="6" fill="#D84315"/>
+              <polygon points="-18,40 18,40 0,72" fill="#FFE0B2"/>
+              <polygon points="-6,59 6,59 0,72" fill="#3E2723"/>
+            </g>
+          </svg>
+          EOF
+
+          cat << 'EOF' > notes-icon-fg.svg
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+            <g transform="translate(76 76) scale(0.703)">
+              <rect x="86" y="88" width="340" height="356" rx="38" fill="#FFFDF5"/>
+              <rect x="86" y="88" width="340" height="74" rx="38" fill="#FF8F00"/>
+              <rect x="86" y="132" width="340" height="30" fill="#FF8F00"/>
+              <circle cx="158" cy="88" r="16" fill="#5D4037"/>
+              <circle cx="256" cy="88" r="16" fill="#5D4037"/>
+              <circle cx="354" cy="88" r="16" fill="#5D4037"/>
+              <rect x="132" y="204" width="248" height="15" rx="7" fill="#E6D5A9"/>
+              <rect x="132" y="254" width="248" height="15" rx="7" fill="#E6D5A9"/>
+              <rect x="132" y="304" width="186" height="15" rx="7" fill="#E6D5A9"/>
+              <rect x="132" y="354" width="144" height="15" rx="7" fill="#E6D5A9"/>
+              <g transform="translate(348 312) rotate(38)">
+                <rect x="-18" y="-75" width="36" height="115" rx="8" fill="#FF7043"/>
+                <rect x="-18" y="-75" width="36" height="24" rx="6" fill="#D84315"/>
+                <polygon points="-18,40 18,40 0,72" fill="#FFE0B2"/>
+                <polygon points="-6,59 6,59 0,72" fill="#3E2723"/>
+              </g>
+            </g>
+          </svg>
+          EOF
+
+          rsvg-convert -w 192 -h 192 notes-icon-full.svg -o www/icon-192.png
+          rsvg-convert -w 512 -h 512 notes-icon-full.svg -o www/icon-512.png
+
+      - name: Prepare Web Files
+        run: |
+          cp index.html style.css manifest.json www/
+          cp dp.png www/ || true
+
       - name: Install & Build Android
         run: |
           npm install
           npx cap add android
-          cp android-custom/MainActivity.java android/app/src/main/java/com/mynotes/offline/MainActivity.java
-          python3 - << 'EOF'
-          p = "android/app/src/main/AndroidManifest.xml"
-          txt = open(p).read()
-          perms = """    <uses-permission android:name="android.permission.CAMERA" />
-              <uses-permission android:name="android.permission.RECORD_AUDIO" />
-              <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-              <uses-permission android:name="android.permission.WAKE_LOCK" />"""
-          txt = txt.replace('<uses-permission android:name="android.permission.INTERNET" />', '<uses-permission android:name="android.permission.INTERNET" />\n' + perms)
-          open(p, "w").write(txt)
+          cp android-custom/MainActivity.java android/app/src/main/java/com/notes/app/MainActivity.java
+
+          RES_DIR="android/app/src/main/res"
+          rsvg-convert -w 48 -h 48 notes-icon-full.svg -o $RES_DIR/mipmap-mdpi/ic_launcher.png
+          rsvg-convert -w 48 -h 48 notes-icon-full.svg -o $RES_DIR/mipmap-mdpi/ic_launcher_round.png
+          rsvg-convert -w 72 -h 72 notes-icon-full.svg -o $RES_DIR/mipmap-hdpi/ic_launcher.png
+          rsvg-convert -w 72 -h 72 notes-icon-full.svg -o $RES_DIR/mipmap-hdpi/ic_launcher_round.png
+          rsvg-convert -w 96 -h 96 notes-icon-full.svg -o $RES_DIR/mipmap-xhdpi/ic_launcher.png
+          rsvg-convert -w 96 -h 96 notes-icon-full.svg -o $RES_DIR/mipmap-xhdpi/ic_launcher_round.png
+          rsvg-convert -w 144 -h 144 notes-icon-full.svg -o $RES_DIR/mipmap-xxhdpi/ic_launcher.png
+          rsvg-convert -w 144 -h 144 notes-icon-full.svg -o $RES_DIR/mipmap-xxhdpi/ic_launcher_round.png
+          rsvg-convert -w 192 -h 192 notes-icon-full.svg -o $RES_DIR/mipmap-xxxhdpi/ic_launcher.png
+          rsvg-convert -w 192 -h 192 notes-icon-full.svg -o $RES_DIR/mipmap-xxxhdpi/ic_launcher_round.png
+
+          rsvg-convert -w 108 -h 108 notes-icon-fg.svg -o $RES_DIR/mipmap-mdpi/ic_launcher_foreground.png
+          rsvg-convert -w 162 -h 162 notes-icon-fg.svg -o $RES_DIR/mipmap-hdpi/ic_launcher_foreground.png
+          rsvg-convert -w 216 -h 216 notes-icon-fg.svg -o $RES_DIR/mipmap-xhdpi/ic_launcher_foreground.png
+          rsvg-convert -w 324 -h 324 notes-icon-fg.svg -o $RES_DIR/mipmap-xxhdpi/ic_launcher_foreground.png
+          rsvg-convert -w 432 -h 432 notes-icon-fg.svg -o $RES_DIR/mipmap-xxxhdpi/ic_launcher_foreground.png
+
+          cat << 'EOF' > $RES_DIR/values/ic_launcher_background.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="ic_launcher_background">#FFB300</color>
+          </resources>
           EOF
+
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          sed -i 's/<\/manifest>/<uses-permission android:name="android.permission.CAMERA" \/><uses-permission android:name="android.permission.RECORD_AUDIO" \/><uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" \/><uses-permission android:name="android.permission.WAKE_LOCK" \/><\/manifest>/' $MANIFEST
+
           npx cap sync android
           cd android && chmod +x gradlew && ./gradlew assembleDebug
+
       - uses: actions/upload-artifact@v4
         with:
           name: MyNotes-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
-          
