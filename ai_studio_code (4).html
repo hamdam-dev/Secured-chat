@@ -1,0 +1,1844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
+    <title>Notes</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    
+    <style>
+        /* =========================================
+           MOOD THEME VARIABLES (Light & Dark)
+           ========================================= */
+        #chat-screen {
+            --chat-bg: radial-gradient(circle at top right, #ffd6ea 0%, #fff0f6 45%, #f3e4ff 100%);
+            --accent: #ff75a0;
+            --accent-deep: #d81b60;
+            --accent-soft: #ffe5ec;
+            --accent-border: rgba(255, 182, 193, 0.55);
+            --accent-text: #c2185b;
+            --sent-bg: linear-gradient(135deg, #ff75a0 0%, #d81b60 100%);
+            --sent-shadow: rgba(216, 27, 96, 0.24);
+            --bar-bg: rgba(255, 255, 255, 0.86);
+            --recv-bg: rgba(255, 255, 255, 0.93);
+            --recv-text: #333333;
+            --input-bg: #fff5f8;
+            --bg-word: #f06292;
+
+            background: var(--chat-bg) !important;
+            transition: background 0.45s ease;
+        }
+
+        /* 11 Mood Themes - Light */
+        #chat-screen[data-mood="romantic"] {
+            --chat-bg: radial-gradient(circle at top right, #ffb3d9 0%, #ffe6f2 45%, #ffd6eb 100%);
+            --accent: #ec407a; --accent-deep: #ad1457; --accent-soft: #ffdce9;
+            --accent-border: rgba(236, 64, 122, 0.48); --accent-text: #880e4f;
+            --sent-bg: linear-gradient(135deg, #f06292 0%, #ad1457 100%);
+            --sent-shadow: rgba(173, 20, 87, 0.28); --input-bg: #fff0f6; --bg-word: #d81b60;
+        }
+        #chat-screen[data-mood="miss"] {
+            --chat-bg: radial-gradient(circle at top right, #ffd7c2 0%, #fff1eb 48%, #ffe1ec 100%);
+            --accent: #ff8a65; --accent-deep: #e91e63; --accent-soft: #ffebe3;
+            --accent-border: rgba(255, 158, 128, 0.5); --accent-text: #d84315;
+            --sent-bg: linear-gradient(135deg, #ff8a65 0%, #e91e63 100%);
+            --sent-shadow: rgba(233, 30, 99, 0.22); --input-bg: #fff6f2; --bg-word: #ff7043;
+        }
+        #chat-screen[data-mood="hug"] {
+            --chat-bg: radial-gradient(circle at top right, #e2d4ff 0%, #f5f0ff 50%, #fce4ec 100%);
+            --accent: #ba68c8; --accent-deep: #7b1fa2; --accent-soft: #f3e5f5;
+            --accent-border: rgba(186, 104, 200, 0.45); --accent-text: #6a1b9a;
+            --sent-bg: linear-gradient(135deg, #ba68c8 0%, #7b1fa2 100%);
+            --sent-shadow: rgba(123, 31, 162, 0.22); --input-bg: #f8f2fc; --bg-word: #ab47bc;
+        }
+        #chat-screen[data-mood="angry"] {
+            --chat-bg: radial-gradient(circle at top right, #ffc6c6 0%, #fff0f0 48%, #ffe2d6 100%);
+            --accent: #ff5252; --accent-deep: #c62828; --accent-soft: #ffebee;
+            --accent-border: rgba(239, 83, 80, 0.45); --accent-text: #b71c1c;
+            --sent-bg: linear-gradient(135deg, #ff5252 0%, #c62828 100%);
+            --sent-shadow: rgba(198, 40, 40, 0.25); --input-bg: #fff5f5; --bg-word: #e53935;
+        }
+        #chat-screen[data-mood="sad"] {
+            --chat-bg: radial-gradient(circle at top right, #c9e6ff 0%, #edf6ff 50%, #e2ebfa 100%);
+            --accent: #64b5f6; --accent-deep: #1565c0; --accent-soft: #e3f2fd;
+            --accent-border: rgba(100, 181, 246, 0.5); --accent-text: #0d47a1;
+            --sent-bg: linear-gradient(135deg, #42a5f5 0%, #1565c0 100%);
+            --sent-shadow: rgba(21, 101, 192, 0.22); --input-bg: #f2f8ff; --bg-word: #1e88e5;
+        }
+        #chat-screen[data-mood="upset"] {
+            --chat-bg: radial-gradient(circle at top right, #d7d5ec 0%, #f1f0f8 50%, #e5e3f2 100%);
+            --accent: #7986cb; --accent-deep: #3949ab; --accent-soft: #e8eaf6;
+            --accent-border: rgba(121, 134, 203, 0.48); --accent-text: #283593;
+            --sent-bg: linear-gradient(135deg, #7986cb 0%, #3949ab 100%);
+            --sent-shadow: rgba(57, 73, 171, 0.22); --input-bg: #f4f4fb; --bg-word: #5c6bc0;
+        }
+        #chat-screen[data-mood="sleepy"] {
+            --chat-bg: radial-gradient(circle at top right, #d5dbff 0%, #f1f3ff 50%, #ede7f6 100%);
+            --accent: #9575cd; --accent-deep: #4527a0; --accent-soft: #ede7f6;
+            --accent-border: rgba(149, 117, 205, 0.48); --accent-text: #311b92;
+            --sent-bg: linear-gradient(135deg, #7e57c2 0%, #4527a0 100%);
+            --sent-shadow: rgba(69, 39, 160, 0.22); --input-bg: #f4f1fb; --bg-word: #7e57c2;
+        }
+        #chat-screen[data-mood="excited"] {
+            --chat-bg: radial-gradient(circle at top right, #ffe59e 0%, #fff9e6 50%, #ffe6f0 100%);
+            --accent: #ffa726; --accent-deep: #e65100; --accent-soft: #fff3e0;
+            --accent-border: rgba(255, 167, 38, 0.5); --accent-text: #bf360c;
+            --sent-bg: linear-gradient(135deg, #ffa726 0%, #ef6c00 100%);
+            --sent-shadow: rgba(239, 108, 0, 0.22); --input-bg: #fffaf0; --bg-word: #fb8c00;
+        }
+        #chat-screen[data-mood="busy"] {
+            --chat-bg: radial-gradient(circle at top right, #c4f0e4 0%, #eefcf8 50%, #e4f3f0 100%);
+            --accent: #26a69a; --accent-deep: #00695c; --accent-soft: #e0f2f1;
+            --accent-border: rgba(38, 166, 154, 0.45); --accent-text: #004d40;
+            --sent-bg: linear-gradient(135deg, #26a69a 0%, #00695c 100%);
+            --sent-shadow: rgba(0, 105, 92, 0.22); --input-bg: #f0fbf9; --bg-word: #00897b;
+        }
+        #chat-screen[data-mood="sick"] {
+            --chat-bg: radial-gradient(circle at top right, #ffe1c7 0%, #fff8f2 50%, #f5efe6 100%);
+            --accent: #ff8a65; --accent-deep: #bf360c; --accent-soft: #fbe9e7;
+            --accent-border: rgba(255, 138, 101, 0.48); --accent-text: #8d2f0e;
+            --sent-bg: linear-gradient(135deg, #ff8a65 0%, #d84315 100%);
+            --sent-shadow: rgba(216, 67, 21, 0.2); --input-bg: #fff7f3; --bg-word: #ff7043;
+        }
+
+        /* =========================================
+           DARK MODE + MOOD OVERRIDES
+           ========================================= */
+        body.dark-chat #chat-screen {
+            --chat-bg: radial-gradient(circle at top right, #2e1227 0%, #170b1a 55%, #0d0712 100%);
+            --bar-bg: rgba(26, 12, 30, 0.9);
+            --recv-bg: rgba(42, 22, 48, 0.93);
+            --recv-text: #fce4ec;
+            --accent-soft: #36193a;
+            --accent-text: #ff9ec0;
+            --input-bg: #291430;
+            --bg-word: #ff8fb1;
+        }
+        body.dark-chat #chat-screen[data-mood="romantic"] {
+            --chat-bg: radial-gradient(circle at top right, #420f2b 0%, #24091b 55%, #12040e 100%);
+            --recv-bg: rgba(56, 16, 40, 0.93); --input-bg: #361027; --accent-soft: #4a1536; --accent-text: #ff80ab;
+        }
+        body.dark-chat #chat-screen[data-mood="miss"] {
+            --chat-bg: radial-gradient(circle at top right, #361916 0%, #1c0e13 55%, #10080b 100%);
+            --recv-bg: rgba(48, 24, 24, 0.93); --input-bg: #2e1618; --accent-soft: #3d1d1f;
+        }
+        body.dark-chat #chat-screen[data-mood="hug"] {
+            --chat-bg: radial-gradient(circle at top right, #251338 0%, #140b21 55%, #0b0612 100%);
+            --recv-bg: rgba(38, 22, 56, 0.93); --input-bg: #251438; --accent-soft: #331c4a; --accent-text: #e1bee7;
+        }
+        body.dark-chat #chat-screen[data-mood="angry"] {
+            --chat-bg: radial-gradient(circle at top right, #3d1012 0%, #1f080a 55%, #120405 100%);
+            --recv-bg: rgba(52, 18, 20, 0.93); --input-bg: #301012; --accent-soft: #421618; --accent-text: #ff8a80;
+        }
+        body.dark-chat #chat-screen[data-mood="sad"] {
+            --chat-bg: radial-gradient(circle at top right, #0f253a 0%, #091522 55%, #050b14 100%);
+            --recv-bg: rgba(18, 36, 56, 0.93); --recv-text: #e3f2fd; --input-bg: #112438; --accent-soft: #17304a; --accent-text: #90caf9;
+        }
+        body.dark-chat #chat-screen[data-mood="upset"] {
+            --chat-bg: radial-gradient(circle at top right, #1b1c36 0%, #101022 55%, #080812 100%);
+            --recv-bg: rgba(28, 30, 54, 0.93); --recv-text: #e8eaf6; --input-bg: #1a1b33; --accent-soft: #252747; --accent-text: #9fa8da;
+        }
+        body.dark-chat #chat-screen[data-mood="sleepy"] {
+            --chat-bg: radial-gradient(circle at top right, #181438 0%, #0e0c21 55%, #070512 100%);
+            --recv-bg: rgba(28, 24, 56, 0.93); --recv-text: #ede7f6; --input-bg: #1a1636; --accent-soft: #26204d; --accent-text: #b39ddb;
+        }
+        body.dark-chat #chat-screen[data-mood="excited"] {
+            --chat-bg: radial-gradient(circle at top right, #33230c 0%, #1c1308 55%, #100b04 100%);
+            --recv-bg: rgba(46, 33, 16, 0.93); --recv-text: #fff8e1; --input-bg: #2b1f0f; --accent-soft: #3d2c14; --accent-text: #ffcc80;
+        }
+        body.dark-chat #chat-screen[data-mood="busy"] {
+            --chat-bg: radial-gradient(circle at top right, #0d2e2a 0%, #081a18 55%, #040f0e 100%);
+            --recv-bg: rgba(16, 44, 40, 0.93); --recv-text: #e0f2f1; --input-bg: #102b27; --accent-soft: #173b36; --accent-text: #80cbc4;
+        }
+        body.dark-chat #chat-screen[data-mood="sick"] {
+            --chat-bg: radial-gradient(circle at top right, #301d13 0%, #1b100b 55%, #0f0906 100%);
+            --recv-bg: rgba(46, 29, 20, 0.93); --recv-text: #fbe9e7; --input-bg: #2b1a12; --accent-soft: #3d251a; --accent-text: #ffab91;
+        }
+
+        /* =========================================
+           COMPONENT STYLING USING VARIABLES
+           ========================================= */
+        header {
+            background: var(--bar-bg) !important;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--accent-border);
+            padding: 8px 10px !important;
+            gap: 6px;
+            transition: background 0.35s ease, border-color 0.35s ease;
+        }
+        .header-profile { display: flex; align-items: center; gap: 8px; min-width: 0; }
+        .header-avatar {
+            width: 36px; height: 36px; border-radius: 50%;
+            background: var(--sent-bg);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 17px; color: white;
+            box-shadow: 0 4px 12px var(--sent-shadow);
+            animation: heartPulse 2.4s infinite ease-in-out;
+            flex-shrink: 0;
+            transition: background 0.35s ease;
+        }
+        @keyframes heartPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+        }
+        header h3 {
+            font-size: 20px !important;
+            color: var(--accent-text) !important;
+            background: none !important;
+            -webkit-text-fill-color: currentColor !important;
+            white-space: nowrap;
+        }
+        #partner-status { display: inline-block; font-size: 10.5px !important; padding: 0; }
+        .header-right { gap: 5px !important; flex-shrink: 0; }
+        .header-icon-btn, #clear-chat-btn {
+            background: var(--accent-soft) !important;
+            padding: 6px 8px !important; margin: 0; font-size: 14px !important;
+            color: var(--accent-text) !important;
+            border-radius: 12px !important;
+            border: 1px solid var(--accent-border) !important;
+            cursor: pointer; font-weight: 600;
+            transition: transform 0.12s, background 0.3s;
+        }
+        #logout-btn {
+            padding: 6px 9px !important; font-size: 11.5px !important;
+            border-radius: 12px !important;
+        }
+        body.dark-chat #logout-btn { background: #3a1622 !important; color: #ff8a80 !important; }
+
+        /* Couple Mood & Miss You Bar */
+        #couple-bar {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 6px 12px; z-index: 9; flex-shrink: 0;
+            background: var(--bar-bg);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--accent-border);
+            gap: 8px;
+            transition: background 0.35s ease, border-color 0.35s ease;
+        }
+        #partner-mood-badge {
+            font-size: 11.5px; font-weight: 700; color: var(--accent-text);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .couple-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+        #my-mood-btn, #miss-you-btn {
+            border: none; border-radius: 14px; padding: 4px 10px;
+            font-size: 11.5px; font-weight: 700; cursor: pointer;
+            transition: transform 0.12s, background 0.3s;
+        }
+        #my-mood-btn {
+            background: var(--accent-soft); color: var(--accent-text);
+            border: 1px solid var(--accent-border);
+        }
+        #miss-you-btn {
+            background: var(--sent-bg); color: white;
+            box-shadow: 0 3px 10px var(--sent-shadow);
+        }
+        #miss-you-btn:active, #my-mood-btn:active { transform: scale(0.94); }
+
+        #mood-picker {
+            display: none; flex-wrap: wrap; gap: 6px; padding: 10px 10px;
+            background: var(--bar-bg); backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--accent-border); z-index: 9; justify-content: center;
+        }
+        .mood-option {
+            background: var(--accent-soft); border: 1px solid var(--accent-border);
+            color: var(--accent-text); border-radius: 14px; padding: 6px 10px;
+            font-size: 12px; font-weight: 700; cursor: pointer;
+            transition: transform 0.12s;
+        }
+        .mood-option.active-mood {
+            background: var(--sent-bg); color: #fff; border-color: transparent;
+        }
+        .mood-option:active { transform: scale(0.94); }
+
+        /* Miss You Popup Toast */
+        #love-pulse-toast {
+            display: none; position: fixed; top: 96px; left: 50%; transform: translateX(-50%);
+            z-index: 80; background: var(--sent-bg);
+            color: white; padding: 10px 20px; border-radius: 25px;
+            font-size: 14px; font-weight: 700; white-space: nowrap;
+            box-shadow: 0 8px 24px var(--sent-shadow);
+            animation: toastPop 0.3s ease-out;
+        }
+        @keyframes toastPop {
+            from { opacity: 0; transform: translate(-50%, -12px) scale(0.9); }
+            to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+        }
+
+        /* Background floating nicknames & emojis */
+        .bg-text {
+            opacity: 0.25 !important; font-size: 19px !important;
+            color: var(--bg-word) !important;
+            transition: color 0.4s ease;
+            animation: gentleFloat 7s ease-in-out infinite;
+        }
+        body.dark-chat .bg-text { opacity: 0.16 !important; }
+        .bg-text:nth-child(2n) { animation-delay: -2s; }
+        .bg-text:nth-child(3n) { animation-delay: -4s; }
+        .bg-emoji {
+            opacity: 0.28 !important; font-size: 20px !important;
+            animation: gentleFloat 6s ease-in-out infinite;
+        }
+        body.dark-chat .bg-emoji { opacity: 0.18 !important; }
+        @keyframes gentleFloat {
+            0%, 100% { transform: translateY(0px) rotate(-10deg); }
+            50% { transform: translateY(-6px) rotate(-5deg); }
+        }
+
+        /* Date Divider Pills */
+        .date-divider { align-self: center; margin: 6px 0 2px; z-index: 6; }
+        .date-divider span {
+            background: var(--bar-bg); backdrop-filter: blur(8px);
+            color: var(--accent-text); font-size: 11px; font-weight: 700;
+            padding: 4px 12px; border-radius: 12px;
+            border: 1px solid var(--accent-border);
+        }
+
+        /* Message Bubbles */
+        #messages-container {
+            gap: 10px !important; padding: 14px 14px !important;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+        }
+        .msg-bubble {
+            border-radius: 20px !important; padding: 11px 15px !important;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06) !important;
+            transition: background 0.35s ease, border-color 0.35s ease;
+        }
+        .msg-bubble.msg-anim { animation: msgPopIn 0.2s ease-out; }
+        @keyframes msgPopIn {
+            from { opacity: 0; transform: translateY(8px) scale(0.97); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .msg-sent {
+            background: var(--sent-bg) !important;
+            border-bottom-right-radius: 6px !important;
+            box-shadow: 0 5px 15px var(--sent-shadow) !important;
+        }
+        .msg-received {
+            background: var(--recv-bg) !important;
+            color: var(--recv-text) !important;
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--accent-border) !important;
+            border-bottom-left-radius: 6px !important;
+        }
+
+        .msg-audio { width: 215px; max-width: 100%; height: 38px; border-radius: 18px; outline: none; margin-bottom: 2px; }
+
+        .view-once-btn {
+            display: flex; align-items: center; gap: 8px;
+            padding: 9px 14px; border-radius: 14px; border: none;
+            background: var(--accent-soft); color: var(--accent-text);
+            font-weight: 700; font-size: 13.5px; cursor: pointer;
+        }
+        .msg-sent .view-once-btn { background: rgba(255, 255, 255, 0.22); color: #fff; }
+        .view-once-opened { font-size: 13px; font-style: italic; opacity: 0.85; }
+
+        /* Floating Hearts Effect */
+        #hearts-layer { position: fixed; inset: 0; pointer-events: none; z-index: 50; overflow: hidden; }
+        .fly-heart { position: absolute; bottom: 70px; font-size: 24px; animation: flyUpHeart 2.3s ease-out forwards; }
+        @keyframes flyUpHeart {
+            0% { opacity: 0; transform: translateY(0) scale(0.6) rotate(0deg); }
+            15% { opacity: 1; }
+            100% { opacity: 0; transform: translateY(-75vh) scale(1.3) rotate(20deg); }
+        }
+
+        /* Scroll to Bottom Button */
+        #scroll-bottom-btn {
+            display: none; position: absolute; bottom: 86px; right: 14px; z-index: 12;
+            width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--accent-border);
+            background: var(--bar-bg); color: var(--accent-text); font-size: 17px;
+            font-weight: 700; cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            align-items: center; justify-content: center;
+        }
+
+        /* Reply Preview */
+        #reply-preview {
+            display: none; align-items: center; justify-content: space-between;
+            background: var(--accent-soft); backdrop-filter: blur(8px);
+            padding: 9px 15px; border-radius: 14px; margin: 0 12px 6px;
+            border-left: 4px solid var(--accent-deep); width: calc(100% - 24px); z-index: 10;
+        }
+        #reply-preview span { font-size: 13px; color: var(--recv-text); max-width: 85%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+        #cancel-reply { background: none; border: none; color: var(--accent-text); font-size: 18px; cursor: pointer; width: auto; margin: 0; padding: 0; box-shadow: none; }
+        .msg-reply-box { background: rgba(0,0,0,0.12); padding: 5px 9px; border-radius: 10px; margin-bottom: 6px; font-size: 12px; border-left: 3px solid #fff; opacity: 0.92; }
+        .msg-received .msg-reply-box { border-left-color: var(--accent-deep); background: var(--accent-soft); }
+
+        /* Typing Indicator */
+        #typing-indicator {
+            display: none; position: absolute; bottom: 82px; left: 15px;
+            background: var(--recv-bg); padding: 11px 16px;
+            border-radius: 20px; border-bottom-left-radius: 5px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid var(--accent-border);
+            z-index: 9; align-items: center; gap: 5px;
+        }
+        .typing-dot { width: 8px; height: 8px; background: var(--accent-deep); border-radius: 50%; animation: typingBounce 1.4s infinite ease-in-out both; }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes typingBounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+
+        /* Emoji Drawer */
+        #emoji-panel {
+            display: none; flex-direction: column;
+            background: var(--bar-bg); backdrop-filter: blur(12px);
+            margin: 0 10px 6px; border-radius: 18px;
+            border: 1px solid var(--accent-border); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+            z-index: 11; overflow: hidden;
+        }
+        .emoji-tabs { display: flex; border-bottom: 1px solid var(--accent-border); background: var(--accent-soft); }
+        .emoji-tab {
+            flex: 1; background: transparent; border: none; padding: 8px 4px;
+            font-size: 13px; font-weight: 700; color: #888; cursor: pointer;
+            border-bottom: 2px solid transparent;
+        }
+        .emoji-tab.active { color: var(--accent-text); border-bottom-color: var(--accent-deep); background: var(--bar-bg); }
+        #emoji-grid {
+            display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
+            padding: 10px; max-height: 155px; overflow-y: auto;
+        }
+        .quick-emoji { background: transparent; border: none; font-size: 22px; cursor: pointer; padding: 4px 0; border-radius: 10px; transition: transform 0.12s; }
+        .quick-emoji:active { transform: scale(1.25); background: var(--accent-soft); }
+
+        /* Input Area & Recording Bar */
+        #input-area {
+            background: var(--bar-bg) !important;
+            backdrop-filter: blur(14px);
+            border-top: 1px solid var(--accent-border);
+            border-radius: 24px 24px 0 0 !important;
+            transition: background 0.35s ease, border-color 0.35s ease;
+        }
+        .input-wrapper {
+            background: var(--input-bg) !important;
+            border: 1.5px solid var(--accent-border) !important;
+            transition: border-color 0.2s, box-shadow 0.2s, background 0.35s ease;
+        }
+        .input-wrapper:focus-within {
+            border-color: var(--accent-deep) !important;
+            box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.05);
+        }
+        #message-input { color: var(--recv-text) !important; }
+        body.dark-chat #message-input::placeholder { color: #b5a7b8; }
+        .emoji-btn { color: var(--accent) !important; }
+        #send-btn {
+            background: var(--sent-bg) !important;
+            box-shadow: 0 4px 10px var(--sent-shadow) !important;
+            transition: transform 0.15s, background 0.35s ease;
+        }
+        #send-btn:active { transform: scale(0.92); }
+        #photo-input { display: none !important; }
+        #photo-btn, #mic-btn { font-size: 19px; padding: 0 5px; }
+
+        #recording-bar {
+            display: none; align-items: center; justify-content: space-between;
+            padding: 12px 15px; padding-bottom: max(15px, env(safe-area-inset-bottom));
+            background: var(--bar-bg); border-radius: 24px 24px 0 0;
+            border-top: 1px solid var(--accent-border); z-index: 10; width: 100%;
+        }
+        .rec-status { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: var(--accent-text); }
+        .rec-dot { width: 10px; height: 10px; border-radius: 50%; background: #e53935; animation: recBlink 1s infinite; }
+        @keyframes recBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
+        .rec-actions { display: flex; gap: 10px; }
+        #rec-cancel-btn {
+            background: #ffebee; color: #d32f2f; border: none; border-radius: 18px;
+            padding: 8px 14px; font-weight: 700; font-size: 13px; cursor: pointer;
+        }
+        #rec-send-btn {
+            background: var(--sent-bg); color: white; border: none; border-radius: 18px;
+            padding: 8px 16px; font-weight: 700; font-size: 13px; cursor: pointer;
+        }
+
+        /* Photo Modals */
+        .msg-img {
+            max-width: 230px; max-height: 280px; width: 100%; object-fit: cover;
+            border-radius: 14px; margin-bottom: 4px; cursor: pointer; display: block;
+            border: 2px solid rgba(255,255,255,0.45);
+        }
+        #photo-preview-modal, #image-viewer-modal {
+            display: none; position: fixed; inset: 0; z-index: 999;
+            background: rgba(12, 6, 12, 0.92); backdrop-filter: blur(8px);
+            flex-direction: column; align-items: center; justify-content: center; padding: 20px;
+        }
+        #photo-preview-img, #image-viewer-img {
+            max-width: 95%; max-height: 68vh; border-radius: 16px; object-fit: contain;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        #view-once-toggle-wrap {
+            display: flex; align-items: center; gap: 8px; margin-top: 14px;
+            background: rgba(255,255,255,0.12); padding: 8px 16px; border-radius: 20px;
+            color: #fff; font-size: 13.5px; font-weight: 600; cursor: pointer;
+        }
+        #view-once-checkbox { width: 18px !important; height: 18px !important; margin: 0 !important; padding: 0 !important; accent-color: #ff75a0; }
+        #viewer-banner {
+            display: none; position: absolute; top: 22px; left: 20px;
+            background: rgba(216, 27, 96, 0.85); color: #fff;
+            padding: 6px 14px; border-radius: 16px; font-size: 12px; font-weight: 700;
+        }
+        .photo-modal-actions { display: flex; gap: 15px; margin-top: 16px; width: 100%; max-width: 320px; }
+        .modal-btn-cancel {
+            flex: 1; padding: 13px; border-radius: 22px; border: none;
+            background: #444; color: #fff; font-weight: 600; font-size: 15px; cursor: pointer;
+        }
+        .modal-btn-send {
+            flex: 1; padding: 13px; border-radius: 22px; border: none;
+            background: var(--sent-bg); color: #fff; font-weight: 600; font-size: 15px; cursor: pointer;
+        }
+        #image-viewer-close {
+            position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.2);
+            color: #fff; border: none; width: 40px; height: 40px; border-radius: 50%;
+            font-size: 20px; cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="notes-screen">
+        <div class="notes-header">
+            <h2>My Notes</h2>
+            <span class="date" id="current-date"></span>
+        </div>
+        <textarea id="note-content" placeholder="Yahan apne notes likhein..."></textarea>
+        <div class="notes-footer">
+            <button id="save-note-btn">Save Note</button>
+            <p id="note-status"></p>
+        </div>
+    </div>
+
+    <div id="login-screen" style="display: none;">
+        <h2>Humari Chat 💖</h2>
+        <input type="email" id="email" placeholder="Email daalein..." required>
+        <input type="password" id="password" placeholder="Password daalein..." required>
+        <button id="login-btn">Login Karein</button>
+        <p id="login-error" class="error"></p>
+    </div>
+
+    <div id="chat-screen" data-mood="love" style="display: none;">
+        <div id="love-background">
+            <span class="bg-text" style="top: 4%; left: 5%;">Janan loves Mino 💕</span>
+            <span class="bg-text" style="top: 10%; right: 6%;">Mino loves Janan ❤️</span>
+            <span class="bg-text" style="top: 16%; left: 38%;">Guley 🌸</span>
+            <span class="bg-text" style="top: 22%; left: 7%;">Zargoo 🥰</span>
+            <span class="bg-text" style="top: 28%; right: 8%;">Jwandun 🧸</span>
+            <span class="bg-text" style="top: 34%; left: 42%;">Zra Me ❤️</span>
+            <span class="bg-text" style="top: 40%; left: 5%;">Mama 🌸</span>
+            <span class="bg-text" style="top: 46%; right: 10%;">Kachocho 🐻</span>
+            <span class="bg-text" style="top: 52%; left: 36%;">Mera Chand 🌙</span>
+            <span class="bg-text" style="top: 58%; left: 8%;">Katoto ✨</span>
+            <span class="bg-text" style="top: 64%; right: 6%;">Zra Sar 😘</span>
+            <span class="bg-text" style="top: 70%; left: 38%;">Zargiya 💖</span>
+            <span class="bg-text" style="top: 76%; left: 6%;">Bacha 💕</span>
+            <span class="bg-text" style="top: 82%; right: 12%;">Kachocha ❤️</span>
+            <span class="bg-text" style="top: 88%; left: 34%;">Sqaman 💕</span>
+            <span class="bg-text" style="top: 93%; left: 8%;">Jaanu 🦋</span>
+            <span class="bg-text" style="top: 93%; right: 8%;">Hamesha ♾️</span>
+
+            <span class="bg-emoji" style="top: 7%; left: 72%;">💖</span>
+            <span class="bg-emoji" style="top: 19%; right: 32%;">🌷</span>
+            <span class="bg-emoji" style="top: 31%; left: 16%;">🦋</span>
+            <span class="bg-emoji" style="top: 48%; right: 36%;">🍓</span>
+            <span class="bg-emoji" style="top: 61%; left: 65%;">✨</span>
+            <span class="bg-emoji" style="top: 79%; right: 35%;">💕</span>
+            <span class="bg-emoji" style="top: 86%; left: 68%;">🌸</span>
+        </div>
+
+        <div id="hearts-layer"></div>
+        <div id="love-pulse-toast">💖 Partner is thinking of you! 💕</div>
+
+        <header>
+            <div class="header-profile">
+                <div class="header-avatar" id="header-avatar">💞</div>
+                <div class="header-left">
+                    <h3>Janan & Mino</h3>
+                    <span id="partner-status">Offline</span>
+                </div>
+            </div>
+            <div class="header-right">
+                <button class="header-icon-btn" id="theme-btn" title="Dark / Light Mode">🌙</button>
+                <button class="header-icon-btn" id="hide-chat-btn" title="Quick Hide to Notes">🙈</button>
+                <button id="clear-chat-btn" title="Clear Chat">🗑️</button>
+                <button id="logout-btn">Logout</button>
+            </div>
+        </header>
+
+        <div id="couple-bar">
+            <span id="partner-mood-badge">Partner: ❤️ Happy</span>
+            <div class="couple-actions">
+                <button type="button" id="my-mood-btn">❤️ Mood</button>
+                <button type="button" id="miss-you-btn">💓 Miss U</button>
+            </div>
+        </div>
+
+        <div id="mood-picker">
+            <button type="button" class="mood-option" data-mood="love">❤️ Happy</button>
+            <button type="button" class="mood-option" data-mood="romantic">💘 Romantic</button>
+            <button type="button" class="mood-option" data-mood="miss">🥰 Missing U</button>
+            <button type="button" class="mood-option" data-mood="hug">🥺 Need Hug</button>
+            <button type="button" class="mood-option" data-mood="angry">😡 Angry</button>
+            <button type="button" class="mood-option" data-mood="sad">😢 Sad</button>
+            <button type="button" class="mood-option" data-mood="upset">😔 Upset</button>
+            <button type="button" class="mood-option" data-mood="sleepy">😴 Sleepy</button>
+            <button type="button" class="mood-option" data-mood="excited">🤩 Excited</button>
+            <button type="button" class="mood-option" data-mood="busy">💼 Busy</button>
+            <button type="button" class="mood-option" data-mood="sick">🤒 Not Well</button>
+        </div>
+        
+        <div id="messages-container"></div>
+
+        <button id="scroll-bottom-btn" title="Scroll to bottom">⬇️</button>
+        
+        <div id="typing-indicator">
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+        </div>
+
+        <div id="reply-preview">
+            <span id="reply-text"></span>
+            <button id="cancel-reply">✖</button>
+        </div>
+
+        <div id="emoji-panel">
+            <div class="emoji-tabs">
+                <button type="button" class="emoji-tab active" data-cat="love">❤️ Love</button>
+                <button type="button" class="emoji-tab" data-cat="faces">😊 Faces</button>
+                <button type="button" class="emoji-tab" data-cat="cute">🌸 Cute</button>
+                <button type="button" class="emoji-tab" data-cat="vibes">🎉 Vibes</button>
+            </div>
+            <div id="emoji-grid"></div>
+        </div>
+
+        <div id="recording-bar">
+            <div class="rec-status">
+                <span class="rec-dot"></span>
+                <span id="rec-timer">Recording 0:00 / 0:20</span>
+            </div>
+            <div class="rec-actions">
+                <button type="button" id="rec-cancel-btn">✖ Cancel</button>
+                <button type="button" id="rec-send-btn">Send ➤</button>
+            </div>
+        </div>
+
+        <div id="input-area">
+            <div class="input-wrapper">
+                <button class="emoji-btn" id="emoji-btn" type="button">😊</button>
+                <button class="emoji-btn" id="photo-btn" type="button" title="Send Photo">📷</button>
+                <button class="emoji-btn" id="mic-btn" type="button" title="Voice Note">🎤</button>
+                <input type="file" id="photo-input" accept="image/*">
+                <textarea id="message-input" rows="1" placeholder="Yahan likhein..."></textarea>
+            </div>
+            <button id="send-btn">➤</button>
+        </div>
+    </div>
+
+    <!-- Photo Preview Modal -->
+    <div id="photo-preview-modal">
+        <img id="photo-preview-img" alt="Preview">
+        <label id="view-once-toggle-wrap">
+            <input type="checkbox" id="view-once-checkbox">
+            <span>🔥 View Once (1 baar dekhne ke baad gayab)</span>
+        </label>
+        <div class="photo-modal-actions">
+            <button class="modal-btn-cancel" id="cancel-photo-btn">Cancel</button>
+            <button class="modal-btn-send" id="send-photo-btn">Send ➤</button>
+        </div>
+    </div>
+
+    <!-- Full-Screen Image Viewer -->
+    <div id="image-viewer-modal">
+        <span id="viewer-banner">🔥 View-Once Photo</span>
+        <button id="image-viewer-close">✖</button>
+        <img id="image-viewer-img" alt="Photo">
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+        import {
+            initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+            collection, addDoc, query, orderBy, limitToLast, where, Timestamp,
+            onSnapshot, serverTimestamp, doc, setDoc, getDocs, updateDoc, writeBatch
+        } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBxiEXvK-xeepTuYRYdizeFqNufzb--3Ac",
+            authDomain: "chat-8e3ff.firebaseapp.com",
+            projectId: "chat-8e3ff",
+            storageBucket: "chat-8e3ff.firebasestorage.app",
+            messagingSenderId: "576628137714",
+            appId: "1:576628137714:web:551e0f79bb8cd5df9b7a6b"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = initializeFirestore(app, {
+            localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+        });
+
+        const SECRET_CODE = "Janan";
+        const CACHE_KEY = "sc_msg_cache_v1";
+        const CLEARED_AT_KEY = "sc_cleared_at_v1";
+        const DARK_MODE_KEY = "sc_dark_mode_v1";
+        const MY_MOOD_KEY = "sc_my_mood_v1";
+        const MY_MOOD_THEME_KEY = "sc_my_mood_theme_v1";
+        const OPENED_ONCE_KEY = "sc_opened_once_v1";
+        const E2EE_PREFIX = "E2EE:1:";
+        const MAX_CACHED_MESSAGES = 50;
+
+        let e2eeKey = null;
+        const decryptedMap = new Map();
+
+        function bufToB64(buf) {
+            const bytes = new Uint8Array(buf);
+            let bin = "";
+            for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+            return btoa(bin);
+        }
+
+        function b64ToBuf(b64) {
+            const bin = atob(b64);
+            const bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            return bytes;
+        }
+
+        async function getE2EEKey() {
+            if (e2eeKey) return e2eeKey;
+            const enc = new TextEncoder();
+            const keyMaterial = await crypto.subtle.importKey(
+                "raw", enc.encode(SECRET_CODE), "PBKDF2", false, ["deriveKey"]
+            );
+            e2eeKey = await crypto.subtle.deriveKey(
+                {
+                    name: "PBKDF2",
+                    salt: enc.encode("secured-chat-e2ee-salt-v1"),
+                    iterations: 100000,
+                    hash: "SHA-256"
+                },
+                keyMaterial,
+                { name: "AES-GCM", length: 256 },
+                false,
+                ["encrypt", "decrypt"]
+            );
+            return e2eeKey;
+        }
+
+        async function encryptText(plainText) {
+            const key = await getE2EEKey();
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const encoded = new TextEncoder().encode(plainText);
+            const cipherBuf = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoded);
+            return E2EE_PREFIX + bufToB64(iv) + ":" + bufToB64(cipherBuf);
+        }
+
+        async function decryptText(value) {
+            if (!value) return "";
+            if (!value.startsWith(E2EE_PREFIX)) return value;
+            try {
+                const key = await getE2EEKey();
+                const parts = value.slice(E2EE_PREFIX.length).split(":");
+                if (parts.length !== 2) return "🔒 Invalid message";
+                const iv = b64ToBuf(parts[0]);
+                const cipherBytes = b64ToBuf(parts[1]);
+                const plainBuf = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, cipherBytes);
+                return new TextDecoder().decode(plainBuf);
+            } catch (e) {
+                return "🔒 Decrypt nahi ho saka";
+            }
+        }
+
+        function compressImage(file) {
+            return new Promise((resolve, reject) => {
+                const url = URL.createObjectURL(file);
+                const img = new Image();
+                img.onload = () => {
+                    URL.revokeObjectURL(url);
+                    const renderCompressed = (maxDim, quality) => {
+                        let w = img.width;
+                        let h = img.height;
+                        if (w > maxDim || h > maxDim) {
+                            if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
+                            else { w = Math.round((w * maxDim) / h); h = maxDim; }
+                        }
+                        const canvas = document.createElement('canvas');
+                        canvas.width = w;
+                        canvas.height = h;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, w, h);
+                        return canvas.toDataURL('image/jpeg', quality);
+                    };
+
+                    let dataUrl = renderCompressed(900, 0.65);
+                    if (dataUrl.length > 450000) dataUrl = renderCompressed(800, 0.48);
+                    if (dataUrl.length > 550000) dataUrl = renderCompressed(640, 0.42);
+                    resolve(dataUrl);
+                };
+                img.onerror = () => {
+                    URL.revokeObjectURL(url);
+                    reject(new Error("Image load nahi ho saki"));
+                };
+                img.src = url;
+            });
+        }
+
+        function loadCachedMessages() {
+            try {
+                const raw = localStorage.getItem(CACHE_KEY);
+                return raw ? JSON.parse(raw) : [];
+            } catch (e) { return []; }
+        }
+
+        function saveCachedMessages(list) {
+            let copy = list.slice(-MAX_CACHED_MESSAGES);
+            while (copy.length > 0) {
+                try {
+                    localStorage.setItem(CACHE_KEY, JSON.stringify(copy));
+                    return;
+                } catch (e) {
+                    copy.shift();
+                }
+            }
+            try { localStorage.removeItem(CACHE_KEY); } catch (e) {}
+        }
+
+        function getOpenedOnceSet() {
+            try {
+                const raw = localStorage.getItem(OPENED_ONCE_KEY);
+                return new Set(raw ? JSON.parse(raw) : []);
+            } catch (e) { return new Set(); }
+        }
+
+        function markOpenedOnceLocal(id) {
+            const set = getOpenedOnceSet();
+            set.add(id);
+            try { localStorage.setItem(OPENED_ONCE_KEY, JSON.stringify([...set].slice(-100))); } catch (e) {}
+        }
+
+        function getLocalClearedAt() {
+            return Number(localStorage.getItem(CLEARED_AT_KEY) || "0");
+        }
+
+        function setLocalClearedAt(ms) {
+            localStorage.setItem(CLEARED_AT_KEY, String(ms));
+        }
+
+        // ==========================================
+        // EMOTION-BASED SOUND ENGINE (Web Audio API)
+        // ==========================================
+        let sharedAudioCtx = null;
+
+        function getAudioCtx() {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (!AudioCtx) return null;
+            if (!sharedAudioCtx) sharedAudioCtx = new AudioCtx();
+            if (sharedAudioCtx.state === 'suspended') sharedAudioCtx.resume();
+            return sharedAudioCtx;
+        }
+
+        function scheduleTone(ctx, freq, delaySec, durSec, type = 'sine', peakVol = 0.22) {
+            const start = ctx.currentTime + delaySec;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, start);
+            gain.gain.setValueAtTime(0.001, start);
+            gain.gain.linearRampToValueAtTime(peakVol, start + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, start + durSec);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(start);
+            osc.stop(start + durSec + 0.02);
+        }
+
+        function detectEmotionSound(text, fallbackMood) {
+            const t = text || "";
+            if (/(😡|🤬|😤|😠|gussa|angry|naraz)/i.test(t)) return "angry";
+            if (/(😢|😭|💔|😞|😔|sad|udaas|sorry|miss u|miss you)/i.test(t)) return "sad";
+            if (/(😂|🤣|😄|😁|🥳|haha|hehe|lol)/i.test(t)) return "excited";
+            if (/(😴|🥱|good night|goodnight|\bgn\b|neend)/i.test(t)) return "sleepy";
+            if (/(🥺|🫂|🤗|hug)/i.test(t)) return "hug";
+            if (/(❤️|💕|💖|💗|💓|😘|🥰|💋|💘|💞|janan|mino|zargoo|love)/i.test(t)) return "romantic";
+            return fallbackMood || "love";
+        }
+
+        function playEmotionSound(text = "", moodKey = "love") {
+            try {
+                const ctx = getAudioCtx();
+                if (!ctx) return;
+                const emotion = detectEmotionSound(text, moodKey);
+
+                if (emotion === "romantic" || emotion === "miss") {
+                    // Warm 3-note romantic harp chime
+                    scheduleTone(ctx, 523.25, 0, 0.55, 'sine', 0.22);
+                    scheduleTone(ctx, 659.25, 0.12, 0.55, 'sine', 0.22);
+                    scheduleTone(ctx, 783.99, 0.24, 0.75, 'sine', 0.20);
+                } else if (emotion === "excited") {
+                    // Cheerful bouncy sparkle
+                    scheduleTone(ctx, 587.33, 0, 0.22, 'triangle', 0.18);
+                    scheduleTone(ctx, 783.99, 0.09, 0.24, 'triangle', 0.18);
+                    scheduleTone(ctx, 987.77, 0.18, 0.38, 'sine', 0.20);
+                } else if (emotion === "sad" || emotion === "upset" || emotion === "sick") {
+                    // Soft gentle descending tone
+                    scheduleTone(ctx, 493.88, 0, 0.55, 'sine', 0.16);
+                    scheduleTone(ctx, 440.00, 0.20, 0.65, 'sine', 0.15);
+                    scheduleTone(ctx, 392.00, 0.42, 0.80, 'sine', 0.14);
+                } else if (emotion === "angry") {
+                    // Short punchy alert
+                    scheduleTone(ctx, 293.66, 0, 0.16, 'triangle', 0.22);
+                    scheduleTone(ctx, 246.94, 0.14, 0.22, 'triangle', 0.20);
+                } else if (emotion === "sleepy") {
+                    // Ultra-soft lullaby chime
+                    scheduleTone(ctx, 523.25, 0, 0.70, 'sine', 0.12);
+                    scheduleTone(ctx, 392.00, 0.24, 0.85, 'sine', 0.10);
+                } else if (emotion === "hug") {
+                    // Sweet comforting bell
+                    scheduleTone(ctx, 587.33, 0, 0.50, 'sine', 0.19);
+                    scheduleTone(ctx, 698.46, 0.15, 0.65, 'sine', 0.19);
+                } else {
+                    // Classic soft 2-note chime
+                    scheduleTone(ctx, 523.25, 0, 0.60, 'sine', 0.22);
+                    scheduleTone(ctx, 659.25, 0.14, 0.65, 'sine', 0.22);
+                }
+            } catch (e) { console.log("Sound error:", e); }
+        }
+
+        const heartsLayer = document.getElementById('hearts-layer');
+        const lovePulseToast = document.getElementById('love-pulse-toast');
+        let pulseToastTimer = null;
+
+        function spawnFloatingHearts() {
+            const icons = ["💖", "💕", "❤️", "✨", "🌸", "🥰", "💘"];
+            for (let i = 0; i < 9; i++) {
+                setTimeout(() => {
+                    const el = document.createElement('span');
+                    el.className = 'fly-heart';
+                    el.innerText = icons[Math.floor(Math.random() * icons.length)];
+                    el.style.left = (10 + Math.random() * 80) + "%";
+                    heartsLayer.appendChild(el);
+                    setTimeout(() => el.remove(), 2400);
+                }, i * 100);
+            }
+        }
+
+        function showLovePulseNotification(msg) {
+            lovePulseToast.innerText = msg || "💖 Partner is thinking of you! 💕";
+            lovePulseToast.style.display = 'block';
+            spawnFloatingHearts();
+            playEmotionSound("", "romantic");
+            if (navigator.vibrate) navigator.vibrate([100, 60, 100]);
+            clearTimeout(pulseToastTimer);
+            pulseToastTimer = setTimeout(() => { lovePulseToast.style.display = 'none'; }, 3500);
+        }
+
+        function hasRomanticTrigger(text) {
+            if (!text) return false;
+            return /(❤️|💕|💖|💗|💓|😘|🥰|💋|💘|💞|janan|mino|zargoo|love)/i.test(text);
+        }
+
+        const EMOJI_CATEGORIES = {
+            love: ["❤️", "💕", "💖", "💗", "💓", "💞", "💘", "💝", "❤️‍🔥", "❣️", "💋", "💌", "💍", "💐", "♾️", "🫶", "🫰", "😍", "🥰", "😘", "💏"],
+            faces: ["😊", "🥹", "🥺", "🙈", "🙉", "🙊", "😳", "🤭", "🫣", "😋", "😜", "😝", "🤪", "😇", "😉", "😌", "🤗", "🫠", "😂", "🤣", "😅", "😢", "😭", "😴", "🤤", "😎", "🤩", "🥳", "😡", "😔", "🤒"],
+            cute: ["🌸", "🌹", "🌺", "🌷", "🌻", "🌼", "🪷", "🦋", "🧸", "🐻", "🐼", "🐰", "🐥", "🐱", "🍓", "🍒", "🍑", "🍫", "🍭", "☕", "🌙", "⭐", "✨", "🌈", "☁️", "🎀", "👑", "💎"],
+            vibes: ["👋", "🙏", "👏", "🙌", "🤝", "✌️", "👌", "👍", "💪", "🔥", "💯", "🎉", "🎊", "🎶", "👀", "🍕", "🍔", "🎂", "🍰", "🚗", "✈️"]
+        };
+
+        const notesScreen = document.getElementById('notes-screen');
+        const noteContent = document.getElementById('note-content');
+        const loginScreen = document.getElementById('login-screen');
+        const chatScreen = document.getElementById('chat-screen');
+        const headerAvatar = document.getElementById('header-avatar');
+        const messageInput = document.getElementById('message-input');
+        const messagesContainer = document.getElementById('messages-container');
+        const partnerStatus = document.getElementById('partner-status');
+        const typingIndicator = document.getElementById('typing-indicator');
+        const replyPreview = document.getElementById('reply-preview');
+        const replyText = document.getElementById('reply-text');
+        const scrollBottomBtn = document.getElementById('scroll-bottom-btn');
+
+        const themeBtn = document.getElementById('theme-btn');
+        const partnerMoodBadge = document.getElementById('partner-mood-badge');
+        const myMoodBtn = document.getElementById('my-mood-btn');
+        const moodPicker = document.getElementById('mood-picker');
+        const missYouBtn = document.getElementById('miss-you-btn');
+
+        const emojiBtn = document.getElementById('emoji-btn');
+        const emojiPanel = document.getElementById('emoji-panel');
+        const emojiGrid = document.getElementById('emoji-grid');
+
+        const photoBtn = document.getElementById('photo-btn');
+        const photoInput = document.getElementById('photo-input');
+        const photoPreviewModal = document.getElementById('photo-preview-modal');
+        const photoPreviewImg = document.getElementById('photo-preview-img');
+        const viewOnceCheckbox = document.getElementById('view-once-checkbox');
+        const cancelPhotoBtn = document.getElementById('cancel-photo-btn');
+        const sendPhotoBtn = document.getElementById('send-photo-btn');
+        const imageViewerModal = document.getElementById('image-viewer-modal');
+        const imageViewerImg = document.getElementById('image-viewer-img');
+        const viewerBanner = document.getElementById('viewer-banner');
+
+        const micBtn = document.getElementById('mic-btn');
+        const inputArea = document.getElementById('input-area');
+        const recordingBar = document.getElementById('recording-bar');
+        const recTimerEl = document.getElementById('rec-timer');
+        const recCancelBtn = document.getElementById('rec-cancel-btn');
+        const recSendBtn = document.getElementById('rec-send-btn');
+
+        document.getElementById('current-date').innerText = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+        let isFirstLoad = true;
+        let typingTimeout;
+        let replyingToText = null;
+        let isTyping = false;
+        let partnerTypingTimeout;
+        let unsubMessages = null;
+        let unsubStatus = null;
+        let cachedMessages = loadCachedMessages();
+        let partnerLastReadAtMs = 0;
+        let lastSeenPulseMs = Date.now();
+        let pendingPhotoDataUrl = null;
+        let currentMyMood = localStorage.getItem(MY_MOOD_KEY) || "❤️ Happy";
+        let currentMyMoodKey = localStorage.getItem(MY_MOOD_THEME_KEY) || "love";
+        let partnerMoodKey = "love";
+
+        function applyDarkMode(isDark) {
+            if (isDark) {
+                document.body.classList.add('dark-chat');
+                themeBtn.innerText = "☀️";
+            } else {
+                document.body.classList.remove('dark-chat');
+                themeBtn.innerText = "🌙";
+            }
+        }
+        applyDarkMode(localStorage.getItem(DARK_MODE_KEY) === "1");
+
+        themeBtn.addEventListener('click', () => {
+            const next = !document.body.classList.contains('dark-chat');
+            localStorage.setItem(DARK_MODE_KEY, next ? "1" : "0");
+            applyDarkMode(next);
+        });
+
+        const MOOD_AVATAR_MAP = {
+            love: "💞", romantic: "💘", miss: "🥰", hug: "🫂", angry: "🔥",
+            sad: "🌧️", upset: "🥺", sleepy: "🌙", excited: "✨", busy: "💼", sick: "🍵"
+        };
+
+        function getMoodKeyFromLabel(label) {
+            if (!label) return "love";
+            const match = [...document.querySelectorAll('.mood-option')].find((b) => b.innerText === label);
+            return match ? match.dataset.mood : "love";
+        }
+
+        function applyMoodTheme(moodKey, moodLabel) {
+            currentMyMoodKey = moodKey || "love";
+            currentMyMood = moodLabel || "❤️ Happy";
+            chatScreen.dataset.mood = currentMyMoodKey;
+            headerAvatar.innerText = MOOD_AVATAR_MAP[currentMyMoodKey] || "💞";
+            myMoodBtn.innerText = currentMyMood;
+
+            document.querySelectorAll('.mood-option').forEach((btn) => {
+                btn.classList.toggle('active-mood', btn.dataset.mood === currentMyMoodKey);
+            });
+        }
+        applyMoodTheme(currentMyMoodKey, currentMyMood);
+
+        myMoodBtn.addEventListener('click', () => {
+            emojiPanel.style.display = 'none';
+            moodPicker.style.display = moodPicker.style.display === 'flex' ? 'none' : 'flex';
+        });
+
+        document.querySelectorAll('.mood-option').forEach((opt) => {
+            opt.addEventListener('click', () => {
+                const moodKey = opt.dataset.mood;
+                const moodLabel = opt.innerText;
+                localStorage.setItem(MY_MOOD_KEY, moodLabel);
+                localStorage.setItem(MY_MOOD_THEME_KEY, moodKey);
+                applyMoodTheme(moodKey, moodLabel);
+                moodPicker.style.display = 'none';
+                playEmotionSound("", moodKey);
+                if (moodKey === "romantic") spawnFloatingHearts();
+                if (auth.currentUser) {
+                    setDoc(doc(db, "status", auth.currentUser.uid), { mood: moodLabel }, { merge: true });
+                }
+            });
+        });
+
+        let lastPulseSent = 0;
+        missYouBtn.addEventListener('click', () => {
+            if (!auth.currentUser) return;
+            const now = Date.now();
+            if (now - lastPulseSent < 2500) return;
+            lastPulseSent = now;
+            spawnFloatingHearts();
+            playEmotionSound("", "romantic");
+            setDoc(doc(db, "status", auth.currentUser.uid), { lovePulseAt: serverTimestamp() }, { merge: true });
+        });
+
+        function renderEmojiCategory(cat) {
+            emojiGrid.innerHTML = "";
+            (EMOJI_CATEGORIES[cat] || []).forEach((em) => {
+                const b = document.createElement('button');
+                b.type = "button";
+                b.className = "quick-emoji";
+                b.innerText = em;
+                b.addEventListener('click', () => {
+                    messageInput.value += em;
+                    messageInput.focus();
+                    messageInput.dispatchEvent(new Event('input'));
+                });
+                emojiGrid.appendChild(b);
+            });
+        }
+        renderEmojiCategory('love');
+
+        document.querySelectorAll('.emoji-tab').forEach((tab) => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.emoji-tab').forEach((t) => t.classList.remove('active'));
+                tab.classList.add('active');
+                renderEmojiCategory(tab.dataset.cat);
+            });
+        });
+
+        emojiBtn.addEventListener('click', () => {
+            moodPicker.style.display = 'none';
+            emojiPanel.style.display = emojiPanel.style.display === 'flex' ? 'none' : 'flex';
+        });
+
+        messagesContainer.addEventListener('click', () => {
+            emojiPanel.style.display = 'none';
+            moodPicker.style.display = 'none';
+        });
+
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let micStream = null;
+        let recTimerInterval = null;
+        let recSeconds = 0;
+        let shouldSendRecording = false;
+
+        function stopMicStream() {
+            clearInterval(recTimerInterval);
+            if (micStream) {
+                micStream.getTracks().forEach((t) => t.stop());
+                micStream = null;
+            }
+            recordingBar.style.display = 'none';
+            inputArea.style.display = 'flex';
+        }
+
+        micBtn.addEventListener('click', async () => {
+            if (!navigator.mediaDevices || !window.MediaRecorder) {
+                alert("Aapka browser voice recording support nahi karta.");
+                return;
+            }
+            emojiPanel.style.display = 'none';
+            moodPicker.style.display = 'none';
+            try {
+                micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const mimeTypes = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', ''];
+                let chosenMime = '';
+                for (const m of mimeTypes) {
+                    if (!m || MediaRecorder.isTypeSupported(m)) { chosenMime = m; break; }
+                }
+                const opts = chosenMime ? { mimeType: chosenMime, audioBitsPerSecond: 24000 } : { audioBitsPerSecond: 24000 };
+                mediaRecorder = new MediaRecorder(micStream, opts);
+                audioChunks = [];
+                shouldSendRecording = false;
+                recSeconds = 0;
+                recTimerEl.innerText = "Recording 0:00 / 0:20";
+
+                mediaRecorder.ondataavailable = (ev) => {
+                    if (ev.data && ev.data.size > 0) audioChunks.push(ev.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    const sendNow = shouldSendRecording;
+                    const blobType = mediaRecorder.mimeType || 'audio/webm';
+                    const blob = new Blob(audioChunks, { type: blobType });
+                    stopMicStream();
+                    if (!sendNow || !auth.currentUser || blob.size < 500) return;
+
+                    const reader = new FileReader();
+                    reader.onloadend = async () => {
+                        try {
+                            const audioDataUrl = reader.result;
+                            const encryptedAudio = await encryptText(audioDataUrl);
+                            const msgData = {
+                                text: "",
+                                audio: encryptedAudio,
+                                sender: auth.currentUser.uid,
+                                read: false,
+                                createdAt: serverTimestamp()
+                            };
+                            if (replyingToText) {
+                                msgData.replyTo = await encryptText(replyingToText);
+                                replyingToText = null;
+                                replyPreview.style.display = 'none';
+                            }
+                            playEmotionSound("", currentMyMoodKey);
+                            await addDoc(collection(db, "messages"), msgData);
+                        } catch (err) {
+                            alert("Voice note send nahi ho saki: " + err.message);
+                        }
+                    };
+                    reader.readAsDataURL(blob);
+                };
+
+                mediaRecorder.start();
+                inputArea.style.display = 'none';
+                recordingBar.style.display = 'flex';
+
+                recTimerInterval = setInterval(() => {
+                    recSeconds++;
+                    const secStr = recSeconds < 10 ? "0" + recSeconds : recSeconds;
+                    recTimerEl.innerText = `Recording 0:${secStr} / 0:20`;
+                    if (recSeconds >= 20) {
+                        shouldSendRecording = true;
+                        if (mediaRecorder && mediaRecorder.state === "recording") mediaRecorder.stop();
+                    }
+                }, 1000);
+            } catch (err) {
+                stopMicStream();
+                alert("Mic permission allow karein!");
+            }
+        });
+
+        recCancelBtn.addEventListener('click', () => {
+            shouldSendRecording = false;
+            if (mediaRecorder && mediaRecorder.state === "recording") mediaRecorder.stop();
+            else stopMicStream();
+        });
+
+        recSendBtn.addEventListener('click', () => {
+            shouldSendRecording = true;
+            if (mediaRecorder && mediaRecorder.state === "recording") mediaRecorder.stop();
+        });
+
+        messagesContainer.addEventListener('scroll', () => {
+            const distFromBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight;
+            scrollBottomBtn.style.display = distFromBottom > 120 ? 'flex' : 'none';
+        });
+        scrollBottomBtn.addEventListener('click', () => {
+            messagesContainer.scrollTo({ top: messagesContainer.scrollHeight, behavior: 'smooth' });
+        });
+
+        document.getElementById('cancel-reply').addEventListener('click', () => {
+            replyingToText = null; replyPreview.style.display = 'none';
+        });
+
+        function setupSwipeToReply(element, text) {
+            let startX = 0;
+            element.addEventListener('touchstart', (e) => { startX = e.touches[0].clientX; }, { passive: true });
+            element.addEventListener('touchend', (e) => {
+                let endX = e.changedTouches[0].clientX;
+                if (endX - startX > 60) {
+                    replyingToText = text; replyText.innerText = text;
+                    replyPreview.style.display = 'flex'; messageInput.focus();
+                }
+            }, { passive: true });
+        }
+
+        photoBtn.addEventListener('click', () => {
+            emojiPanel.style.display = 'none';
+            moodPicker.style.display = 'none';
+            photoInput.click();
+        });
+
+        photoInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            photoInput.value = "";
+            if (!file) return;
+            try {
+                pendingPhotoDataUrl = await compressImage(file);
+                photoPreviewImg.src = pendingPhotoDataUrl;
+                viewOnceCheckbox.checked = false;
+                photoPreviewModal.style.display = 'flex';
+            } catch (err) {
+                alert("Photo select karne mein masla aaya: " + err.message);
+            }
+        });
+
+        cancelPhotoBtn.addEventListener('click', () => {
+            pendingPhotoDataUrl = null;
+            photoPreviewImg.src = "";
+            photoPreviewModal.style.display = 'none';
+        });
+
+        sendPhotoBtn.addEventListener('click', async () => {
+            if (!pendingPhotoDataUrl || !auth.currentUser) return;
+            const dataUrlToSend = pendingPhotoDataUrl;
+            const isViewOnce = viewOnceCheckbox.checked;
+            pendingPhotoDataUrl = null;
+            photoPreviewModal.style.display = 'none';
+            photoPreviewImg.src = "";
+
+            playEmotionSound("", currentMyMoodKey);
+
+            try {
+                const encryptedImg = await encryptText(dataUrlToSend);
+                const msgData = {
+                    text: "",
+                    image: encryptedImg,
+                    viewOnce: isViewOnce,
+                    openedOnce: false,
+                    sender: auth.currentUser.uid,
+                    read: false,
+                    createdAt: serverTimestamp()
+                };
+                if (replyingToText) {
+                    msgData.replyTo = await encryptText(replyingToText);
+                    replyingToText = null;
+                    replyPreview.style.display = 'none';
+                }
+                await addDoc(collection(db, "messages"), msgData);
+            } catch (e) {
+                alert("Photo send nahi ho saki! Error: " + e.message);
+            }
+        });
+
+        let activeViewOnceMsgId = null;
+
+        async function openImageViewer(src, viewOnceMsgId) {
+            imageViewerImg.src = src;
+            activeViewOnceMsgId = viewOnceMsgId || null;
+            viewerBanner.style.display = viewOnceMsgId ? 'block' : 'none';
+            imageViewerModal.style.display = 'flex';
+        }
+
+        async function closeImageViewer() {
+            imageViewerModal.style.display = 'none';
+            imageViewerImg.src = "";
+            viewerBanner.style.display = 'none';
+
+            if (activeViewOnceMsgId) {
+                const msgId = activeViewOnceMsgId;
+                activeViewOnceMsgId = null;
+                markOpenedOnceLocal(msgId);
+
+                const idx = cachedMessages.findIndex((m) => m.id === msgId);
+                if (idx !== -1) {
+                    cachedMessages[idx].image = null;
+                    cachedMessages[idx].openedOnce = true;
+                    decryptedMap.delete(msgId);
+                    saveCachedMessages(cachedMessages);
+                }
+                if (auth.currentUser) {
+                    renderMessages(auth.currentUser.uid);
+                    try {
+                        await updateDoc(doc(db, "messages", msgId), { image: null, openedOnce: true });
+                    } catch (e) { console.log("View once cleanup:", e); }
+                }
+            }
+        }
+
+        document.getElementById('image-viewer-close').addEventListener('click', closeImageViewer);
+        imageViewerModal.addEventListener('click', (e) => {
+            if (e.target === imageViewerModal) closeImageViewer();
+        });
+
+        function formatDateLabel(ms) {
+            const d = new Date(ms);
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+            const msgDay = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+            if (msgDay === today) return "Today";
+            if (msgDay === today - 86400000) return "Yesterday";
+            return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+        }
+
+        function refreshTicksInPlace() {
+            document.querySelectorAll('.msg-tick').forEach((tickSpan) => {
+                const ts = Number(tickSpan.dataset.ts || "0");
+                const isRead = tickSpan.dataset.read === "1" || (partnerLastReadAtMs > 0 && ts > 0 && ts <= partnerLastReadAtMs);
+                if (isRead) {
+                    tickSpan.innerText = "✓✓";
+                    tickSpan.style.color = "#53bdeb";
+                }
+            });
+        }
+
+        async function decryptAndCacheInRam(msg) {
+            if (decryptedMap.has(msg.id)) return decryptedMap.get(msg.id);
+            const plainText = msg.text ? await decryptText(msg.text) : "";
+            const plainReply = msg.replyTo ? await decryptText(msg.replyTo) : null;
+            const plainImage = msg.image ? await decryptText(msg.image) : null;
+            const plainAudio = msg.audio ? await decryptText(msg.audio) : null;
+            const res = { text: plainText, replyTo: plainReply, image: plainImage, audio: plainAudio };
+            decryptedMap.set(msg.id, res);
+            return res;
+        }
+
+        async function renderMessages(myUid, animateLastOnly = false) {
+            const clearedAt = getLocalClearedAt();
+            const openedSet = getOpenedOnceSet();
+            const visible = cachedMessages.filter((m) => (m.createdAtMs || 0) > clearedAt);
+
+            for (const m of visible) {
+                await decryptAndCacheInRam(m);
+            }
+
+            messagesContainer.innerHTML = "";
+            let lastDateLabel = "";
+
+            visible.forEach((m, index) => {
+                if (m.createdAtMs) {
+                    const label = formatDateLabel(m.createdAtMs);
+                    if (label !== lastDateLabel) {
+                        lastDateLabel = label;
+                        const divChip = document.createElement('div');
+                        divChip.className = 'date-divider';
+                        const spanChip = document.createElement('span');
+                        spanChip.innerText = label;
+                        divChip.appendChild(spanChip);
+                        messagesContainer.appendChild(divChip);
+                    }
+                }
+
+                const dec = decryptedMap.get(m.id) || { text: "", replyTo: null, image: null, audio: null };
+                const msgDiv = document.createElement('div');
+                const isLastNew = animateLastOnly && index === visible.length - 1;
+                msgDiv.className = (m.sender === myUid ? 'msg-bubble msg-sent' : 'msg-bubble msg-received') + (isLastNew ? ' msg-anim' : '');
+
+                if (dec.replyTo) {
+                    const replyBox = document.createElement('div');
+                    replyBox.className = 'msg-reply-box';
+                    replyBox.innerText = dec.replyTo;
+                    msgDiv.appendChild(replyBox);
+                }
+
+                if (m.viewOnce) {
+                    const alreadyOpened = m.openedOnce || openedSet.has(m.id) || !dec.image;
+                    if (m.sender === myUid) {
+                        const info = document.createElement('span');
+                        info.className = 'view-once-opened';
+                        info.innerText = alreadyOpened ? "💨 View-Once Photo Opened" : "🔥 View-Once Photo Sent";
+                        msgDiv.appendChild(info);
+                    } else if (alreadyOpened) {
+                        const info = document.createElement('span');
+                        info.className = 'view-once-opened';
+                        info.innerText = "💨 Photo Opened";
+                        msgDiv.appendChild(info);
+                    } else if (dec.image && dec.image.startsWith("data:image/")) {
+                        const btn = document.createElement('button');
+                        btn.type = "button";
+                        btn.className = "view-once-btn";
+                        btn.innerText = "🔥 View-Once Photo (Tap to open)";
+                        btn.addEventListener('click', () => openImageViewer(dec.image, m.id));
+                        msgDiv.appendChild(btn);
+                    }
+                } else if (dec.image && dec.image.startsWith("data:image/")) {
+                    const imgEl = document.createElement('img');
+                    imgEl.className = 'msg-img';
+                    imgEl.src = dec.image;
+                    imgEl.alt = "Photo";
+                    imgEl.onload = () => { messagesContainer.scrollTop = messagesContainer.scrollHeight; };
+                    imgEl.addEventListener('click', () => openImageViewer(dec.image, null));
+                    msgDiv.appendChild(imgEl);
+                }
+
+                if (dec.audio && dec.audio.startsWith("data:audio/")) {
+                    const audioEl = document.createElement('audio');
+                    audioEl.className = 'msg-audio';
+                    audioEl.controls = true;
+                    audioEl.setAttribute('playsinline', '');
+                    audioEl.src = dec.audio;
+                    msgDiv.appendChild(audioEl);
+                }
+
+                if (dec.text) {
+                    const textSpan = document.createElement('span');
+                    textSpan.innerText = dec.text;
+                    msgDiv.appendChild(textSpan);
+                }
+
+                const metaDiv = document.createElement('div');
+                metaDiv.style.display = "flex"; metaDiv.style.alignItems = "center";
+                metaDiv.style.justifyContent = "flex-end"; metaDiv.style.gap = "5px"; metaDiv.style.marginTop = "5px";
+
+                const timeSpan = document.createElement('span');
+                timeSpan.className = 'msg-time'; timeSpan.style.margin = "0";
+                if (m.createdAtMs) {
+                    timeSpan.innerText = new Date(m.createdAtMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                }
+                metaDiv.appendChild(timeSpan);
+
+                if (m.sender === myUid) {
+                    const tickSpan = document.createElement('span');
+                    tickSpan.className = 'msg-tick';
+                    tickSpan.dataset.ts = String(m.createdAtMs || 0);
+                    tickSpan.dataset.read = m.read ? "1" : "0";
+                    tickSpan.style.fontSize = "12px";
+                    const isRead = m.read || (partnerLastReadAtMs > 0 && m.createdAtMs && m.createdAtMs <= partnerLastReadAtMs);
+                    if (isRead) { tickSpan.innerText = "✓✓"; tickSpan.style.color = "#53bdeb"; }
+                    else { tickSpan.innerText = "✓"; tickSpan.style.color = "rgba(255,255,255,0.75)"; }
+                    metaDiv.appendChild(tickSpan);
+                }
+                msgDiv.appendChild(metaDiv);
+                messagesContainer.appendChild(msgDiv);
+
+                const replyFallback = dec.text || (dec.audio ? "🎤 Voice Note" : "📷 Photo");
+                setupSwipeToReply(msgDiv, replyFallback);
+            });
+
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            scrollBottomBtn.style.display = 'none';
+        }
+
+        function stopChatListeners() {
+            if (unsubMessages) { unsubMessages(); unsubMessages = null; }
+            if (unsubStatus) { unsubStatus(); unsubStatus = null; }
+            isFirstLoad = true;
+            if (mediaRecorder && mediaRecorder.state === "recording") {
+                shouldSendRecording = false;
+                mediaRecorder.stop();
+            } else {
+                stopMicStream();
+            }
+        }
+
+        function updateLastRead() {
+            if (!auth.currentUser || chatScreen.style.display !== 'flex') return;
+            if (document.visibilityState === "hidden") return;
+            setDoc(doc(db, "status", auth.currentUser.uid), { lastReadAt: serverTimestamp() }, { merge: true });
+        }
+
+        function startChat(user) {
+            if (unsubMessages || unsubStatus) return;
+
+            setDoc(doc(db, "status", user.uid), {
+                online: true, typing: false, mood: currentMyMood,
+                lastSeen: serverTimestamp(), lastReadAt: serverTimestamp()
+            }, { merge: true });
+
+            unsubStatus = onSnapshot(collection(db, "status"), (snapshot) => {
+                let needsTickRefresh = false;
+
+                snapshot.forEach((docSnap) => {
+                    const data = docSnap.data();
+
+                    if (data.clearedAt) {
+                        const clearedMs = data.clearedAt.toMillis();
+                        if (clearedMs > getLocalClearedAt()) {
+                            setLocalClearedAt(clearedMs);
+                            cachedMessages = [];
+                            decryptedMap.clear();
+                            saveCachedMessages([]);
+                            messagesContainer.innerHTML = "";
+                        }
+                    }
+
+                    if (docSnap.id !== user.uid) {
+                        if (data.mood) {
+                            partnerMoodBadge.innerText = "Partner: " + data.mood;
+                            partnerMoodKey = getMoodKeyFromLabel(data.mood);
+                        }
+
+                        if (data.lovePulseAt) {
+                            const pulseMs = data.lovePulseAt.toMillis();
+                            if (pulseMs > lastSeenPulseMs && (Date.now() - pulseMs) < 60000) {
+                                lastSeenPulseMs = pulseMs;
+                                showLovePulseNotification("💖 Partner is thinking of you! 💕");
+                            }
+                        }
+
+                        if (data.lastReadAt) {
+                            const readMs = data.lastReadAt.toMillis();
+                            if (readMs > partnerLastReadAtMs) {
+                                partnerLastReadAtMs = readMs;
+                                needsTickRefresh = true;
+                            }
+                        }
+
+                        if (data.typing) {
+                            typingIndicator.style.display = 'flex';
+                            partnerStatus.innerText = "Typing... ✍️";
+                            partnerStatus.style.color = "var(--accent-text)";
+                            clearTimeout(partnerTypingTimeout);
+                            partnerTypingTimeout = setTimeout(() => {
+                                typingIndicator.style.display = 'none';
+                                partnerStatus.innerText = "Online 🟢"; partnerStatus.style.color = "#4CAF50";
+                            }, 3000);
+                        } else {
+                            typingIndicator.style.display = 'none';
+                            if (data.online) {
+                                partnerStatus.innerText = "Online 🟢"; partnerStatus.style.color = "#4CAF50";
+                            } else {
+                                partnerStatus.innerText = data.lastSeen
+                                    ? "Last seen: " + data.lastSeen.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                    : "Last seen: recently";
+                                partnerStatus.style.color = "#888";
+                            }
+                        }
+                    }
+                });
+
+                if (needsTickRefresh) {
+                    refreshTicksInPlace();
+                }
+            });
+
+            loadMessages(user.uid);
+        }
+
+        document.getElementById('hide-chat-btn').addEventListener('click', () => {
+            if (auth.currentUser) {
+                setDoc(doc(db, "status", auth.currentUser.uid), { online: false, typing: false, lastSeen: serverTimestamp() }, { merge: true });
+            }
+            stopChatListeners();
+            e2eeKey = null;
+            decryptedMap.clear();
+            chatScreen.style.display = 'none';
+            notesScreen.style.display = 'flex';
+            messageInput.value = "";
+            messagesContainer.innerHTML = "";
+            typingIndicator.style.display = 'none';
+            emojiPanel.style.display = 'none';
+            moodPicker.style.display = 'none';
+            isTyping = false;
+        });
+
+        document.getElementById('save-note-btn').addEventListener('click', async () => {
+            if (noteContent.value.trim() === SECRET_CODE) {
+                noteContent.value = "";
+                notesScreen.style.display = 'none';
+                await getE2EEKey();
+                if (auth.currentUser) {
+                    chatScreen.style.display = 'flex';
+                    await renderMessages(auth.currentUser.uid);
+                    startChat(auth.currentUser);
+                } else {
+                    loginScreen.style.display = 'flex';
+                }
+                return;
+            }
+            noteContent.value = "";
+            document.getElementById('note-status').innerText = "Note Saved Successfully!";
+            setTimeout(() => { document.getElementById('note-status').innerText = ""; }, 2000);
+        });
+
+        document.getElementById('login-btn').addEventListener('click', async () => {
+            try {
+                const cred = await signInWithEmailAndPassword(
+                    auth,
+                    document.getElementById('email').value.trim(),
+                    document.getElementById('password').value
+                );
+                await getE2EEKey();
+                document.getElementById('login-error').innerText = "";
+                loginScreen.style.display = 'none';
+                chatScreen.style.display = 'flex';
+                await renderMessages(cred.user.uid);
+                startChat(cred.user);
+            } catch (error) {
+                document.getElementById('login-error').innerText = "Error: " + error.message;
+                document.getElementById('login-error').style.color = "#d32f2f";
+            }
+        });
+
+        document.getElementById('logout-btn').addEventListener('click', async () => {
+            if (auth.currentUser) {
+                await setDoc(doc(db, "status", auth.currentUser.uid), { online: false, typing: false, lastSeen: serverTimestamp() }, { merge: true });
+            }
+            stopChatListeners();
+            e2eeKey = null;
+            decryptedMap.clear();
+            await signOut(auth);
+            chatScreen.style.display = 'none';
+            notesScreen.style.display = 'flex';
+            messageInput.value = "";
+            messagesContainer.innerHTML = "";
+            typingIndicator.style.display = 'none';
+            emojiPanel.style.display = 'none';
+            moodPicker.style.display = 'none';
+            isTyping = false;
+        });
+
+        document.getElementById('clear-chat-btn').addEventListener('click', async () => {
+            if (confirm("Kya aap waqai saari chat delete karna chahte hain?")) {
+                try {
+                    const snapshot = await getDocs(query(collection(db, "messages")));
+                    const docs = snapshot.docs;
+                    for (let i = 0; i < docs.length; i += 400) {
+                        const batch = writeBatch(db);
+                        docs.slice(i, i + 400).forEach((d) => batch.delete(doc(db, "messages", d.id)));
+                        await batch.commit();
+                    }
+                    const nowMs = Date.now();
+                    setLocalClearedAt(nowMs);
+                    cachedMessages = [];
+                    decryptedMap.clear();
+                    saveCachedMessages([]);
+                    messagesContainer.innerHTML = "";
+                    if (auth.currentUser) {
+                        await setDoc(doc(db, "status", auth.currentUser.uid), { clearedAt: serverTimestamp() }, { merge: true });
+                    }
+                } catch (e) { alert("Delete Error: " + e.message); }
+            }
+        });
+
+        onAuthStateChanged(auth, (user) => {
+            if (!user) {
+                stopChatListeners();
+                messagesContainer.innerHTML = '';
+                typingIndicator.style.display = 'none';
+            } else if (chatScreen.style.display === 'flex') {
+                startChat(user);
+            }
+        });
+
+        document.addEventListener("visibilitychange", () => {
+            if (auth.currentUser && chatScreen.style.display === 'flex') {
+                if (document.visibilityState === "hidden") {
+                    setDoc(doc(db, "status", auth.currentUser.uid), { online: false, typing: false, lastSeen: serverTimestamp() }, { merge: true });
+                    isTyping = false;
+                } else {
+                    setDoc(doc(db, "status", auth.currentUser.uid), { online: true, lastReadAt: serverTimestamp() }, { merge: true });
+                }
+            }
+        });
+
+        messageInput.addEventListener('input', function () {
+            this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px';
+            if (this.value === '') this.style.height = 'auto';
+            if (!auth.currentUser) return;
+
+            if (!isTyping) {
+                setDoc(doc(db, "status", auth.currentUser.uid), { typing: true }, { merge: true });
+                isTyping = true;
+            }
+            clearTimeout(typingTimeout);
+            typingTimeout = setTimeout(() => {
+                setDoc(doc(db, "status", auth.currentUser.uid), { typing: false }, { merge: true });
+                isTyping = false;
+            }, 1500);
+        });
+
+        document.getElementById('send-btn').addEventListener('click', async () => {
+            const plainText = messageInput.value.trim();
+            if (plainText === "") return;
+
+            emojiPanel.style.display = 'none';
+            moodPicker.style.display = 'none';
+            playEmotionSound(plainText, currentMyMoodKey);
+            if (hasRomanticTrigger(plainText)) spawnFloatingHearts();
+
+            try {
+                const encryptedText = await encryptText(plainText);
+                const msgData = { text: encryptedText, sender: auth.currentUser.uid, read: false, createdAt: serverTimestamp() };
+                if (replyingToText) {
+                    msgData.replyTo = await encryptText(replyingToText);
+                    replyingToText = null;
+                    replyPreview.style.display = 'none';
+                }
+
+                messageInput.value = ""; messageInput.style.height = 'auto';
+                clearTimeout(typingTimeout);
+                setDoc(doc(db, "status", auth.currentUser.uid), { typing: false }, { merge: true });
+                isTyping = false;
+
+                await addDoc(collection(db, "messages"), msgData);
+            } catch (e) {
+                console.error("Error: ", e);
+                alert("Message send nahi ho saka! Asal Error: " + e.message);
+            }
+        });
+
+        function loadMessages(myUid) {
+            cachedMessages = loadCachedMessages();
+
+            let lastSec = 0;
+            let lastNs = 0;
+            cachedMessages.forEach((m) => {
+                const sec = m.createdAtSec || 0;
+                const ns = m.createdAtNs || 0;
+                if (sec > lastSec || (sec === lastSec && ns > lastNs)) {
+                    lastSec = sec;
+                    lastNs = ns;
+                }
+            });
+
+            const q = lastSec > 0
+                ? query(collection(db, "messages"), where("createdAt", ">", new Timestamp(lastSec, lastNs)), orderBy("createdAt", "asc"))
+                : query(collection(db, "messages"), orderBy("createdAt", "asc"), limitToLast(30));
+
+            unsubMessages = onSnapshot(q, async (snapshot) => {
+                let hasNewIncoming = false;
+                let changed = false;
+                const newIncomingItems = [];
+
+                snapshot.docChanges().forEach((change) => {
+                    const docSnap = change.doc;
+                    const data = docSnap.data();
+                    if (!data.createdAt) return;
+
+                    const item = {
+                        id: docSnap.id,
+                        text: data.text || "",
+                        image: data.image || null,
+                        audio: data.audio || null,
+                        viewOnce: !!data.viewOnce,
+                        openedOnce: !!data.openedOnce,
+                        replyTo: data.replyTo || null,
+                        sender: data.sender,
+                        read: !!data.read,
+                        createdAtMs: data.createdAt.toMillis(),
+                        createdAtSec: data.createdAt.seconds,
+                        createdAtNs: data.createdAt.nanoseconds
+                    };
+
+                    if (change.type === "added") {
+                        if (!isFirstLoad && data.sender !== myUid) {
+                            hasNewIncoming = true;
+                            newIncomingItems.push(item);
+                        }
+                        const idx = cachedMessages.findIndex((m) => m.id === item.id);
+                        if (idx === -1) {
+                            cachedMessages.push(item);
+                            changed = true;
+                        } else {
+                            cachedMessages[idx] = item;
+                            changed = true;
+                        }
+                    } else if (change.type === "modified") {
+                        const idx = cachedMessages.findIndex((m) => m.id === item.id);
+                        if (idx !== -1) {
+                            cachedMessages[idx] = item;
+                            decryptedMap.delete(item.id);
+                            changed = true;
+                        }
+                    } else if (change.type === "removed") {
+                        cachedMessages = cachedMessages.filter((m) => m.id !== item.id);
+                        decryptedMap.delete(item.id);
+                        changed = true;
+                    }
+                });
+
+                const animateNew = !isFirstLoad && changed;
+                isFirstLoad = false;
+
+                if (changed) {
+                    cachedMessages.sort((a, b) => (a.createdAtMs || 0) - (b.createdAtMs || 0));
+                    saveCachedMessages(cachedMessages);
+                    await renderMessages(myUid, animateNew);
+
+                    if (hasNewIncoming && chatScreen.style.display === 'flex') {
+                        updateLastRead();
+                        const latest = newIncomingItems[newIncomingItems.length - 1];
+                        const latestDec = latest ? decryptedMap.get(latest.id) : null;
+                        playEmotionSound(latestDec ? latestDec.text : "", partnerMoodKey);
+
+                        for (const item of newIncomingItems) {
+                            const dec = decryptedMap.get(item.id);
+                            if (dec && hasRomanticTrigger(dec.text)) {
+                                spawnFloatingHearts();
+                                break;
+                            }
+                        }
+                    }
+                }
+            }, (error) => {
+                alert("Chat load nahi ho rahi! Error: " + error.message);
+            });
+        }
+    </script>
+</body>
+</html>
