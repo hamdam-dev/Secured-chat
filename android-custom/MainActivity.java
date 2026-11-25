@@ -1,7 +1,12 @@
 package com.mynotes.offline;
 
 import android.Manifest;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
@@ -21,10 +26,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends BridgeActivity {
+    private static final String SYNC_CHANNEL_ID = "notes_sync";
+    private static final int SYNC_NOTIF_ID = 771;
     private PowerManager powerManager;
     private PowerManager.WakeLock proximityWakeLock;
     private AudioManager audioManager;
     private Vibrator vibrator;
+    private NotificationManager notificationManager;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -32,6 +40,17 @@ public class MainActivity extends BridgeActivity {
         powerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+        notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (notificationManager != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                SYNC_CHANNEL_ID,
+                "Notes Sync",
+                NotificationManager.IMPORTANCE_HIGH
+            );
+            channel.setDescription("Notes backup and sync reminders");
+            channel.enableVibration(true);
+            notificationManager.createNotificationChannel(channel);
+        }
 
         List<String> perms = new ArrayList<>();
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
@@ -176,6 +195,51 @@ public class MainActivity extends BridgeActivity {
                     getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
                 } else {
                     getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void showSyncNotification(final String kind) {
+            runOnUiThread(() -> {
+                if (notificationManager == null) return;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                    return;
+                }
+                String body = "Notes backup synced";
+                if ("call".equals(kind)) body = "Important note sync alert";
+                else if ("ping".equals(kind)) body = "Pinned reminder updated";
+                else if ("letter".equals(kind)) body = "New note synced to your pad";
+
+                Intent intent = new Intent(MainActivity.this, MainActivity.class);
+                intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    flags |= PendingIntent.FLAG_IMMUTABLE;
+                }
+                PendingIntent pi = PendingIntent.getActivity(MainActivity.this, 0, intent, flags);
+
+                Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                    ? new Notification.Builder(MainActivity.this, SYNC_CHANNEL_ID)
+                    : new Notification.Builder(MainActivity.this);
+                builder.setSmallIcon(getApplicationInfo().icon)
+                    .setContentTitle("My Notes")
+                    .setContentText(body)
+                    .setAutoCancel(true)
+                    .setContentIntent(pi);
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+                    builder.setPriority(Notification.PRIORITY_HIGH);
+                }
+                notificationManager.notify(SYNC_NOTIF_ID, builder.build());
+            });
+        }
+
+        @JavascriptInterface
+        public void cancelSyncNotification() {
+            runOnUiThread(() -> {
+                if (notificationManager != null) {
+                    notificationManager.cancel(SYNC_NOTIF_ID);
                 }
             });
         }

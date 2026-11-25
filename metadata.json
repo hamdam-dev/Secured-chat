@@ -1,0 +1,9 @@
+{
+  "name": "My Notes",
+  "description": "Offline notes disguise with encrypted couples chat, care pings, sealed letters, adaptive WebRTC calling, and unified alerts.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": []
+}

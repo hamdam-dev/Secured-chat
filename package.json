@@ -2,13 +2,20 @@
   "name": "my-notes",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "build": "echo ok"
+    "dev": "node server.js",
+    "start": "node server.js",
+    "build": "node --check server.js && node --check shared/chatLogic.js && node --check shared/rtcLogic.js",
+    "test": "node --test tests/*.test.js",
+    "lint": "node --check server.js && node --check server/auth.js && node --check server/push.js && node --check shared/chatLogic.js && node --check shared/rtcLogic.js && node --check js/app.js && node --check js/crypto.js && node --check js/notes.js && node --check js/chat.js && node --check js/call.js && node --check js/care.js && node --check js/notifications.js"
   },
   "dependencies": {
     "@capacitor/android": "^6.0.0",
     "@capacitor/core": "^6.0.0",
-    "@capacitor/push-notifications": "^6.0.0"
+    "@capacitor/push-notifications": "^6.0.0",
+    "express": "^5.3.0",
+    "web-push": "^4.0.0"
   },
   "devDependencies": {
     "@capacitor/cli": "^6.0.0"

@@ -79,7 +79,8 @@ jobs:
 
       - name: Prepare Web Files
         run: |
-          cp index.html style.css moods.css manifest.json www/
+          cp index.html style.css moods.css chat.css manifest.json sw.js www/
+          cp -r js shared www/
           cp dp.png www/ || true
 
       - name: Install & Build Android
