@@ -1528,7 +1528,7 @@
             window.AndroidCallBridge?.vibratePattern?.("pulse");
             if (auth.currentUser) {
                 setDoc(doc(db, "status", auth.currentUser.uid), { lovePulseAt: Date.now() }, { merge: true }).catch(() => {});
-                sendPushAlert("pulse");
+                sendPushAlert("message");
             }
         });
 
