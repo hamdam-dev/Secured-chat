@@ -82,6 +82,7 @@ jobs:
           cp index.html style.css moods.css chat.css manifest.json sw.js www/
           cp -r js shared www/
           cp dp.png www/ || true
+          node -e 'const fs=require("fs");const c=fs.existsSync("firebase-web-config.json")?fs.readFileSync("firebase-web-config.json","utf8").trim():"{}";fs.writeFileSync("www/firebase-config.js","window.__FIREBASE_CONFIG__="+c+";\nwindow.__APP_CONFIG__={hasPushServer:true};\n");'
 
       - name: Install & Build Android
         run: |
