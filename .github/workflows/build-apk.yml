@@ -77,11 +77,10 @@ jobs:
           rsvg-convert -w 192 -h 192 notes-icon-full.svg -o www/icon-192.png
           rsvg-convert -w 512 -h 512 notes-icon-full.svg -o www/icon-512.png
 
-      - name: Prepare Web Files
+      - - name: Prepare Web Files
         run: |
-          cp index.html style.css manifest.json www/
+          cp index.html style.css moods.css manifest.json www/
           cp dp.png www/ || true
-
       - name: Install & Build Android
         run: |
           npm install
