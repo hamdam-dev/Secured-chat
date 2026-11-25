@@ -128,7 +128,7 @@ jobs:
 
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           sed -i 's/<\/manifest>/<uses-permission android:name="android.permission.CAMERA" \/><uses-permission android:name="android.permission.RECORD_AUDIO" \/><uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" \/><uses-permission android:name="android.permission.WAKE_LOCK" \/><uses-permission android:name="android.permission.VIBRATE" \/><uses-permission android:name="android.permission.POST_NOTIFICATIONS" \/><\/manifest>/' $MANIFEST
-          sed -i 's/<\/application>/<meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="notes_sync" \/><meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@mipmap\/ic_launcher" \/><\/application>/' $MANIFEST
+          sed -i 's/<\/application>/<meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="notes_sync" \/><meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@android:drawable\/ic_menu_edit" \/><\/application>/' $MANIFEST
 
           npx cap sync android
           cd android && chmod +x gradlew && ./gradlew assembleDebug

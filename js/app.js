@@ -18,7 +18,18 @@ const MY_MOOD_KEY = "sc_my_mood_v1";
 const PULSE_SEEN_KEY = "sc_last_pulse_seen_v1";
 const CLEAR_SEEN_KEY = "sc_last_clear_seen_v1";
 
-const firebaseConfig = window.__FIREBASE_CONFIG__ || {};
+let firebaseConfig = window.__FIREBASE_CONFIG__ || {};
+if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+  try {
+    const cfgRes = await fetch("./firebase-web-config.json", { cache: "no-store" });
+    if (cfgRes.ok) {
+      const parsedCfg = await cfgRes.json();
+      if (parsedCfg?.apiKey && parsedCfg?.projectId) {
+        firebaseConfig = parsedCfg;
+      }
+    }
+  } catch {}
+}
 const hasFirebaseConfig = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId);
 const app = hasFirebaseConfig ? initializeApp(firebaseConfig) : null;
 const auth = app ? getAuth(app) : { currentUser: null };

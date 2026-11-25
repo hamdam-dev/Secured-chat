@@ -58,7 +58,7 @@ export function createNotificationManager({ getAuth, getDb, doc, setDoc, isNotes
     if (!("serviceWorker" in navigator) || isNativeApp()) return null;
     if (swRegistration) return swRegistration;
     try {
-      swRegistration = await navigator.serviceWorker.register("/sw.js");
+      swRegistration = await navigator.serviceWorker.register("sw.js");
       await navigator.serviceWorker.ready;
       return swRegistration;
     } catch {
