@@ -1,0 +1,173 @@
+/* =========================================
+   16 MOOD THEMES FOR JANAN & MINO
+   ========================================= */
+
+/* 1. Romantic (Rose Velvet) */
+body.theme-romantic #chat-screen { background: linear-gradient(180deg, #ffe4ec 0%, #f8bbd0 100%) !important; }
+body.theme-romantic header#main-header { background: rgba(255, 240, 246, 0.92) !important; border-color: #f48fb1 !important; }
+body.theme-romantic .msg-sent { background: linear-gradient(135deg, #ff4081, #ad1457) !important; }
+body.theme-romantic .msg-received { background: rgba(255, 255, 255, 0.96) !important; border-color: #f48fb1 !important; }
+body.theme-romantic #send-btn { background: #c2185b !important; }
+body.theme-romantic .bg-text { color: #ec407a !important; }
+
+/* 2. Happy (Sunny Peach & Gold) */
+body.theme-happy #chat-screen { background: linear-gradient(180deg, #fff8e1 0%, #ffe0b2 100%) !important; }
+body.theme-happy header#main-header { background: rgba(255, 251, 235, 0.94) !important; border-color: #ffb74d !important; }
+body.theme-happy header#main-header h3 { color: #e65100 !important; }
+body.theme-happy .hdr-pill-btn, body.theme-happy .media-tool-btn { background: #fff3e0 !important; color: #e65100 !important; }
+body.theme-happy .msg-sent { background: linear-gradient(135deg, #ffa726, #ef6c00) !important; }
+body.theme-happy .msg-received { background: #fffdf7 !important; border-color: #ffcc80 !important; }
+body.theme-happy #send-btn { background: #ef6c00 !important; }
+body.theme-happy .input-wrapper { background: #fff8e1 !important; border-color: #ffcc80 !important; }
+body.theme-happy .bg-text { color: #fb8c00 !important; }
+
+/* 3. Miss U (Soft Lavender Lilac) */
+body.theme-miss #chat-screen { background: linear-gradient(180deg, #f3e5f5 0%, #d1c4e9 100%) !important; }
+body.theme-miss header#main-header { background: rgba(248, 240, 255, 0.92) !important; border-color: #ba68c8 !important; }
+body.theme-miss header#main-header h3 { color: #6a1b9a !important; }
+body.theme-miss .hdr-pill-btn, body.theme-miss .media-tool-btn { background: #f3e5f5 !important; color: #7b1fa2 !important; }
+body.theme-miss .msg-sent { background: linear-gradient(135deg, #ab47bc, #6a1b9a) !important; }
+body.theme-miss .msg-received { background: #fcf7ff !important; border-color: #ce93d8 !important; }
+body.theme-miss #send-btn { background: #7b1fa2 !important; }
+body.theme-miss .input-wrapper { background: #f8f0ff !important; border-color: #ce93d8 !important; }
+body.theme-miss .bg-text { color: #8e24aa !important; }
+
+/* 4. Sleepy (Midnight Starry Indigo) */
+body.theme-sleepy #chat-screen { background: linear-gradient(180deg, #0f172a 0%, #1e1b4b 100%) !important; }
+body.theme-sleepy header#main-header { background: rgba(20, 24, 52, 0.92) !important; border-color: #6366f1 !important; }
+body.theme-sleepy header#main-header h3, body.theme-sleepy #mood-status-line { color: #a5b4fc !important; }
+body.theme-sleepy .hdr-pill-btn, body.theme-sleepy .media-tool-btn { background: #1e293b !important; color: #a5b4fc !important; }
+body.theme-sleepy .msg-sent { background: linear-gradient(135deg, #6366f1, #3730a3) !important; color: #fff !important; }
+body.theme-sleepy .msg-received { background: #1e293b !important; color: #e2e8f0 !important; border-color: #4338ca !important; }
+body.theme-sleepy #input-area { background: rgba(15, 23, 42, 0.96) !important; }
+body.theme-sleepy .input-wrapper { background: #1e293b !important; border-color: #4f46e5 !important; }
+body.theme-sleepy #message-input { color: #f8fafc !important; }
+body.theme-sleepy #send-btn { background: #4f46e5 !important; }
+body.theme-sleepy .bg-text { color: #818cf8 !important; opacity: 0.2 !important; }
+
+/* 5. Hungry (Strawberry Caramel) */
+body.theme-hungry #chat-screen { background: linear-gradient(180deg, #fff3e0 0%, #ffccbc 100%) !important; }
+body.theme-hungry header#main-header { background: rgba(255, 248, 240, 0.92) !important; border-color: #ff8a65 !important; }
+body.theme-hungry header#main-header h3 { color: #bf360c !important; }
+body.theme-hungry .hdr-pill-btn, body.theme-hungry .media-tool-btn { background: #fbe9e7 !important; color: #d84315 !important; }
+body.theme-hungry .msg-sent { background: linear-gradient(135deg, #ff7043, #bf360c) !important; }
+body.theme-hungry .msg-received { background: #fffaf7 !important; border-color: #ffab91 !important; }
+body.theme-hungry #send-btn { background: #d84315 !important; }
+body.theme-hungry .bg-text { color: #ff5722 !important; }
+
+/* 6. Angry (Fiery Crimson Ember) */
+body.theme-angry #chat-screen { background: linear-gradient(180deg, #ffebee 0%, #ffcdd2 100%) !important; }
+body.theme-angry header#main-header { background: rgba(255, 240, 240, 0.92) !important; border-color: #e53935 !important; }
+body.theme-angry header#main-header h3 { color: #b71c1c !important; }
+body.theme-angry .hdr-pill-btn, body.theme-angry .media-tool-btn { background: #ffebee !important; color: #c62828 !important; }
+body.theme-angry .msg-sent { background: linear-gradient(135deg, #ef5350, #b71c1c) !important; }
+body.theme-angry .msg-received { background: #fff8f8 !important; border-color: #ef9a9a !important; }
+body.theme-angry #send-btn { background: #c62828 !important; }
+body.theme-angry .input-wrapper { background: #fff5f5 !important; border-color: #ef9a9a !important; }
+body.theme-angry .bg-text { color: #d32f2f !important; }
+
+/* 7. Sad (Rainy Sky Blue) */
+body.theme-sad #chat-screen { background: linear-gradient(180deg, #e3f2fd 0%, #b0bec5 100%) !important; }
+body.theme-sad header#main-header { background: rgba(240, 247, 255, 0.92) !important; border-color: #64b5f6 !important; }
+body.theme-sad header#main-header h3 { color: #1565c0 !important; }
+body.theme-sad .hdr-pill-btn, body.theme-sad .media-tool-btn { background: #e3f2fd !important; color: #1976d2 !important; }
+body.theme-sad .msg-sent { background: linear-gradient(135deg, #42a5f5, #1565c0) !important; }
+body.theme-sad .msg-received { background: #f5faff !important; border-color: #90caf9 !important; }
+body.theme-sad #send-btn { background: #1976d2 !important; }
+body.theme-sad .input-wrapper { background: #eef6ff !important; border-color: #90caf9 !important; }
+body.theme-sad .bg-text { color: #1e88e5 !important; }
+
+/* 8. Busy (Fresh Sage Mint) */
+body.theme-busy #chat-screen { background: linear-gradient(180deg, #e8f5e9 0%, #b2dfdb 100%) !important; }
+body.theme-busy header#main-header { background: rgba(240, 253, 244, 0.92) !important; border-color: #4db6ac !important; }
+body.theme-busy header#main-header h3 { color: #00695c !important; }
+body.theme-busy .hdr-pill-btn, body.theme-busy .media-tool-btn { background: #e0f2f1 !important; color: #00796b !important; }
+body.theme-busy .msg-sent { background: linear-gradient(135deg, #26a69a, #00695c) !important; }
+body.theme-busy .msg-received { background: #f7fffc !important; border-color: #80cbc4 !important; }
+body.theme-busy #send-btn { background: #00796b !important; }
+body.theme-busy .input-wrapper { background: #e8f5e9 !important; border-color: #80cbc4 !important; }
+body.theme-busy .bg-text { color: #00897b !important; }
+
+/* 9. Excited (Neon Party Glow) */
+body.theme-excited #chat-screen { background: linear-gradient(180deg, #fce4ec 0%, #ede7f6 55%, #e0f7fa 100%) !important; }
+body.theme-excited header#main-header { background: rgba(255, 255, 255, 0.9) !important; border-color: #e040fb !important; }
+body.theme-excited header#main-header h3 { color: #aa00ff !important; }
+body.theme-excited .hdr-pill-btn, body.theme-excited .media-tool-btn { background: #f3e5f5 !important; color: #aa00ff !important; }
+body.theme-excited .msg-sent { background: linear-gradient(135deg, #ff4081, #7c4dff) !important; }
+body.theme-excited .msg-received { background: #fff !important; border-color: #ea80fc !important; }
+body.theme-excited #send-btn { background: #aa00ff !important; }
+body.theme-excited .bg-text { color: #d500f9 !important; }
+
+/* 10. Sick (Warm Honey Chamomile) */
+body.theme-sick #chat-screen { background: linear-gradient(180deg, #fffde7 0%, #e6ee9c 100%) !important; }
+body.theme-sick header#main-header { background: rgba(255, 253, 240, 0.94) !important; border-color: #afb42b !important; }
+body.theme-sick header#main-header h3 { color: #827717 !important; }
+body.theme-sick .hdr-pill-btn, body.theme-sick .media-tool-btn { background: #f9fbe7 !important; color: #827717 !important; }
+body.theme-sick .msg-sent { background: linear-gradient(135deg, #9ccc65, #558b2f) !important; }
+body.theme-sick .msg-received { background: #fffff5 !important; border-color: #dce775 !important; }
+body.theme-sick #send-btn { background: #689f38 !important; }
+body.theme-sick .bg-text { color: #9e9d24 !important; }
+
+/* 11. Shy (Sakura Pastel Blush) */
+body.theme-shy #chat-screen { background: linear-gradient(180deg, #fff5f8 0%, #ffdbe9 100%) !important; }
+body.theme-shy header#main-header { background: rgba(255, 248, 251, 0.94) !important; border-color: #f8bbd0 !important; }
+body.theme-shy .msg-sent { background: linear-gradient(135deg, #f48fb1, #ec407a) !important; }
+body.theme-shy .msg-received { background: #fff !important; border-color: #f8bbd0 !important; }
+body.theme-shy #send-btn { background: #ec407a !important; }
+body.theme-shy .bg-text { color: #f06292 !important; }
+
+/* 12. Kissy (Cherry Ruby Lips) */
+body.theme-kissy #chat-screen { background: linear-gradient(180deg, #fce4ec 0%, #f48fb1 100%) !important; }
+body.theme-kissy header#main-header { background: rgba(255, 235, 242, 0.92) !important; border-color: #e91e63 !important; }
+body.theme-kissy header#main-header h3 { color: #880e4f !important; }
+body.theme-kissy .msg-sent { background: linear-gradient(135deg, #e91e63, #880e4f) !important; }
+body.theme-kissy .msg-received { background: #fff5f8 !important; border-color: #f06292 !important; }
+body.theme-kissy #send-btn { background: #ad1457 !important; }
+body.theme-kissy .bg-text { color: #c2185b !important; }
+
+/* 13. Moody / Dark Heart (Obsidian Rose Gold) */
+body.theme-moody #chat-screen { background: linear-gradient(180deg, #18181b 0%, #2d1b24 100%) !important; }
+body.theme-moody header#main-header { background: rgba(32, 24, 28, 0.94) !important; border-color: #e11d48 !important; }
+body.theme-moody header#main-header h3, body.theme-moody #mood-status-line { color: #fda4af !important; }
+body.theme-moody .hdr-pill-btn, body.theme-moody .media-tool-btn { background: #2d1f26 !important; color: #fda4af !important; }
+body.theme-moody .msg-sent { background: linear-gradient(135deg, #be123c, #881337) !important; }
+body.theme-moody .msg-received { background: #27272a !important; color: #f4f4f5 !important; border-color: #9f1239 !important; }
+body.theme-moody #input-area { background: rgba(24, 24, 27, 0.96) !important; }
+body.theme-moody .input-wrapper { background: #27272a !important; border-color: #be123c !important; }
+body.theme-moody #message-input { color: #fff !important; }
+body.theme-moody #send-btn { background: #e11d48 !important; }
+body.theme-moody .bg-text { color: #fb7185 !important; opacity: 0.2 !important; }
+
+/* 14. Night Vibes (Aurora Galaxy) */
+body.theme-night #chat-screen { background: linear-gradient(180deg, #042f2e 0%, #0f172a 100%) !important; }
+body.theme-night header#main-header { background: rgba(10, 35, 42, 0.92) !important; border-color: #2dd4bf !important; }
+body.theme-night header#main-header h3, body.theme-night #mood-status-line { color: #5eead4 !important; }
+body.theme-night .hdr-pill-btn, body.theme-night .media-tool-btn { background: #134e4a !important; color: #5eead4 !important; }
+body.theme-night .msg-sent { background: linear-gradient(135deg, #0d9488, #0f766e) !important; }
+body.theme-night .msg-received { background: #1e293b !important; color: #e2e8f0 !important; border-color: #14b8a6 !important; }
+body.theme-night #input-area { background: rgba(4, 47, 46, 0.95) !important; }
+body.theme-night .input-wrapper { background: #134e4a !important; border-color: #2dd4bf !important; }
+body.theme-night #message-input { color: #fff !important; }
+body.theme-night #send-btn { background: #0d9488 !important; }
+body.theme-night .bg-text { color: #2dd4bf !important; opacity: 0.2 !important; }
+
+/* 15. Cozy / Cute (Teddy Caramel Latte) */
+body.theme-cozy #chat-screen { background: linear-gradient(180deg, #efebe9 0%, #d7ccc8 100%) !important; }
+body.theme-cozy header#main-header { background: rgba(250, 245, 242, 0.94) !important; border-color: #a1887f !important; }
+body.theme-cozy header#main-header h3 { color: #5d4037 !important; }
+body.theme-cozy .hdr-pill-btn, body.theme-cozy .media-tool-btn { background: #efebe9 !important; color: #6d4c41 !important; }
+body.theme-cozy .msg-sent { background: linear-gradient(135deg, #8d6e63, #5d4037) !important; }
+body.theme-cozy .msg-received { background: #fffaf6 !important; border-color: #bcaaa4 !important; }
+body.theme-cozy #send-btn { background: #6d4c41 !important; }
+body.theme-cozy .input-wrapper { background: #f5f0ed !important; border-color: #bcaaa4 !important; }
+body.theme-cozy .bg-text { color: #795548 !important; }
+
+/* 16. Royal (Plum & Champagne Gold) */
+body.theme-royal #chat-screen { background: linear-gradient(180deg, #f3e5f5 0%, #fff8e1 100%) !important; }
+body.theme-royal header#main-header { background: rgba(255, 250, 245, 0.94) !important; border-color: #d4af37 !important; }
+body.theme-royal header#main-header h3 { color: #4a148c !important; }
+body.theme-royal .hdr-pill-btn, body.theme-royal .media-tool-btn { background: #f3e5f5 !important; color: #6a1b9a !important; }
+body.theme-royal .msg-sent { background: linear-gradient(135deg, #7b1fa2, #b8860b) !important; }
+body.theme-royal .msg-received { background: #fffdf5 !important; border-color: #e6c200 !important; }
+body.theme-royal #send-btn { background: #6a1b9a !important; }
+body.theme-royal .bg-text { color: #8e24aa !important; }
