@@ -23,6 +23,7 @@ export function diffMessageIds(renderedOrder, nextSortedMessages) {
 export function getBubblePreviewText(dec) {
   if (!dec) return "";
   if (dec.isCallLog) return dec.text || "Call";
+  if (dec.isGameResult) return dec.text || "🎮 Game Update";
   if (dec.carePing) return `${dec.carePing.emoji || "💞"} ${dec.carePing.label || "Care Ping"}`;
   if (dec.letterData) return `💌 ${dec.letterData.title || "Surprise Letter"}`;
   if (dec.questionCard) return `🃏 ${dec.questionCard.question || "Dil Ki Baat"}`;

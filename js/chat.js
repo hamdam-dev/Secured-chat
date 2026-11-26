@@ -12,7 +12,7 @@ import {
   searchEmojis,
   addRecentEmoji
 } from "../shared/emojiCatalog.js";
-import { isMessageExpired } from "../shared/gameLogic.js";
+import { isMessageExpired, shouldNotifyCreatorOnMessageChange } from "../shared/gameLogic.js";
 
 const MSG_CACHE_KEY = "sc_msg_cache_v1";
 const DELETED_LOCAL_KEY = "sc_deleted_local_v1";
@@ -62,6 +62,8 @@ export function createChatManager({
   const epSections = document.getElementById("ep-sections");
   const pinnedBar = document.getElementById("pinned-msg-bar");
   const pinnedPreviewEl = document.getElementById("pinned-msg-preview");
+  const gameUpdateBar = document.getElementById("game-update-bar");
+  const gameUpdatePreviewEl = document.getElementById("game-update-preview");
   const searchBar = document.getElementById("chat-search-bar");
   const searchInput = document.getElementById("chat-search-input");
   const searchCountEl = document.getElementById("chat-search-count");
@@ -86,6 +88,7 @@ export function createChatManager({
   let pendingDeleteIds = [];
   let gameRenderer = null;
   let currentPinned = null;
+  let activeGameUpdateMsgId = null;
   let searchQuery = "";
   let searchMatches = [];
   let searchIdx = 0;
@@ -497,7 +500,19 @@ export function createChatManager({
     }
   }
 
-  async function updateEncryptedMessage(msgId, nextPayloadObj) {
+  function showGameUpdateBanner(msgId, label) {
+    if (!gameUpdateBar || !gameUpdatePreviewEl) return;
+    activeGameUpdateMsgId = msgId || null;
+    gameUpdatePreviewEl.innerText = label || "Love ne game mein chaal chali!";
+    gameUpdateBar.style.display = "flex";
+  }
+
+  function hideGameUpdateBanner() {
+    activeGameUpdateMsgId = null;
+    if (gameUpdateBar) gameUpdateBar.style.display = "none";
+  }
+
+  async function updateEncryptedMessage(msgId, nextPayloadObj, opts = {}) {
     const m = messagesMap.get(msgId);
     if (m) {
       m.decrypted = nextPayloadObj;
@@ -508,6 +523,19 @@ export function createChatManager({
     if (db && msgId && !m?.isPending) {
       const cipher = await encryptPayload(nextPayloadObj);
       await updateDoc(doc(db, "messages", msgId), { text: cipher }).catch(() => {});
+      if (opts.notifyPartner !== false) {
+        notifications.sendPushAlert(opts.alertKind || "letter");
+      }
+      if (opts.gameNoticeText) {
+        await sendEncryptedMessage(
+          {
+            isGameResult: true,
+            refGameId: msgId,
+            text: opts.gameNoticeText
+          },
+          opts.alertKind || "letter"
+        );
+      }
     }
   }
 
@@ -533,6 +561,25 @@ export function createChatManager({
       cl.className = "call-log-pill" + (dec.missed ? " call-log-missed" : "");
       cl.innerText = dec.text || "📞 Call";
       div.appendChild(cl);
+    } else if (dec.isGameResult) {
+      const box = document.createElement("div");
+      box.className = "game-result-notice";
+      const txt = document.createElement("div");
+      txt.className = "game-result-text";
+      txt.innerText = dec.text || "🎮 Game Update!";
+      box.appendChild(txt);
+      if (dec.refGameId) {
+        const jBtn = document.createElement("button");
+        jBtn.type = "button";
+        jBtn.className = "game-mini-btn";
+        jBtn.innerText = "👀 Board / Card Dekhein";
+        jBtn.onclick = e => {
+          e.stopPropagation();
+          jumpToMessage(dec.refGameId);
+        };
+        box.appendChild(jBtn);
+      }
+      div.appendChild(box);
     } else if (dec.carePing) {
       allowDoubleTapReact = true;
       const pBox = document.createElement("div");
@@ -565,10 +612,18 @@ export function createChatManager({
           const val = inp.value.trim();
           if (!val) return;
           playEmotionSound("love");
-          await updateEncryptedMessage(m.id, {
-            ...dec,
-            questionCard: { ...dec.questionCard, answer: val }
-          });
+          await updateEncryptedMessage(
+            m.id,
+            {
+              ...dec,
+              questionCard: { ...dec.questionCard, answer: val, lastUpdatedBy: myUid }
+            },
+            {
+              notifyPartner: true,
+              alertKind: "letter",
+              gameNoticeText: `🃏 Dil Ki Baat ka jawab mila:\n"${dec.questionCard.question}"\n💖 ${val}`
+            }
+          );
         };
         row.appendChild(inp);
         row.appendChild(btn);
@@ -981,6 +1036,7 @@ export function createChatManager({
       let incomingNew = false;
       let incomingKind = "message";
       let changed = false;
+      const creatorGameUpdates = [];
 
       for (const item of decResults) {
         const { ch, raw, dec } = item;
@@ -998,6 +1054,20 @@ export function createChatManager({
           if (ch.type === "added" && !isFirstMsgLoad && raw.sender !== myUid) {
             incomingNew = true;
             incomingKind = getIncomingAlertKind(dec);
+          } else if (
+            shouldNotifyCreatorOnMessageChange({
+              changeType: ch.type,
+              isFirstLoad: isFirstMsgLoad,
+              docSender: raw.sender,
+              myUid,
+              nextDec: dec
+            })
+          ) {
+            const actionLabel =
+              dec?.gameData?.lastActionText ||
+              (dec?.questionCard?.answer ? `🃏 Jawab aaya: "${dec.questionCard.answer}"` : "") ||
+              `${getBubblePreviewText(dec)} update hua!`;
+            creatorGameUpdates.push({ id: ch.doc.id, label: actionLabel });
           }
           changed = true;
         }
@@ -1017,6 +1087,15 @@ export function createChatManager({
         } else {
           notifications.showBrowserAlert(incomingKind);
         }
+      } else if (creatorGameUpdates.length) {
+        const latest = creatorGameUpdates[creatorGameUpdates.length - 1];
+        showGameUpdateBanner(latest.id, latest.label);
+        if (notes.isChatVisible() && document.visibilityState === "visible") {
+          playEmotionSound("gift");
+          markMessagesAsRead();
+        } else {
+          notifications.showBrowserAlert("letter");
+        }
       }
       flushPendingQueue();
     });
@@ -1027,7 +1106,7 @@ export function createChatManager({
     const db = getDb();
     if (!user || !db) return;
     onActivity?.();
-    if (replyingToText) {
+    if (replyingToText && !payloadObj.isCallLog && !payloadObj.isGameResult) {
       payloadObj.replyTo = replyingToText;
       replyingToText = null;
       replyPreview.style.display = "none";
@@ -1190,7 +1269,7 @@ export function createChatManager({
     setTimeout(() => URL.revokeObjectURL(url), 1500);
   });
 
-  // Pinned bar wiring
+  // Pinned bar & Game Update alert bar wiring
   document.getElementById("pinned-jump-btn")?.addEventListener("click", () => {
     if (currentPinned?.id) jumpToMessage(currentPinned.id);
   });
@@ -1202,6 +1281,12 @@ export function createChatManager({
       setDoc(doc(db, "status", user.uid), { pinnedMsg: null }, { merge: true }).catch(() => {});
     }
   });
+  document.getElementById("game-update-jump-btn")?.addEventListener("click", () => {
+    const targetId = activeGameUpdateMsgId;
+    hideGameUpdateBanner();
+    if (targetId) jumpToMessage(targetId);
+  });
+  document.getElementById("close-game-update-btn")?.addEventListener("click", hideGameUpdateBanner);
 
   // Event wiring
   messagesContainer.addEventListener("scroll", () => {
@@ -1640,6 +1725,9 @@ export function createChatManager({
     setPartnerLastReadMs(ms) { partnerLastReadMs = ms; refreshTicksInPlace(); },
     setGameRenderer(fn) { gameRenderer = fn; },
     setPinnedBarState,
+    showGameUpdateBanner,
+    hideGameUpdateBanner,
+    jumpToMessage,
     loadMsgCache,
     startMessagesListener,
     markMessagesAsRead,
