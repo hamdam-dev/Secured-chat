@@ -12,9 +12,15 @@ import { createNotificationManager } from "./notifications.js";
 import { createChatManager } from "./chat.js";
 import { createCallManager } from "./call.js";
 import { createCareManager } from "./care.js";
+import { createGamesManager } from "./games.js";
+import { createDoodleManager } from "./doodle.js";
 
 const THEME_KEY = "sc_dark_mode_v1";
 const MY_MOOD_KEY = "sc_my_mood_v1";
+const MY_ACT_KEY = "sc_my_act_v1";
+const CHAT_TITLE_KEY = "sc_chat_title_v1";
+const CUSTOM_DP_KEY = "sc_custom_dp_v1";
+const WALL_DIM_KEY = "sc_wall_dim_v1";
 const PULSE_SEEN_KEY = "sc_last_pulse_seen_v1";
 const CLEAR_SEEN_KEY = "sc_last_clear_seen_v1";
 
@@ -70,7 +76,9 @@ const MOODS = [
 
 let myMoodText = "";
 let myMoodKey = "";
+let myActivityText = localStorage.getItem(MY_ACT_KEY) || "";
 let partnerMoodText = "";
+let partnerActivityText = "";
 let isPartnerOnline = false;
 let heartbeatInt = null;
 let unsubStatus = null;
@@ -137,10 +145,12 @@ const call = createCallManager({
 const moodStatusLine = document.getElementById("mood-status-line");
 function renderMoodStatusLine() {
   const parts = [];
-  if (myMoodText) parts.push("Main: " + myMoodText);
-  if (partnerMoodText) parts.push("Love: " + partnerMoodText);
+  const myCombined = [myMoodText, myActivityText].filter(Boolean).join(" • ");
+  const partnerCombined = [partnerMoodText, partnerActivityText].filter(Boolean).join(" • ");
+  if (myCombined) parts.push("Main: " + myCombined);
+  if (partnerCombined) parts.push("Love: " + partnerCombined);
   if (parts.length) {
-    moodStatusLine.innerText = parts.join("  •  ");
+    moodStatusLine.innerText = parts.join("  |  ");
     moodStatusLine.style.display = "block";
   } else {
     moodStatusLine.style.display = "none";
@@ -175,6 +185,9 @@ function selectMoodByKey(key) {
 }
 
 createCareManager({ chat });
+const games = createGamesManager({ getAuth: () => auth, chat });
+chat.setGameRenderer(games.renderGameBubble);
+createDoodleManager({ chat });
 
 function openChatScreen() {
   notes.notesScreen.style.display = "none";
@@ -194,8 +207,9 @@ function hideChatToNotes() {
   document.getElementById("more-dropdown").style.display = "none";
   document.getElementById("emoji-picker").style.display = "none";
   document.getElementById("reaction-popup").style.display = "none";
-  ["delete-msg-modal", "clear-confirm-modal", "push-debug-modal", "mood-modal", "gift-modal", "care-modal", "img-viewer-modal"].forEach(id => {
-    document.getElementById(id).style.display = "none";
+  ["delete-msg-modal", "clear-confirm-modal", "push-debug-modal", "mood-modal", "gift-modal", "care-modal", "img-viewer-modal", "reaction-all-modal", "games-modal", "doodle-modal", "starred-modal", "privacy-settings-modal"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = "none";
   });
   document.getElementById("viewer-img").src = "";
   chat.stopTransientMedia();
@@ -214,9 +228,9 @@ window.handleAndroidBack = function () {
     document.getElementById("viewer-img").src = "";
     return true;
   }
-  for (const id of ["delete-msg-modal", "clear-confirm-modal", "push-debug-modal", "mood-modal", "gift-modal", "care-modal"]) {
+  for (const id of ["reaction-all-modal", "games-modal", "doodle-modal", "starred-modal", "privacy-settings-modal", "delete-msg-modal", "clear-confirm-modal", "push-debug-modal", "mood-modal", "gift-modal", "care-modal"]) {
     const el = document.getElementById(id);
-    if (el.style.display === "flex") {
+    if (el && el.style.display === "flex") {
       el.style.display = "none";
       return true;
     }
@@ -431,7 +445,96 @@ document.getElementById("logout-btn").addEventListener("click", async () => {
   hideChatToNotes();
 });
 
-// Mood Grid
+// Mood Grid, Quick Activity Status & Custom Look/Privacy
+function applyCustomAppearance() {
+  const customTitle = (localStorage.getItem(CHAT_TITLE_KEY) || "").trim();
+  const titleEl = document.getElementById("chat-header-title");
+  if (titleEl && customTitle) titleEl.innerText = customTitle;
+
+  const customDp = localStorage.getItem(CUSTOM_DP_KEY);
+  if (customDp) {
+    const hdrDp = document.getElementById("header-dp");
+    const loginDp = document.querySelector(".login-dp");
+    if (hdrDp) hdrDp.src = customDp;
+    if (loginDp) loginDp.src = customDp;
+  }
+
+  const dimWall = localStorage.getItem(WALL_DIM_KEY) === "1";
+  const loveBg = document.getElementById("love-background");
+  if (loveBg) loveBg.style.opacity = dimWall ? "0.32" : "1";
+}
+applyCustomAppearance();
+
+document.querySelectorAll("#activity-status-row [data-act]").forEach(btn => {
+  if (btn.dataset.act === myActivityText && myActivityText) btn.classList.add("active");
+  btn.addEventListener("click", () => {
+    myActivityText = btn.dataset.act || "";
+    try { localStorage.setItem(MY_ACT_KEY, myActivityText); } catch {}
+    document.querySelectorAll("#activity-status-row [data-act]").forEach(b => {
+      b.classList.toggle("active", b.dataset.act === myActivityText && Boolean(myActivityText));
+    });
+    renderMoodStatusLine();
+    if (auth.currentUser && db) {
+      setDoc(doc(db, "status", auth.currentUser.uid), { activity: myActivityText }, { merge: true }).catch(() => {});
+    }
+  });
+});
+
+const privacyModal = document.getElementById("privacy-settings-modal");
+document.getElementById("open-privacy-btn")?.addEventListener("click", () => {
+  moreDropdown.style.display = "none";
+  document.getElementById("custom-name-input").value = localStorage.getItem(CHAT_TITLE_KEY) || "Janan & Mino";
+  document.getElementById("custom-secret-input").value = notes.getSecretCode();
+  document.getElementById("custom-decoy-input").value = notes.getDecoyCode();
+  document.getElementById("shake-hide-toggle").checked = notes.isShakeHideEnabled();
+  privacyModal.style.display = "flex";
+});
+document.getElementById("close-privacy-btn")?.addEventListener("click", () => {
+  privacyModal.style.display = "none";
+});
+document.getElementById("wall-bright-btn")?.addEventListener("click", () => {
+  const next = localStorage.getItem(WALL_DIM_KEY) === "1" ? "0" : "1";
+  try { localStorage.setItem(WALL_DIM_KEY, next); } catch {}
+  applyCustomAppearance();
+});
+document.getElementById("custom-dp-btn")?.addEventListener("click", () => {
+  notes.setPickingMedia(true);
+  document.getElementById("custom-dp-input")?.click();
+});
+document.getElementById("custom-dp-input")?.addEventListener("change", e => {
+  notes.setPickingMedia(false);
+  const file = e.target.files?.[0];
+  e.target.value = "";
+  if (!file) return;
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+  img.onload = () => {
+    const c = document.createElement("canvas");
+    c.width = 240;
+    c.height = 240;
+    const minSide = Math.min(img.width, img.height);
+    const sx = (img.width - minSide) / 2;
+    const sy = (img.height - minSide) / 2;
+    c.getContext("2d").drawImage(img, sx, sy, minSide, minSide, 0, 0, 240, 240);
+    try { localStorage.setItem(CUSTOM_DP_KEY, c.toDataURL("image/jpeg", 0.8)); } catch {}
+    URL.revokeObjectURL(url);
+    applyCustomAppearance();
+  };
+  img.src = url;
+});
+document.getElementById("save-privacy-btn")?.addEventListener("click", () => {
+  const titleVal = document.getElementById("custom-name-input").value.trim() || "Janan & Mino";
+  const secretVal = document.getElementById("custom-secret-input").value.trim();
+  const decoyVal = document.getElementById("custom-decoy-input").value.trim();
+  const shakeVal = document.getElementById("shake-hide-toggle").checked;
+  try { localStorage.setItem(CHAT_TITLE_KEY, titleVal); } catch {}
+  if (secretVal) notes.setSecretCode(secretVal);
+  notes.setDecoyCode(decoyVal);
+  notes.setShakeHideEnabled(shakeVal);
+  applyCustomAppearance();
+  privacyModal.style.display = "none";
+});
+
 try {
   const savedMood = JSON.parse(localStorage.getItem(MY_MOOD_KEY) || "null");
   if (savedMood && savedMood.key) {
@@ -439,9 +542,9 @@ try {
     myMoodText = savedMood.text;
     document.getElementById("mood-btn").innerText = savedMood.emoji || "😌";
     applyMoodTheme(myMoodKey);
-    renderMoodStatusLine();
   }
 } catch {}
+renderMoodStatusLine();
 
 const moodGrid = document.getElementById("mood-grid");
 MOODS.forEach(m => {
@@ -512,6 +615,9 @@ if (app) {
         initUpdate.mood = myMoodText;
         initUpdate.moodKey = myMoodKey;
       }
+      if (myActivityText) {
+        initUpdate.activity = myActivityText;
+      }
       setDoc(doc(db, "status", user.uid), initUpdate, { merge: true }).catch(() => {});
 
       clearInterval(heartbeatInt);
@@ -528,9 +634,13 @@ if (app) {
       if (unsubStatus) unsubStatus();
       isFirstStatusLoad = true;
       unsubStatus = onSnapshot(collection(db, "status"), async snap => {
+        let latestPin = null;
         for (const d of snap.docs) {
-          if (d.id === user.uid) continue;
           const data = d.data();
+          if (data.pinnedMsg && (!latestPin || (data.pinnedMsg.at || 0) > (latestPin.at || 0))) {
+            latestPin = data.pinnedMsg;
+          }
+          if (d.id === user.uid) continue;
 
           if (data.fcmToken || data.webPushSub) {
             notifications.setPartnerTargets({
@@ -540,6 +650,7 @@ if (app) {
           }
           if (data.lastReadAt) chat.setPartnerLastReadMs(data.lastReadAt.toMillis());
           partnerMoodText = data.mood || "";
+          partnerActivityText = data.activity || "";
           renderMoodStatusLine();
 
           if (data.clearedAtMs && data.clearedAtMs > lastClearSeen) {
@@ -592,6 +703,7 @@ if (app) {
 
           await call.handleSignalingData(data, signalState);
         }
+        chat.setPinnedBarState(latestPin);
         isFirstStatusLoad = false;
       });
       chat.startMessagesListener();
@@ -604,6 +716,7 @@ if (app) {
       chat.resetOnSignOut();
       typingIndicator.style.display = "none";
       partnerMoodText = "";
+      partnerActivityText = "";
       isPartnerOnline = false;
       renderMoodStatusLine();
     }

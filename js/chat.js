@@ -6,9 +6,28 @@ import {
   buildMessageSignature,
   getIncomingAlertKind
 } from "../shared/chatLogic.js";
+import {
+  EMOJI_SECTIONS,
+  getQuickReactions,
+  searchEmojis,
+  addRecentEmoji
+} from "../shared/emojiCatalog.js";
+import { isMessageExpired } from "../shared/gameLogic.js";
 
 const MSG_CACHE_KEY = "sc_msg_cache_v1";
 const DELETED_LOCAL_KEY = "sc_deleted_local_v1";
+const RECENT_EMOJIS_KEY = "sc_recent_emojis_v1";
+const RECENT_REACTS_KEY = "sc_recent_reacts_v1";
+const STARRED_MSGS_KEY = "sc_starred_msgs_v1";
+const DISAPPEAR_HRS_KEY = "sc_disappear_hrs_v1";
+const PENDING_QUEUE_KEY = "sc_pending_msgs_v1";
+
+function formatDuration(sec = 0) {
+  const s = Math.max(0, Math.floor(sec));
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return `${m}:${String(rem).padStart(2, "0")}`;
+}
 
 export function createChatManager({
   getAuth,
@@ -30,9 +49,23 @@ export function createChatManager({
   const replyPreview = document.getElementById("reply-preview");
   const replyTextEl = document.getElementById("reply-text");
   const reactionPopup = document.getElementById("reaction-popup");
+  const rpScrollStrip = document.getElementById("rp-scroll-strip");
+  const reactionAllModal = document.getElementById("reaction-all-modal");
+  const reactSearchInput = document.getElementById("react-search-input");
+  const reactAllTabs = document.getElementById("react-all-tabs");
+  const reactAllSections = document.getElementById("react-all-sections");
   const mediaBar = document.getElementById("media-actions-bar");
   const expandMediaBtn = document.getElementById("expand-media-btn");
   const emojiPicker = document.getElementById("emoji-picker");
+  const epSearchInput = document.getElementById("ep-search-input");
+  const epTabs = document.getElementById("ep-tabs");
+  const epSections = document.getElementById("ep-sections");
+  const pinnedBar = document.getElementById("pinned-msg-bar");
+  const pinnedPreviewEl = document.getElementById("pinned-msg-preview");
+  const searchBar = document.getElementById("chat-search-bar");
+  const searchInput = document.getElementById("chat-search-input");
+  const searchCountEl = document.getElementById("chat-search-count");
+  const disappearBtn = document.getElementById("disappear-cycle-btn");
 
   let myUid = null;
   let partnerLastReadMs = 0;
@@ -51,26 +84,62 @@ export function createChatManager({
   let activeAudioEl = null;
   let activeAudioBtn = null;
   let pendingDeleteIds = [];
+  let gameRenderer = null;
+  let currentPinned = null;
+  let searchQuery = "";
+  let searchMatches = [];
+  let searchIdx = 0;
+  let flushingPending = false;
+
+  function readJson(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  function writeJson(key, val) {
+    try {
+      localStorage.setItem(key, JSON.stringify(val));
+    } catch {}
+  }
 
   function getDeletedLocalSet() {
-    try {
-      return new Set(JSON.parse(localStorage.getItem(DELETED_LOCAL_KEY) || "[]"));
-    } catch {
-      return new Set();
-    }
+    return new Set(readJson(DELETED_LOCAL_KEY, []));
   }
 
   function addDeletedLocal(ids) {
     const set = getDeletedLocalSet();
     ids.forEach(id => set.add(id));
-    try {
-      localStorage.setItem(DELETED_LOCAL_KEY, JSON.stringify([...set].slice(-300)));
-    } catch {}
+    writeJson(DELETED_LOCAL_KEY, [...set].slice(-300));
   }
+
+  function getDisappearHours() {
+    const h = Number(localStorage.getItem(DISAPPEAR_HRS_KEY) || "0");
+    return [0, 1, 24].includes(h) ? h : 0;
+  }
+
+  function renderDisappearLabel() {
+    if (!disappearBtn) return;
+    const h = getDisappearHours();
+    disappearBtn.innerText = h ? `⏳ Disappear: ${h}h` : "⏳ Disappear: Off";
+  }
+  renderDisappearLabel();
+
+  disappearBtn?.addEventListener("click", e => {
+    e.stopPropagation();
+    const order = [0, 1, 24];
+    const next = order[(order.indexOf(getDisappearHours()) + 1) % order.length];
+    try { localStorage.setItem(DISAPPEAR_HRS_KEY, String(next)); } catch {}
+    renderDisappearLabel();
+  });
 
   function saveMsgCache() {
     try {
       const arr = sortMessages([...messagesMap.values()])
+        .filter(m => !m.isPending && !isMessageExpired(m.decrypted))
         .slice(-50)
         .map(m => {
           const copy = { ...m.decrypted };
@@ -91,19 +160,90 @@ export function createChatManager({
 
   function loadMsgCache() {
     try {
-      const arr = JSON.parse(localStorage.getItem(MSG_CACHE_KEY) || "[]");
+      const arr = readJson(MSG_CACHE_KEY, []);
       const deleted = getDeletedLocalSet();
+      const now = Date.now();
       arr.forEach(m => {
-        if (!deleted.has(m.id)) messagesMap.set(m.id, m);
+        if (!deleted.has(m.id) && !isMessageExpired(m.decrypted, now)) {
+          messagesMap.set(m.id, m);
+        }
       });
+      loadPendingIntoMap();
       if (messagesMap.size > 0) renderAllMessages(true);
     } catch {}
   }
 
+  function loadPendingIntoMap() {
+    const queue = readJson(PENDING_QUEUE_KEY, []);
+    queue.forEach(item => {
+      messagesMap.set(item.tempId, {
+        id: item.tempId,
+        sender: myUid || "me",
+        createdAtSec: Math.floor(item.createdMs / 1000),
+        createdAtNs: 0,
+        reaction: "",
+        isPending: true,
+        decrypted: item.payloadObj
+      });
+    });
+  }
+
+  async function flushPendingQueue() {
+    if (flushingPending) return;
+    const user = getAuth()?.currentUser;
+    const db = getDb();
+    if (!user || !db || (typeof navigator !== "undefined" && !navigator.onLine)) return;
+    const queue = readJson(PENDING_QUEUE_KEY, []);
+    if (!queue.length) return;
+    flushingPending = true;
+    const remaining = [];
+    for (const item of queue) {
+      try {
+        const cipher = await encryptPayload(item.payloadObj);
+        await addDoc(collection(db, "messages"), {
+          text: cipher,
+          sender: user.uid,
+          read: false,
+          createdAt: serverTimestamp()
+        });
+        messagesMap.delete(item.tempId);
+      } catch {
+        remaining.push(item);
+      }
+    }
+    writeJson(PENDING_QUEUE_KEY, remaining);
+    flushingPending = false;
+    renderAllMessages(false);
+  }
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("online", () => flushPendingQueue());
+  }
+
+  function sweepExpiredMessages() {
+    const now = Date.now();
+    const expiredIds = [];
+    messagesMap.forEach((m, id) => {
+      if (isMessageExpired(m.decrypted, now)) expiredIds.push(id);
+    });
+    if (!expiredIds.length) return;
+    const db = getDb();
+    expiredIds.forEach(id => {
+      const m = messagesMap.get(id);
+      messagesMap.delete(id);
+      if (db && m?.sender === myUid && !m?.isPending) {
+        deleteDoc(doc(db, "messages", id)).catch(() => {});
+      }
+    });
+    renderAllMessages(false, true);
+    saveMsgCache();
+  }
+  setInterval(sweepExpiredMessages, 30000);
+
   function updateOldestCursor() {
     let minTs = null;
     messagesMap.forEach(m => {
-      if (m.createdAtSec > 0) {
+      if (!m.isPending && m.createdAtSec > 0) {
         if (
           !minTs ||
           m.createdAtSec < minTs.seconds ||
@@ -154,21 +294,228 @@ export function createChatManager({
     updateSelectionBar();
   }
 
+  async function applyReaction(msgId, emoji) {
+    if (!msgId) return;
+    const m = messagesMap.get(msgId);
+    const nextReaction = m && m.reaction === emoji ? "" : emoji;
+    if (m) {
+      m.reaction = nextReaction;
+      renderAllMessages(false, true);
+      saveMsgCache();
+    }
+    if (nextReaction) {
+      const rec = addRecentEmoji(readJson(RECENT_REACTS_KEY, []), nextReaction, 12);
+      writeJson(RECENT_REACTS_KEY, rec);
+    }
+    const db = getDb();
+    if (db && !m?.isPending) {
+      try { await updateDoc(doc(db, "messages", msgId), { reaction: nextReaction }); } catch {}
+    }
+  }
+
+  function buildQuickReactionStrip(currentReaction = "") {
+    if (!rpScrollStrip) return;
+    rpScrollStrip.innerHTML = "";
+    const recentReacts = readJson(RECENT_REACTS_KEY, []);
+    const list = getQuickReactions(recentReacts);
+    list.forEach(emoji => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "rp-btn" + (currentReaction === emoji ? " active" : "");
+      b.innerText = emoji;
+      b.setAttribute("aria-label", `React with ${emoji}`);
+      b.onclick = e => {
+        e.stopPropagation();
+        const targetId = activePopupMsgId;
+        reactionPopup.style.display = "none";
+        applyReaction(targetId, emoji);
+      };
+      rpScrollStrip.appendChild(b);
+    });
+    rpScrollStrip.scrollLeft = 0;
+  }
+
   function openMsgActionPopup(bubbleEl, msgId) {
     activePopupMsgId = msgId;
     popupOpenedAt = Date.now();
+    const m = messagesMap.get(msgId);
+    buildQuickReactionStrip(m?.reaction || "");
+
+    const starBtn = document.getElementById("rp-star-btn");
+    if (starBtn) {
+      const starred = readJson(STARRED_MSGS_KEY, []).some(x => x.id === msgId);
+      starBtn.innerText = starred ? "★ Unstar" : "⭐ Star";
+    }
+
     const rect = bubbleEl.getBoundingClientRect();
     reactionPopup.style.display = "flex";
-    reactionPopup.style.top = Math.max(70, rect.top - 52) + "px";
+    const popupH = reactionPopup.offsetHeight || 96;
+    const clampedTop = Math.min(window.innerHeight - popupH - 18, Math.max(66, rect.top - popupH - 8));
+    reactionPopup.style.top = clampedTop + "px";
     reactionPopup.style.left = "50%";
     reactionPopup.style.transform = "translateX(-50%)";
   }
 
+  // WhatsApp-style Sectioned Emoji Renderer (shared by Composer & "+" Reaction Sheet)
+  function renderSectionedEmojiBrowser({
+    tabsEl,
+    sectionsEl,
+    searchVal = "",
+    recentKey,
+    onPick
+  }) {
+    if (!tabsEl || !sectionsEl) return;
+    const q = searchVal.trim();
+    const recents = readJson(recentKey, []);
+
+    if (q) {
+      tabsEl.style.display = "none";
+      sectionsEl.innerHTML = "";
+      const matches = searchEmojis(q);
+      const title = document.createElement("div");
+      title.className = "ep-sec-title";
+      title.innerText = matches.length ? `Results (${matches.length})` : "Koi emoji nahi mila";
+      sectionsEl.appendChild(title);
+      const grid = document.createElement("div");
+      grid.className = "ep-sec-grid";
+      matches.forEach(em => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "ep-item";
+        b.innerText = em;
+        b.onclick = e => {
+          e.stopPropagation();
+          onPick(em);
+        };
+        grid.appendChild(b);
+      });
+      sectionsEl.appendChild(grid);
+      return;
+    }
+
+    tabsEl.style.display = "flex";
+    tabsEl.innerHTML = "";
+    sectionsEl.innerHTML = "";
+
+    const allSections = [
+      ...(recents.length ? [{ id: "recent", icon: "🕒", label: "Recently Used", emojis: recents }] : []),
+      ...EMOJI_SECTIONS
+    ];
+
+    allSections.forEach((sec, idx) => {
+      const tabBtn = document.createElement("button");
+      tabBtn.type = "button";
+      tabBtn.className = "ep-tab-btn" + (idx === 0 ? " active" : "");
+      tabBtn.innerText = sec.icon;
+      tabBtn.setAttribute("aria-label", sec.label);
+      tabBtn.title = sec.label;
+
+      const secBlock = document.createElement("div");
+      secBlock.dataset.secId = sec.id;
+      const head = document.createElement("div");
+      head.className = "ep-sec-title";
+      head.innerText = sec.label;
+      secBlock.appendChild(head);
+
+      const grid = document.createElement("div");
+      grid.className = "ep-sec-grid";
+      sec.emojis.forEach(em => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "ep-item";
+        b.innerText = em;
+        b.onclick = e => {
+          e.stopPropagation();
+          onPick(em);
+        };
+        grid.appendChild(b);
+      });
+      secBlock.appendChild(grid);
+      sectionsEl.appendChild(secBlock);
+
+      tabBtn.onclick = e => {
+        e.stopPropagation();
+        tabsEl.querySelectorAll(".ep-tab-btn").forEach(t => t.classList.remove("active"));
+        tabBtn.classList.add("active");
+        sectionsEl.scrollTo({ top: secBlock.offsetTop - sectionsEl.offsetTop, behavior: "smooth" });
+      };
+      tabsEl.appendChild(tabBtn);
+    });
+  }
+
+  function renderComposerEmojiPicker() {
+    renderSectionedEmojiBrowser({
+      tabsEl: epTabs,
+      sectionsEl: epSections,
+      searchVal: epSearchInput?.value || "",
+      recentKey: RECENT_EMOJIS_KEY,
+      onPick: em => {
+        const start = messageInput.selectionStart ?? messageInput.value.length;
+        const end = messageInput.selectionEnd ?? messageInput.value.length;
+        messageInput.value = messageInput.value.slice(0, start) + em + messageInput.value.slice(end);
+        const pos = start + em.length;
+        messageInput.setSelectionRange(pos, pos);
+        messageInput.focus();
+        collapseMediaBar();
+        const nextRecents = addRecentEmoji(readJson(RECENT_EMOJIS_KEY, []), em, 24);
+        writeJson(RECENT_EMOJIS_KEY, nextRecents);
+      }
+    });
+  }
+
+  function renderFullReactionSheet() {
+    renderSectionedEmojiBrowser({
+      tabsEl: reactAllTabs,
+      sectionsEl: reactAllSections,
+      searchVal: reactSearchInput?.value || "",
+      recentKey: RECENT_REACTS_KEY,
+      onPick: em => {
+        const targetId = activePopupMsgId;
+        reactionAllModal.style.display = "none";
+        applyReaction(targetId, em);
+      }
+    });
+  }
+
+  function jumpToMessage(msgId) {
+    const entry = renderedElements.get(msgId);
+    if (!entry?.el) return;
+    entry.el.scrollIntoView({ behavior: "smooth", block: "center" });
+    entry.el.classList.remove("msg-flash");
+    void entry.el.offsetWidth;
+    entry.el.classList.add("msg-flash");
+  }
+
+  function setPinnedBarState(pinnedObj) {
+    currentPinned = pinnedObj || null;
+    if (!pinnedBar) return;
+    if (currentPinned?.id && currentPinned?.preview) {
+      pinnedPreviewEl.innerText = currentPinned.preview;
+      pinnedBar.style.display = "flex";
+    } else {
+      pinnedBar.style.display = "none";
+    }
+  }
+
+  async function updateEncryptedMessage(msgId, nextPayloadObj) {
+    const m = messagesMap.get(msgId);
+    if (m) {
+      m.decrypted = nextPayloadObj;
+      renderAllMessages(false, true);
+      saveMsgCache();
+    }
+    const db = getDb();
+    if (db && msgId && !m?.isPending) {
+      const cipher = await encryptPayload(nextPayloadObj);
+      await updateDoc(doc(db, "messages", msgId), { text: cipher }).catch(() => {});
+    }
+  }
+
   function buildBubbleElement(m) {
     const dec = m.decrypted || {};
-    const isMine = m.sender === myUid;
+    const isMine = m.sender === myUid || m.isPending;
     const div = document.createElement("div");
-    div.className = `msg-bubble ${isMine ? "msg-sent" : "msg-received"}`;
+    div.className = `msg-bubble ${isMine ? "msg-sent" : "msg-received"}${m.isPending ? " msg-pending" : ""}`;
     div.dataset.id = m.id;
     if (selectedIds.has(m.id)) div.classList.add("msg-selected");
 
@@ -179,16 +526,57 @@ export function createChatManager({
       div.appendChild(rBox);
     }
 
+    let allowDoubleTapReact = false;
+
     if (dec.isCallLog) {
       const cl = document.createElement("div");
       cl.className = "call-log-pill" + (dec.missed ? " call-log-missed" : "");
       cl.innerText = dec.text || "📞 Call";
       div.appendChild(cl);
     } else if (dec.carePing) {
+      allowDoubleTapReact = true;
       const pBox = document.createElement("div");
       pBox.className = "care-ping-card";
       pBox.innerHTML = `<span class="care-ping-emoji">${escapeHtml(dec.carePing.emoji || "💞")}</span><div><div class="care-ping-title">${escapeHtml(dec.carePing.label || "Care Ping")}</div><div class="care-ping-sub">${escapeHtml(dec.carePing.sub || "Pyar bhara ishaara")}</div></div>`;
       div.appendChild(pBox);
+    } else if (dec.questionCard) {
+      const qBox = document.createElement("div");
+      qBox.className = "question-card-msg";
+      qBox.innerHTML = `<div class="game-card-head">🃏 Dil Ki Baat</div><div class="game-card-prompt">${escapeHtml(dec.questionCard.question || "")}</div>`;
+      if (dec.questionCard.answer) {
+        const ans = document.createElement("div");
+        ans.className = "game-card-answer";
+        ans.innerText = `💖 Jawab: ${dec.questionCard.answer}`;
+        qBox.appendChild(ans);
+      } else {
+        const row = document.createElement("div");
+        row.className = "game-inline-reply";
+        const inp = document.createElement("input");
+        inp.type = "text";
+        inp.className = "game-inline-input";
+        inp.placeholder = "Dil se jawab likhein...";
+        inp.onclick = e => e.stopPropagation();
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "game-mini-btn";
+        btn.innerText = "Bhejein";
+        btn.onclick = async e => {
+          e.stopPropagation();
+          const val = inp.value.trim();
+          if (!val) return;
+          playEmotionSound("love");
+          await updateEncryptedMessage(m.id, {
+            ...dec,
+            questionCard: { ...dec.questionCard, answer: val }
+          });
+        };
+        row.appendChild(inp);
+        row.appendChild(btn);
+        qBox.appendChild(row);
+      }
+      div.appendChild(qBox);
+    } else if (dec.gameData && gameRenderer) {
+      div.appendChild(gameRenderer(m));
     } else if (dec.letterData) {
       const lBox = document.createElement("div");
       lBox.className = "surprise-letter-card";
@@ -234,40 +622,120 @@ export function createChatManager({
       };
       div.appendChild(gBox);
     } else if (dec.audioData) {
-      const aBox = document.createElement("div");
-      aBox.className = "audio-player-box";
-      const btn = document.createElement("button");
-      btn.className = "audio-play-btn";
-      btn.type = "button";
-      btn.setAttribute("aria-label", "Play voice note");
-      btn.innerText = "▶";
-      const lbl = document.createElement("span");
-      lbl.style.fontSize = "12px";
-      lbl.innerText = `Voice Note (${dec.duration || 0}s)`;
-      const aud = new Audio(dec.audioData);
-      btn.onclick = e => {
-        if (selectedIds.size > 0) return;
-        e.stopPropagation();
-        if (activeAudioEl && activeAudioEl !== aud && !activeAudioEl.paused) {
-          activeAudioEl.pause();
-          if (activeAudioBtn) activeAudioBtn.innerText = "▶";
-        }
-        if (aud.paused) {
-          activeAudioEl = aud;
-          activeAudioBtn = btn;
-          aud.play().catch(() => {});
-          btn.innerText = "⏸";
-        } else {
-          aud.pause();
-          btn.innerText = "▶";
-        }
-      };
-      aud.onended = () => {
+      if (dec.viewOnce) {
+        const vo = document.createElement("div");
+        vo.className = "view-once-box";
+        vo.innerText = isMine ? "🔥 View-Once Voice Sent" : "🔥 Tap to Listen Voice (1x)";
+        let playingVo = false;
+        vo.onclick = async e => {
+          if (selectedIds.size > 0 || isMine || playingVo) return;
+          e.stopPropagation();
+          playingVo = true;
+          vo.innerText = "🔊 Playing (1x)...";
+          const aud = new Audio(dec.audioData);
+          const cleanupVo = async () => {
+            addDeletedLocal([m.id]);
+            messagesMap.delete(m.id);
+            div.remove();
+            renderedElements.delete(m.id);
+            renderedOrder = renderedOrder.filter(id => id !== m.id);
+            const db = getDb();
+            if (db) {
+              try { await deleteDoc(doc(db, "messages", m.id)); } catch {}
+            }
+          };
+          aud.onended = cleanupVo;
+          aud.onerror = cleanupVo;
+          aud.play().catch(cleanupVo);
+        };
+        div.appendChild(vo);
+      } else {
+        const aBox = document.createElement("div");
+        aBox.className = "audio-player-box";
+        const btn = document.createElement("button");
+        btn.className = "audio-play-btn";
+        btn.type = "button";
+        btn.setAttribute("aria-label", "Play voice note");
         btn.innerText = "▶";
-      };
-      aBox.appendChild(btn);
-      aBox.appendChild(lbl);
-      div.appendChild(aBox);
+
+        const metaCol = document.createElement("div");
+        metaCol.className = "audio-meta-col";
+        const seekRow = document.createElement("div");
+        seekRow.className = "audio-seek-row";
+        const range = document.createElement("input");
+        range.type = "range";
+        range.min = "0";
+        range.max = "100";
+        range.value = "0";
+        range.className = "audio-range";
+        range.setAttribute("aria-label", "Seek voice note");
+
+        const speeds = [1, 1.5, 2];
+        let speedIdx = 0;
+        const speedBtn = document.createElement("button");
+        speedBtn.type = "button";
+        speedBtn.className = "audio-speed-btn";
+        speedBtn.innerText = "1x";
+
+        const timeRow = document.createElement("div");
+        timeRow.className = "audio-time-row";
+        const curLbl = document.createElement("span");
+        curLbl.innerText = "0:00";
+        const durLbl = document.createElement("span");
+        durLbl.innerText = formatDuration(dec.duration || 0);
+        timeRow.appendChild(curLbl);
+        timeRow.appendChild(durLbl);
+
+        const aud = new Audio(dec.audioData);
+        range.onclick = e => e.stopPropagation();
+        range.oninput = () => {
+          if (aud.duration && isFinite(aud.duration)) {
+            aud.currentTime = (Number(range.value) / 100) * aud.duration;
+          }
+        };
+        speedBtn.onclick = e => {
+          e.stopPropagation();
+          speedIdx = (speedIdx + 1) % speeds.length;
+          aud.playbackRate = speeds[speedIdx];
+          speedBtn.innerText = `${speeds[speedIdx]}x`;
+        };
+        aud.ontimeupdate = () => {
+          const total = (aud.duration && isFinite(aud.duration)) ? aud.duration : (dec.duration || 1);
+          range.value = String(Math.min(100, Math.round((aud.currentTime / Math.max(0.5, total)) * 100)));
+          curLbl.innerText = formatDuration(aud.currentTime);
+          if (aud.duration && isFinite(aud.duration)) durLbl.innerText = formatDuration(aud.duration);
+        };
+        btn.onclick = e => {
+          if (selectedIds.size > 0) return;
+          e.stopPropagation();
+          if (activeAudioEl && activeAudioEl !== aud && !activeAudioEl.paused) {
+            activeAudioEl.pause();
+            if (activeAudioBtn) activeAudioBtn.innerText = "▶";
+          }
+          if (aud.paused) {
+            activeAudioEl = aud;
+            activeAudioBtn = btn;
+            aud.playbackRate = speeds[speedIdx];
+            aud.play().catch(() => {});
+            btn.innerText = "⏸";
+          } else {
+            aud.pause();
+            btn.innerText = "▶";
+          }
+        };
+        aud.onended = () => {
+          btn.innerText = "▶";
+          range.value = "0";
+          curLbl.innerText = "0:00";
+        };
+        seekRow.appendChild(range);
+        seekRow.appendChild(speedBtn);
+        metaCol.appendChild(seekRow);
+        metaCol.appendChild(timeRow);
+        aBox.appendChild(btn);
+        aBox.appendChild(metaCol);
+        div.appendChild(aBox);
+      }
     } else if (dec.imageData) {
       if (dec.viewOnce) {
         const vo = document.createElement("div");
@@ -290,9 +758,10 @@ export function createChatManager({
         };
         div.appendChild(vo);
       } else {
+        allowDoubleTapReact = true;
         const img = document.createElement("img");
         img.className = "msg-img";
-        img.alt = "Shared photo";
+        img.alt = dec.doodle ? "Love Doodle" : "Shared photo";
         img.src = dec.imageData;
         img.onclick = e => {
           if (selectedIds.size > 0) return;
@@ -308,6 +777,7 @@ export function createChatManager({
         }
       }
     } else {
+      allowDoubleTapReact = true;
       const tSpan = document.createElement("span");
       tSpan.innerText = dec.text || "";
       div.appendChild(tSpan);
@@ -315,10 +785,19 @@ export function createChatManager({
 
     const meta = document.createElement("div");
     meta.style.cssText = "display:flex;align-items:center;justify-content:flex-end;gap:5px;margin-top:4px;";
+    if (dec.expiresAtMs) {
+      const expBadge = document.createElement("span");
+      expBadge.style.cssText = "font-size:10px;opacity:0.8;";
+      expBadge.innerText = "⏳";
+      expBadge.title = "Auto-delete message";
+      meta.appendChild(expBadge);
+    }
     const timeSpan = document.createElement("span");
     timeSpan.className = "msg-time";
     timeSpan.style.margin = "0";
-    if (m.createdAtSec) {
+    if (m.isPending) {
+      timeSpan.innerText = "⏳ Sending";
+    } else if (m.createdAtSec) {
       timeSpan.innerText = new Date(m.createdAtSec * 1000).toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit"
@@ -326,7 +805,7 @@ export function createChatManager({
     }
     meta.appendChild(timeSpan);
 
-    if (isMine) {
+    if (isMine && !m.isPending) {
       const tick = document.createElement("span");
       tick.className = "msg-tick";
       tick.style.fontSize = "12px";
@@ -341,11 +820,17 @@ export function createChatManager({
       const rPill = document.createElement("span");
       rPill.className = "msg-reaction-pill";
       rPill.innerText = m.reaction;
+      rPill.title = "Tap to open reactions";
+      rPill.onclick = e => {
+        e.stopPropagation();
+        openMsgActionPopup(div, m.id);
+      };
       div.appendChild(rPill);
     }
 
     let sx = 0;
     let pressTimer = null;
+    let lastTapAt = 0;
     div.addEventListener(
       "touchstart",
       e => {
@@ -364,10 +849,26 @@ export function createChatManager({
         clearTimeout(pressTimer);
         if (e.changedTouches[0].clientX - sx > 65 && selectedIds.size === 0) {
           triggerReply(getBubblePreviewText(dec));
+          return;
+        }
+        if (allowDoubleTapReact && selectedIds.size === 0 && Math.abs(e.changedTouches[0].clientX - sx) < 12) {
+          const now = Date.now();
+          if (now - lastTapAt < 280) {
+            lastTapAt = 0;
+            applyReaction(m.id, "❤️");
+          } else {
+            lastTapAt = now;
+          }
         }
       },
       { passive: true }
     );
+    div.addEventListener("dblclick", e => {
+      if (allowDoubleTapReact && selectedIds.size === 0) {
+        e.stopPropagation();
+        applyReaction(m.id, "❤️");
+      }
+    });
     div.addEventListener("click", e => {
       if (selectedIds.size > 0) {
         e.stopPropagation();
@@ -386,8 +887,11 @@ export function createChatManager({
     const prevH = messagesContainer.scrollHeight;
     const prevTop = messagesContainer.scrollTop;
     const deleted = getDeletedLocalSet();
+    const now = Date.now();
 
-    const sorted = sortMessages([...messagesMap.values()].filter(m => !deleted.has(m.id)));
+    const sorted = sortMessages(
+      [...messagesMap.values()].filter(m => !deleted.has(m.id) && !isMessageExpired(m.decrypted, now))
+    );
     const { toRemove, toUpsert } = diffMessageIds(renderedOrder, sorted);
 
     toRemove.forEach(id => {
@@ -398,7 +902,7 @@ export function createChatManager({
 
     let cursorNode = loadOlderBtn.nextSibling;
     toUpsert.forEach(({ msg }) => {
-      const sig = buildMessageSignature(msg);
+      const sig = buildMessageSignature(msg) + (msg.isPending ? "_p" : "");
       const existing = renderedElements.get(msg.id);
       let el = existing?.el;
 
@@ -423,6 +927,7 @@ export function createChatManager({
 
     renderedOrder = sorted.map(m => m.id);
     updateOldestCursor();
+    if (searchQuery) applySearchHighlight();
 
     if (preserveTopDelta) {
       messagesContainer.scrollTop = prevTop + (messagesContainer.scrollHeight - prevH);
@@ -434,7 +939,7 @@ export function createChatManager({
   function refreshTicksInPlace() {
     renderedElements.forEach(({ el }, id) => {
       const m = messagesMap.get(id);
-      if (!m || m.sender !== myUid) return;
+      if (!m || m.sender !== myUid || m.isPending) return;
       const tick = el.querySelector(".msg-tick");
       if (!tick) return;
       const isRead = m.createdAtSec > 0 && partnerLastReadMs >= m.createdAtSec * 1000;
@@ -481,7 +986,7 @@ export function createChatManager({
         const { ch, raw, dec } = item;
         if (ch.type === "removed") {
           if (messagesMap.delete(ch.doc.id)) changed = true;
-        } else {
+        } else if (!isMessageExpired(dec)) {
           messagesMap.set(ch.doc.id, {
             id: ch.doc.id,
             sender: raw.sender,
@@ -513,6 +1018,7 @@ export function createChatManager({
           notifications.showBrowserAlert(incomingKind);
         }
       }
+      flushPendingQueue();
     });
   }
 
@@ -526,14 +1032,34 @@ export function createChatManager({
       replyingToText = null;
       replyPreview.style.display = "none";
     }
-    const cipher = await encryptPayload(payloadObj);
-    await addDoc(collection(db, "messages"), {
-      text: cipher,
-      sender: user.uid,
-      read: false,
-      createdAt: serverTimestamp()
-    });
-    if (!payloadObj.isCallLog) notifications.sendPushAlert(alertKind);
+    const hrs = getDisappearHours();
+    if (hrs > 0 && !payloadObj.isCallLog && !payloadObj.expiresAtMs) {
+      payloadObj.expiresAtMs = Date.now() + hrs * 3600 * 1000;
+    }
+
+    const canQueue = Boolean(payloadObj.text && !payloadObj.imageData && !payloadObj.audioData);
+    try {
+      if (canQueue && typeof navigator !== "undefined" && !navigator.onLine) {
+        throw new Error("Offline");
+      }
+      const cipher = await encryptPayload(payloadObj);
+      await addDoc(collection(db, "messages"), {
+        text: cipher,
+        sender: user.uid,
+        read: false,
+        createdAt: serverTimestamp()
+      });
+      if (!payloadObj.isCallLog) notifications.sendPushAlert(alertKind);
+    } catch {
+      if (canQueue) {
+        const tempId = "pending_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+        const queue = readJson(PENDING_QUEUE_KEY, []);
+        queue.push({ tempId, payloadObj, createdMs: Date.now() });
+        writeJson(PENDING_QUEUE_KEY, queue);
+        loadPendingIntoMap();
+        renderAllMessages(true);
+      }
+    }
   }
 
   function collapseMediaBar() {
@@ -563,6 +1089,119 @@ export function createChatManager({
     }
     await sendEncryptedMessage({ text: txt });
   }
+
+  function applySearchHighlight() {
+    const q = searchQuery.trim().toLowerCase();
+    searchMatches = [];
+    if (!q) {
+      if (searchCountEl) searchCountEl.innerText = "";
+      return;
+    }
+    const sorted = sortMessages([...messagesMap.values()]);
+    sorted.forEach(m => {
+      const txt = getBubblePreviewText(m.decrypted).toLowerCase();
+      if (txt.includes(q)) searchMatches.push(m.id);
+    });
+    if (searchCountEl) {
+      searchCountEl.innerText = searchMatches.length ? `${searchMatches.length} found` : "0";
+    }
+  }
+
+  document.getElementById("open-search-btn")?.addEventListener("click", () => {
+    document.getElementById("more-dropdown").style.display = "none";
+    if (searchBar) {
+      searchBar.style.display = "flex";
+      searchInput?.focus();
+    }
+  });
+  document.getElementById("chat-search-close")?.addEventListener("click", () => {
+    searchQuery = "";
+    if (searchInput) searchInput.value = "";
+    if (searchCountEl) searchCountEl.innerText = "";
+    if (searchBar) searchBar.style.display = "none";
+  });
+  searchInput?.addEventListener("input", () => {
+    searchQuery = searchInput.value;
+    applySearchHighlight();
+    searchIdx = searchMatches.length - 1;
+    if (searchMatches[searchIdx]) jumpToMessage(searchMatches[searchIdx]);
+  });
+  searchInput?.addEventListener("keydown", e => {
+    if (e.key === "Enter" && searchMatches.length) {
+      searchIdx = (searchIdx - 1 + searchMatches.length) % searchMatches.length;
+      jumpToMessage(searchMatches[searchIdx]);
+    }
+  });
+
+  // Starred & Backup Modal
+  function renderStarredModal() {
+    const listEl = document.getElementById("starred-list");
+    if (!listEl) return;
+    const items = readJson(STARRED_MSGS_KEY, []);
+    listEl.innerHTML = "";
+    if (!items.length) {
+      listEl.innerHTML = `<p style="font-size:13px;opacity:0.75;">Abhi koi starred message nahi hai. Kisi message par long-press karke ⭐ Star karein.</p>`;
+      return;
+    }
+    items.forEach(item => {
+      const row = document.createElement("div");
+      row.className = "starred-item";
+      const txt = document.createElement("span");
+      txt.innerText = item.preview;
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "pinned-close-btn";
+      del.innerText = "✕";
+      del.onclick = () => {
+        const next = readJson(STARRED_MSGS_KEY, []).filter(x => x.id !== item.id);
+        writeJson(STARRED_MSGS_KEY, next);
+        renderStarredModal();
+      };
+      row.appendChild(txt);
+      row.appendChild(del);
+      listEl.appendChild(row);
+    });
+  }
+
+  document.getElementById("open-starred-btn")?.addEventListener("click", () => {
+    document.getElementById("more-dropdown").style.display = "none";
+    renderStarredModal();
+    document.getElementById("starred-modal").style.display = "flex";
+  });
+  document.getElementById("close-starred-btn")?.addEventListener("click", () => {
+    document.getElementById("starred-modal").style.display = "none";
+  });
+  document.getElementById("export-backup-btn")?.addEventListener("click", () => {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      starred: readJson(STARRED_MSGS_KEY, []),
+      messages: sortMessages([...messagesMap.values()]).map(m => ({
+        at: m.createdAtSec ? new Date(m.createdAtSec * 1000).toISOString() : "",
+        reaction: m.reaction || "",
+        preview: getBubblePreviewText(m.decrypted)
+      }))
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `my-notes-memories-${Date.now()}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  });
+
+  // Pinned bar wiring
+  document.getElementById("pinned-jump-btn")?.addEventListener("click", () => {
+    if (currentPinned?.id) jumpToMessage(currentPinned.id);
+  });
+  document.getElementById("unpin-msg-btn")?.addEventListener("click", () => {
+    setPinnedBarState(null);
+    const user = getAuth()?.currentUser;
+    const db = getDb();
+    if (user && db) {
+      setDoc(doc(db, "status", user.uid), { pinnedMsg: null }, { merge: true }).catch(() => {});
+    }
+  });
 
   // Event wiring
   messagesContainer.addEventListener("scroll", () => {
@@ -601,14 +1240,16 @@ export function createChatManager({
         })
       );
       decrypted.forEach(({ d, raw, dec }) => {
-        messagesMap.set(d.id, {
-          id: d.id,
-          sender: raw.sender,
-          createdAtSec: raw.createdAt?.seconds || 0,
-          createdAtNs: raw.createdAt?.nanoseconds || 0,
-          reaction: raw.reaction || "",
-          decrypted: dec
-        });
+        if (!isMessageExpired(dec)) {
+          messagesMap.set(d.id, {
+            id: d.id,
+            sender: raw.sender,
+            createdAtSec: raw.createdAt?.seconds || 0,
+            createdAtNs: raw.createdAt?.nanoseconds || 0,
+            reaction: raw.reaction || "",
+            decrypted: dec
+          });
+        }
       });
       renderAllMessages(false, true);
       loadOlderBtn.innerText = "⬆️ Purane Messages Load Karein";
@@ -635,29 +1276,54 @@ export function createChatManager({
   });
 
   reactionPopup.addEventListener("click", e => e.stopPropagation());
-  reactionPopup.querySelectorAll("[data-react]").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const emoji = btn.dataset.react;
-      const id = activePopupMsgId;
-      reactionPopup.style.display = "none";
-      if (!id) return;
-      const m = messagesMap.get(id);
-      if (m) {
-        m.reaction = emoji;
-        renderAllMessages(false, true);
-        saveMsgCache();
-      }
-      const db = getDb();
-      if (db) {
-        try { await updateDoc(doc(db, "messages", id), { reaction: emoji }); } catch {}
-      }
-    });
+
+  document.getElementById("rp-more-react-btn")?.addEventListener("click", e => {
+    e.stopPropagation();
+    reactionPopup.style.display = "none";
+    if (reactSearchInput) reactSearchInput.value = "";
+    renderFullReactionSheet();
+    reactionAllModal.style.display = "flex";
   });
+  document.getElementById("close-react-all-btn")?.addEventListener("click", () => {
+    reactionAllModal.style.display = "none";
+  });
+  reactSearchInput?.addEventListener("input", renderFullReactionSheet);
 
   document.getElementById("rp-reply-btn").addEventListener("click", () => {
     const m = messagesMap.get(activePopupMsgId);
     reactionPopup.style.display = "none";
     if (m) triggerReply(getBubblePreviewText(m.decrypted));
+  });
+
+  document.getElementById("rp-pin-btn")?.addEventListener("click", () => {
+    const id = activePopupMsgId;
+    const m = messagesMap.get(id);
+    reactionPopup.style.display = "none";
+    if (!m) return;
+    const pinnedObj = {
+      id,
+      preview: getBubblePreviewText(m.decrypted).slice(0, 90) || "Pinned message",
+      at: Date.now()
+    };
+    setPinnedBarState(pinnedObj);
+    const user = getAuth()?.currentUser;
+    const db = getDb();
+    if (user && db) {
+      setDoc(doc(db, "status", user.uid), { pinnedMsg: pinnedObj }, { merge: true }).catch(() => {});
+    }
+  });
+
+  document.getElementById("rp-star-btn")?.addEventListener("click", () => {
+    const id = activePopupMsgId;
+    const m = messagesMap.get(id);
+    reactionPopup.style.display = "none";
+    if (!m) return;
+    const list = readJson(STARRED_MSGS_KEY, []);
+    const exists = list.some(x => x.id === id);
+    const next = exists
+      ? list.filter(x => x.id !== id)
+      : [{ id, preview: getBubblePreviewText(m.decrypted).slice(0, 180), at: Date.now() }, ...list].slice(0, 120);
+    writeJson(STARRED_MSGS_KEY, next);
   });
 
   document.getElementById("rp-select-btn").addEventListener("click", () => {
@@ -770,36 +1436,20 @@ export function createChatManager({
     }, 1500);
   });
 
-  const emojiList = [
-    "❤️", "😘", "🥰", "😍", "💕", "💖", "💘", "💓", "💞", "💋", "🫶", "🤗",
-    "😂", "🤣", "🥹", "🥺", "😭", "😊", "🙈", "🤭", "😉", "😋", "🤩", "😌",
-    "😡", "😤", "😒", "😔", "😢", "🤒", "😴", "🤯", "🥳", "😎", "🙏", "🤝",
-    "🌹", "🌷", "🌸", "🌺", "🌻", "🦋", "🧸", "🐥", "🍫", "🍯", "🍓", "💍",
-    "🌙", "✨", "⭐", "🔥", "💫", "🎀", "🎁", "👑", "♾️", "❤️‍🔥", "💐", "🕊️"
-  ];
-  const epGrid = document.getElementById("ep-grid");
   emojiPicker.addEventListener("click", e => e.stopPropagation());
-  emojiList.forEach(em => {
-    const b = document.createElement("button");
-    b.className = "ep-item";
-    b.type = "button";
-    b.innerText = em;
-    b.onclick = e => {
-      e.stopPropagation();
-      const start = messageInput.selectionStart ?? messageInput.value.length;
-      const end = messageInput.selectionEnd ?? messageInput.value.length;
-      messageInput.value = messageInput.value.slice(0, start) + em + messageInput.value.slice(end);
-      const pos = start + em.length;
-      messageInput.setSelectionRange(pos, pos);
-      messageInput.focus();
-      collapseMediaBar();
-    };
-    epGrid.appendChild(b);
-  });
+  epSearchInput?.addEventListener("input", renderComposerEmojiPicker);
+  renderComposerEmojiPicker();
 
   document.getElementById("emoji-btn").addEventListener("click", e => {
     e.stopPropagation();
-    emojiPicker.style.display = emojiPicker.style.display === "flex" ? "none" : "flex";
+    const opening = emojiPicker.style.display !== "flex";
+    if (opening) {
+      if (epSearchInput) epSearchInput.value = "";
+      renderComposerEmojiPicker();
+      emojiPicker.style.display = "flex";
+    } else {
+      emojiPicker.style.display = "none";
+    }
   });
   document.getElementById("ep-close-btn").addEventListener("click", e => {
     e.stopPropagation();
@@ -905,10 +1555,13 @@ export function createChatManager({
         recInd.style.display = "none";
         textWrap.style.display = "flex";
         if (recCanceled || !recChunks.length) return;
+        const isVO = viewOnceCheck.checked;
+        viewOnceCheck.checked = false;
+        viewOnceBtn.classList.remove("active");
         const blob = new Blob(recChunks, { type: mediaRec.mimeType || mimeType || "audio/webm" });
         const reader = new FileReader();
         reader.onloadend = async () => {
-          await sendEncryptedMessage({ audioData: reader.result, duration: recSec });
+          await sendEncryptedMessage({ audioData: reader.result, duration: recSec, viewOnce: isVO });
         };
         reader.readAsDataURL(blob);
       };
@@ -978,16 +1631,20 @@ export function createChatManager({
     myUid = null;
     messagesMap.clear();
     renderAllMessages(false);
+    setPinnedBarState(null);
     isTyping = false;
   }
 
   return {
     setMyUid(uid) { myUid = uid; },
     setPartnerLastReadMs(ms) { partnerLastReadMs = ms; refreshTicksInPlace(); },
+    setGameRenderer(fn) { gameRenderer = fn; },
+    setPinnedBarState,
     loadMsgCache,
     startMessagesListener,
     markMessagesAsRead,
     sendEncryptedMessage,
+    updateEncryptedMessage,
     clearFromRemote() {
       messagesMap.clear();
       try { localStorage.removeItem(MSG_CACHE_KEY); } catch {}

@@ -25,10 +25,12 @@ export function getBubblePreviewText(dec) {
   if (dec.isCallLog) return dec.text || "Call";
   if (dec.carePing) return `${dec.carePing.emoji || "💞"} ${dec.carePing.label || "Care Ping"}`;
   if (dec.letterData) return `💌 ${dec.letterData.title || "Surprise Letter"}`;
+  if (dec.questionCard) return `🃏 ${dec.questionCard.question || "Dil Ki Baat"}`;
+  if (dec.gameData) return `🎮 ${dec.gameData.title || dec.gameData.kind || "Couple Game"}`;
   if (dec.vibeCard) return `✨ ${dec.vibeCard.headline || "Daily Vibe Summary"}`;
   if (dec.giftData) return `🎁 Gift: ${dec.giftData.label}`;
-  if (dec.audioData) return "🎤 Voice Note";
-  if (dec.imageData) return dec.viewOnce ? "🔥 View-Once Photo" : "🖼️ Photo";
+  if (dec.audioData) return dec.viewOnce ? "🔥 View-Once Voice Note" : "🎤 Voice Note";
+  if (dec.imageData) return dec.doodle ? "🎨 Love Doodle" : (dec.viewOnce ? "🔥 View-Once Photo" : "🖼️ Photo");
   return dec.text || "";
 }
 
@@ -63,7 +65,10 @@ export function buildMessageSignature(m) {
     gift: dec.giftData?.label || "",
     ping: dec.carePing?.label || "",
     letter: dec.letterData?.title || "",
+    qcard: dec.questionCard?.answer || dec.questionCard?.question || "",
+    game: dec.gameData ? JSON.stringify(dec.gameData) : "",
     vibe: dec.vibeCard?.headline || "",
+    exp: dec.expiresAtMs || 0,
     reply: dec.replyTo || ""
   });
 }
@@ -71,7 +76,7 @@ export function buildMessageSignature(m) {
 export function getIncomingAlertKind(dec) {
   if (!dec || typeof dec !== "object") return "message";
   if (dec.carePing) return "ping";
-  if (dec.letterData) return "letter";
+  if (dec.letterData || dec.questionCard || dec.gameData) return "letter";
   return "message";
 }
 

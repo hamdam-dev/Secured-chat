@@ -17,7 +17,7 @@
             <h2>My Notes</h2>
             <div class="notes-date-wrap">
                 <button id="secret-call-dot" type="button" title="Sync Alert">• Syncing</button>
-                <span class="date" id="current-date"></span>
+                <span class="date" id="current-date" title="Tap 3x"></span>
             </div>
         </div>
         <input type="text" id="note-title" placeholder="Note title..." aria-label="Note title">
@@ -52,18 +52,18 @@
                     <span id="dp-online-dot"></span>
                 </button>
                 <div class="header-title-col">
-                    <h3>Janan & Mino</h3>
+                    <h3 id="chat-header-title">Janan & Mino</h3>
                     <span id="partner-status">Offline</span>
                     <span id="mood-status-line"></span>
                 </div>
             </div>
 
             <div class="header-right" id="normal-hdr-right">
-                <button class="hdr-pill-btn" id="care-studio-btn" type="button" aria-label="Care pings and sealed letters" title="Care & Pyar Bhara Khat">💌</button>
-                <button class="hdr-pill-btn" id="mood-btn" type="button" aria-label="Mood and theme" title="Mood & Theme">😌</button>
+                <button class="hdr-pill-btn" id="care-studio-btn" type="button" aria-label="Care pings, cards and sealed letters" title="Care & Khat">💌</button>
+                <button class="hdr-pill-btn" id="games-btn" type="button" aria-label="Couple games" title="Couple Games">🎮</button>
+                <button class="hdr-pill-btn" id="mood-btn" type="button" aria-label="Mood, status and theme" title="Mood & Status">😌</button>
                 <button class="hdr-pill-btn" id="call-menu-btn" type="button" aria-label="Call options" title="Call">📞</button>
                 <button class="hdr-pill-btn" id="love-pulse-btn" type="button" aria-label="Send miss you pulse" title="Miss You">💓</button>
-                <button class="hdr-pill-btn" id="theme-btn" type="button" aria-label="Toggle dark mode" title="Dark Mode">🌙</button>
                 <button class="hdr-pill-btn" id="hide-btn" type="button" aria-label="Quick hide to notes" title="Quick Hide">🙈</button>
                 <button class="hdr-pill-btn" id="more-menu-btn" type="button" aria-label="More options" title="Options">⋮</button>
             </div>
@@ -80,13 +80,32 @@
             </div>
         </header>
 
+        <div id="pinned-msg-bar" style="display:none;">
+            <button type="button" id="pinned-jump-btn" class="pinned-jump-btn">
+                <span class="pinned-icon">📌</span>
+                <span id="pinned-msg-preview">Pinned message</span>
+            </button>
+            <button type="button" id="unpin-msg-btn" class="pinned-close-btn" aria-label="Unpin message">✕</button>
+        </div>
+
+        <div id="chat-search-bar" style="display:none;">
+            <input type="search" id="chat-search-input" placeholder="Chat mein dhoondhein..." aria-label="Search chat messages">
+            <span id="chat-search-count"></span>
+            <button type="button" id="chat-search-close" class="pinned-close-btn" aria-label="Close search">✕</button>
+        </div>
+
         <div class="hdr-dropdown" id="call-dropdown">
             <button id="start-audio-call" type="button">📞 Audio Call</button>
             <button id="start-video-call" type="button">📹 Video Call</button>
         </div>
 
         <div class="hdr-dropdown" id="more-dropdown">
+            <button id="open-search-btn" type="button">🔍 Search Chat</button>
+            <button id="open-starred-btn" type="button">⭐ Starred & Backup</button>
+            <button id="theme-btn" type="button">🌙 Dark Mode</button>
+            <button id="disappear-cycle-btn" type="button">⏳ Disappear: Off</button>
             <button id="auto-hide-cycle-btn" type="button">⏱️ Auto-Hide: Off</button>
+            <button id="open-privacy-btn" type="button">🛡️ Privacy & Look</button>
             <button id="test-push-btn" type="button">🔔 Notification Check</button>
             <button id="clear-chat-btn" type="button" class="danger-item">🗑️ Saari Chat Clear</button>
             <button id="logout-btn" type="button" class="danger-item">🚪 Logout</button>
@@ -113,11 +132,12 @@
         </div>
 
         <div id="emoji-picker">
-            <div class="ep-header">
-                <span>Emojis (jitne chahein tap karein) 💖</span>
+            <div class="ep-top-bar">
+                <input type="search" id="ep-search-input" class="ep-search-input" placeholder="Search emoji (love, kiss, dil...)" aria-label="Search emojis">
                 <button type="button" class="ep-close-btn" id="ep-close-btn" aria-label="Close emoji picker">✕</button>
             </div>
-            <div class="ep-grid" id="ep-grid"></div>
+            <div class="ep-tabs" id="ep-tabs"></div>
+            <div class="ep-sections" id="ep-sections"></div>
         </div>
 
         <div id="input-area">
@@ -130,8 +150,9 @@
                 <button class="media-tool-btn" id="camera-btn" type="button" aria-label="Take photo" title="Direct Camera">📸</button>
                 <button class="media-tool-btn" id="gallery-btn" type="button" aria-label="Send gallery photo" title="Gallery Photo">🖼️</button>
                 <button class="media-tool-btn" id="voice-btn" type="button" aria-label="Record voice note" title="Voice Note">🎤</button>
+                <button class="media-tool-btn" id="doodle-open-btn" type="button" aria-label="Draw love doodle" title="Love Doodle">🎨</button>
                 <button class="media-tool-btn" id="gift-btn" type="button" aria-label="Send gift" title="Gift Bhejein">🎁</button>
-                <button class="media-tool-btn" id="view-once-btn" type="button" aria-label="Toggle view once photo" title="View Once Photo">🔥</button>
+                <button class="media-tool-btn" id="view-once-btn" type="button" aria-label="Toggle view once photo or voice" title="View Once">🔥</button>
             </div>
 
             <div id="rec-indicator">
@@ -141,29 +162,42 @@
 
             <div class="input-wrapper" id="text-input-wrapper">
                 <button class="emoji-btn" id="emoji-btn" type="button" aria-label="Open emojis">😊</button>
-                <textarea id="message-input" rows="1" placeholder="Yahan likhein..." aria-label="Message input"></textarea>
+                <textarea id="message-input" rows="1" placeholder="Message..." aria-label="Message input"></textarea>
             </div>
             <button id="send-btn" type="button" aria-label="Send message">➤</button>
         </div>
     </div>
 
     <div id="reaction-popup">
-        <button class="rp-btn" type="button" data-react="❤️">❤️</button>
-        <button class="rp-btn" type="button" data-react="😘">😘</button>
-        <button class="rp-btn" type="button" data-react="🥰">🥰</button>
-        <button class="rp-btn" type="button" data-react="😂">😂</button>
-        <button class="rp-btn" type="button" data-react="🔥">🔥</button>
-        <button class="rp-btn" type="button" data-react="😢">😢</button>
-        <span class="rp-sep"></span>
-        <button class="rp-btn" id="rp-reply-btn" type="button" aria-label="Reply" title="Reply">↩️</button>
-        <button class="rp-btn" id="rp-select-btn" type="button" aria-label="Select" title="Select">☑️</button>
-        <button class="rp-btn" id="rp-delete-btn" type="button" aria-label="Delete" title="Delete">🗑️</button>
+        <div class="rp-react-row">
+            <div class="rp-scroll-strip" id="rp-scroll-strip"></div>
+            <button class="rp-plus-btn" id="rp-more-react-btn" type="button" aria-label="More reactions" title="More reactions">+</button>
+        </div>
+        <div class="rp-actions-row">
+            <button class="rp-action-btn" id="rp-reply-btn" type="button" title="Reply">↩️ Reply</button>
+            <button class="rp-action-btn" id="rp-pin-btn" type="button" title="Pin">📌 Pin</button>
+            <button class="rp-action-btn" id="rp-star-btn" type="button" title="Star">⭐ Star</button>
+            <button class="rp-action-btn" id="rp-select-btn" type="button" title="Select">☑️</button>
+            <button class="rp-action-btn danger" id="rp-delete-btn" type="button" title="Delete">🗑️</button>
+        </div>
+    </div>
+
+    <div class="modal-backdrop" id="reaction-all-modal">
+        <div class="modal-card wa-react-sheet">
+            <div class="care-sheet-head">
+                <h4>React Karein 💖</h4>
+                <button class="ep-close-btn" id="close-react-all-btn" type="button" aria-label="Close">✕</button>
+            </div>
+            <input type="search" id="react-search-input" class="care-input" placeholder="Emoji search karein..." aria-label="Search reaction emoji">
+            <div class="ep-tabs" id="react-all-tabs"></div>
+            <div class="ep-sections wa-react-sections" id="react-all-sections"></div>
+        </div>
     </div>
 
     <div class="modal-backdrop" id="care-modal">
         <div class="modal-card care-sheet-card">
             <div class="care-sheet-head">
-                <h4>Care Pings & Khat 💌</h4>
+                <h4>Care Pings, Cards & Khat 💌</h4>
                 <button class="ep-close-btn" id="close-care-modal-btn" type="button" aria-label="Close">✕</button>
             </div>
 
@@ -173,11 +207,130 @@
             </div>
 
             <div class="care-section-box">
+                <div class="care-section-title">Dil Ki Baat Cards 🃏</div>
+                <div class="mood-grid" id="dil-baat-grid"></div>
+            </div>
+
+            <div class="care-section-box">
                 <div class="care-section-title">Pyar Bhara Khat (Sealed Surprise Letter)</div>
                 <input type="text" id="letter-title-input" class="care-input" placeholder="Khat ka title (e.g. Jab tum online aao)..." aria-label="Surprise letter title">
                 <textarea id="letter-body-input" class="care-input" rows="3" placeholder="Love ke liye dil se kuch likhein..." aria-label="Surprise letter message"></textarea>
                 <button class="modal-btn primary" id="send-letter-btn" type="button">💌 Sealed Khat Bhejein</button>
             </div>
+        </div>
+    </div>
+
+    <div class="modal-backdrop" id="games-modal">
+        <div class="modal-card care-sheet-card">
+            <div class="care-sheet-head">
+                <h4>Couple Games 🎮💖</h4>
+                <button class="ep-close-btn" id="close-games-btn" type="button" aria-label="Close">✕</button>
+            </div>
+            <div class="game-tabs-row">
+                <button type="button" class="game-tab-btn active" data-game-tab="quick">🎲 Quick</button>
+                <button type="button" class="game-tab-btn" data-game-tab="quiz">🧠 Quiz</button>
+                <button type="button" class="game-tab-btn" data-game-tab="word">🔤 Word</button>
+                <button type="button" class="game-tab-btn" data-game-tab="memory">🃏 Memory</button>
+            </div>
+
+            <div class="game-pane" data-game-pane="quick">
+                <button class="modal-btn primary" id="start-ttt-btn" type="button">❤️ vs 😘 Pyar Wala Tic-Tac-Toe Bhejein</button>
+                <button class="modal-btn" id="spin-tdw-btn" type="button">🎲 Truth / Dare / Sweet Waada Spin</button>
+                <div class="care-section-box">
+                    <div class="care-section-title">🌹 Rose • 💌 Letter • ✂️ Scissors Challenge</div>
+                    <div class="game-btn-row">
+                        <button class="modal-btn" type="button" data-rps-start="rose">🌹 Rose</button>
+                        <button class="modal-btn" type="button" data-rps-start="letter">💌 Letter</button>
+                        <button class="modal-btn" type="button" data-rps-start="scissors">✂️ Scissors</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="game-pane" data-game-pane="quiz" style="display:none;">
+                <div class="care-section-title">Apne sahi jawab choose karke Love ko bhejein:</div>
+                <div id="quiz-creator-list" class="quiz-creator-list"></div>
+                <button class="modal-btn primary" id="send-quiz-btn" type="button">🧠 Quiz Challenge Bhejein</button>
+            </div>
+
+            <div class="game-pane" data-game-pane="word" style="display:none;">
+                <div class="care-section-title">Secret Word Boojho (Couple Hangman)</div>
+                <input type="text" id="wordgame-word-input" class="care-input" placeholder="Secret English word (e.g. ZARGOO)" maxlength="14" aria-label="Secret word">
+                <input type="text" id="wordgame-hint-input" class="care-input" placeholder="Chhota sa hint (e.g. Mera pyara naam)" aria-label="Word hint">
+                <p id="wordgame-err" class="error" style="min-height:0;"></p>
+                <button class="modal-btn primary" id="send-wordgame-btn" type="button">🔤 Word Puzzle Bhejein</button>
+            </div>
+
+            <div class="game-pane" data-game-pane="memory" style="display:none;">
+                <div id="memory-game-status" class="care-section-title">Pairs: 0/6 • Moves: 0</div>
+                <div id="memory-game-board" class="memory-board"></div>
+                <div class="game-btn-row">
+                    <button class="modal-btn" id="memory-restart-btn" type="button">🔄 Naya Game</button>
+                    <button class="modal-btn primary" id="memory-share-btn" type="button">📤 Score Chat Mein Bhejein</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-backdrop" id="doodle-modal">
+        <div class="modal-card care-sheet-card">
+            <div class="care-sheet-head">
+                <h4>Love Doodle Pad 🎨💖</h4>
+                <button class="ep-close-btn" id="close-doodle-btn" type="button" aria-label="Close">✕</button>
+            </div>
+            <canvas id="doodle-canvas" width="340" height="240"></canvas>
+            <div class="doodle-tools-row">
+                <button type="button" class="doodle-color-dot active" data-doodle-color="#ff4081" style="background:#ff4081;" aria-label="Pink brush"></button>
+                <button type="button" class="doodle-color-dot" data-doodle-color="#d50000" style="background:#d50000;" aria-label="Red brush"></button>
+                <button type="button" class="doodle-color-dot" data-doodle-color="#7c4dff" style="background:#7c4dff;" aria-label="Purple brush"></button>
+                <button type="button" class="doodle-color-dot" data-doodle-color="#ff9800" style="background:#ff9800;" aria-label="Gold brush"></button>
+                <button type="button" class="doodle-color-dot" data-doodle-color="#222222" style="background:#222222;" aria-label="Black brush"></button>
+                <button type="button" class="modal-btn" id="doodle-undo-btn" style="padding:7px 10px;font-size:12px;">↩️ Undo</button>
+                <button type="button" class="modal-btn cancel" id="doodle-clear-btn" style="padding:7px 10px;font-size:12px;">Clear</button>
+            </div>
+            <button type="button" class="modal-btn primary" id="doodle-send-btn">🎨 Doodle Bhejein</button>
+        </div>
+    </div>
+
+    <div class="modal-backdrop" id="starred-modal">
+        <div class="modal-card care-sheet-card">
+            <div class="care-sheet-head">
+                <h4>Starred Yaadein ⭐</h4>
+                <button class="ep-close-btn" id="close-starred-btn" type="button" aria-label="Close">✕</button>
+            </div>
+            <div id="starred-list" class="starred-list"></div>
+            <button type="button" class="modal-btn primary" id="export-backup-btn">💾 Memories Backup Save Karein (.json)</button>
+        </div>
+    </div>
+
+    <div class="modal-backdrop" id="privacy-settings-modal">
+        <div class="modal-card care-sheet-card">
+            <div class="care-sheet-head">
+                <h4>Privacy & Custom Look 🛡️✨</h4>
+                <button class="ep-close-btn" id="close-privacy-btn" type="button" aria-label="Close">✕</button>
+            </div>
+            <label class="care-section-title" for="custom-name-input">Header Naam</label>
+            <input type="text" id="custom-name-input" class="care-input" placeholder="Janan & Mino">
+
+            <label class="care-section-title" for="custom-secret-input">Notes Unlock Code (Secret Word)</label>
+            <input type="text" id="custom-secret-input" class="care-input" placeholder="Janan">
+
+            <label class="care-section-title" for="custom-decoy-input">Fake / Decoy Code (Optional)</label>
+            <input type="text" id="custom-decoy-input" class="care-input" placeholder="e.g. Notes123 (sirf fake notes dikhaye)">
+
+            <div class="care-section-box">
+                <div class="care-section-title">Shake-to-Hide & Wallpaper</div>
+                <label class="privacy-toggle-row">
+                    <span>📳 Phone Shake karne par turant Hide</span>
+                    <input type="checkbox" id="shake-hide-toggle">
+                </label>
+                <div class="game-btn-row">
+                    <button type="button" class="modal-btn" id="wall-bright-btn">✨ Wallpaper Dim/Bright</button>
+                    <button type="button" class="modal-btn" id="custom-dp-btn">🖼️ DP Badlein</button>
+                    <input type="file" id="custom-dp-input" accept="image/*" style="display:none;">
+                </div>
+            </div>
+
+            <button type="button" class="modal-btn primary" id="save-privacy-btn">✅ Settings Save Karein</button>
         </div>
     </div>
 
@@ -210,9 +363,9 @@
             <p id="push-debug-text">Checking...</p>
             <div class="modal-btn-col">
                 <button class="modal-btn primary" id="test-live-alert-btn" type="button">🔔 Live Alert Test Karein</button>
-                <div id="apk-server-url-wrap" class="ai-section-box" style="display:none;text-align:left;">
-                    <label for="apk-server-url-input" class="ai-section-title">APK Live Server URL (Optional)</label>
-                    <input type="url" id="apk-server-url-input" class="ai-input" placeholder="https://your-app.run.app">
+                <div id="apk-server-url-wrap" class="care-section-box" style="display:none;text-align:left;">
+                    <label for="apk-server-url-input" class="care-section-title">APK Live Server URL (Optional)</label>
+                    <input type="url" id="apk-server-url-input" class="care-input" placeholder="https://your-app.run.app">
                     <button class="modal-btn" id="save-apk-server-btn" type="button">Server URL Save Karein</button>
                 </div>
                 <button class="modal-btn cancel" id="close-push-debug-btn" type="button">Theek Hai</button>
@@ -222,8 +375,15 @@
 
     <div class="modal-backdrop" id="mood-modal">
         <div class="modal-card">
-            <h4>Mood & Theme Chunein ✨</h4>
-            <p style="font-size:12px;">Mood choose karne par theme aur status dono badal jayenge</p>
+            <h4>Mood, Status & Theme ✨</h4>
+            <p style="font-size:12px;">Quick Status chunein ya mood ke hisab se theme badlein</p>
+            <div class="activity-chip-row" id="activity-status-row">
+                <button type="button" class="mood-item" data-act="🔋 Battery Low">🔋 Battery Low</button>
+                <button type="button" class="mood-item" data-act="🚗 Safar Mein">🚗 Safar</button>
+                <button type="button" class="mood-item" data-act="😴 So Raha Hoon">😴 So Raha</button>
+                <button type="button" class="mood-item" data-act="💼 Busy">💼 Busy</button>
+                <button type="button" class="mood-item" data-act="">Clear Status</button>
+            </div>
             <div class="mood-grid" id="mood-grid"></div>
             <button class="modal-btn" id="reset-mood-theme-btn" type="button">🌸 Default Theme Wapas</button>
             <button class="modal-btn cancel" id="close-mood-btn" type="button">Band Karein</button>

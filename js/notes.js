@@ -1,6 +1,9 @@
 import { escapeHtml } from "./crypto.js";
 
-const SECRET_CODE = "Janan";
+const DEFAULT_SECRET_CODE = "Janan";
+const SECRET_CODE_KEY = "sc_secret_code_v1";
+const DECOY_CODE_KEY = "sc_decoy_code_v1";
+const SHAKE_HIDE_KEY = "sc_shake_hide_v1";
 const NOTES_KEY = "sc_offline_phone_notes_v1";
 const AUTO_HIDE_KEY = "sc_auto_hide_min_v1";
 
@@ -13,16 +16,94 @@ export function createNotesManager({ onUnlock }) {
   const noteStatusEl = document.getElementById("note-status");
   const savedNotesWrap = document.getElementById("saved-notes-wrap");
   const secretCallDot = document.getElementById("secret-call-dot");
+  const currentDateEl = document.getElementById("current-date");
 
   let editingNoteId = null;
   let autoHideTimer = null;
   let isPickingMedia = false;
+  let dateTapCount = 0;
+  let dateTapTimer = null;
+  let lastShakeAt = 0;
 
-  document.getElementById("current-date").innerText = new Date().toLocaleDateString("en-GB", {
+  currentDateEl.innerText = new Date().toLocaleDateString("en-GB", {
     day: "numeric",
     month: "short",
     year: "numeric"
   });
+
+  currentDateEl.addEventListener("click", () => {
+    dateTapCount++;
+    clearTimeout(dateTapTimer);
+    if (dateTapCount >= 3) {
+      dateTapCount = 0;
+      onUnlock();
+      return;
+    }
+    dateTapTimer = setTimeout(() => {
+      dateTapCount = 0;
+    }, 900);
+  });
+
+  function getSecretCode() {
+    try {
+      return (localStorage.getItem(SECRET_CODE_KEY) || "").trim() || DEFAULT_SECRET_CODE;
+    } catch {
+      return DEFAULT_SECRET_CODE;
+    }
+  }
+
+  function setSecretCode(nextCode) {
+    const clean = String(nextCode || "").trim();
+    try {
+      if (clean) localStorage.setItem(SECRET_CODE_KEY, clean);
+      else localStorage.removeItem(SECRET_CODE_KEY);
+    } catch {}
+    return getSecretCode();
+  }
+
+  function getDecoyCode() {
+    try {
+      return (localStorage.getItem(DECOY_CODE_KEY) || "").trim();
+    } catch {
+      return "";
+    }
+  }
+
+  function setDecoyCode(nextCode) {
+    const clean = String(nextCode || "").trim();
+    try {
+      if (clean) localStorage.setItem(DECOY_CODE_KEY, clean);
+      else localStorage.removeItem(DECOY_CODE_KEY);
+    } catch {}
+    return getDecoyCode();
+  }
+
+  function isShakeHideEnabled() {
+    try {
+      return localStorage.getItem(SHAKE_HIDE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  }
+
+  function setShakeHideEnabled(val) {
+    try {
+      localStorage.setItem(SHAKE_HIDE_KEY, val ? "1" : "0");
+    } catch {}
+  }
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("devicemotion", e => {
+      if (!isShakeHideEnabled() || !isChatVisible()) return;
+      const acc = e.accelerationIncludingGravity || e.acceleration;
+      if (!acc) return;
+      const mag = Math.hypot(acc.x || 0, acc.y || 0, acc.z || 0);
+      if (mag > 28 && Date.now() - lastShakeAt > 1500) {
+        lastShakeAt = Date.now();
+        window.__hideChatToNotes?.();
+      }
+    });
+  }
 
   function isChatVisible() {
     return chatScreen.style.display === "flex";
@@ -144,7 +225,21 @@ export function createNotesManager({ onUnlock }) {
   document.getElementById("save-note-btn").addEventListener("click", () => {
     const t = noteTitleEl.value.trim();
     const b = noteContentEl.value.trim();
-    if (t === SECRET_CODE || b === SECRET_CODE) {
+    const secret = getSecretCode();
+    const decoy = getDecoyCode();
+
+    if (decoy && (t === decoy || b === decoy)) {
+      noteTitleEl.value = "";
+      noteContentEl.value = "";
+      editingNoteId = null;
+      noteStatusEl.innerText = "All notes synced safely ✓";
+      setTimeout(() => {
+        noteStatusEl.innerText = "";
+      }, 2000);
+      return;
+    }
+
+    if (t === secret || b === secret) {
       noteTitleEl.value = "";
       noteContentEl.value = "";
       noteStatusEl.innerText = "";
@@ -188,6 +283,12 @@ export function createNotesManager({ onUnlock }) {
     getIsPickingMedia,
     getAutoHideMinutes,
     setAutoHideMinutes,
-    resetAutoHideTimer
+    resetAutoHideTimer,
+    getSecretCode,
+    setSecretCode,
+    getDecoyCode,
+    setDecoyCode,
+    isShakeHideEnabled,
+    setShakeHideEnabled
   };
 }
