@@ -22,6 +22,7 @@ export function createNotificationManager({ getAuth, getDb, doc, setDoc, isNotes
   let partnerFcmToken = null;
   let partnerWebSub = null;
   let swRegistration = null;
+  let pushInitPromise = null;
 
   function isNativeApp() {
     return Boolean(window.Capacitor?.isNativePlatform?.());
@@ -204,62 +205,80 @@ export function createNotificationManager({ getAuth, getDb, doc, setDoc, isNotes
   }
 
   async function initPushNotifications() {
-    ensureServiceWorker();
-    const Push = window.Capacitor?.Plugins?.PushNotifications;
-    if (!Push) {
-      lastPushError = "Browser mode";
-      if ("Notification" in window && Notification.permission === "granted") {
-        subscribeWebPush();
-      }
-      return;
-    }
-    try {
-      await Push.createChannel({
-        id: "notes_sync",
-        name: "Notes Sync",
-        description: "Notes backup and reminders",
-        importance: 5,
-        visibility: 0,
-        vibration: true
-      });
-
-      if (!pushListenersSet) {
-        pushListenersSet = true;
-        Push.addListener("registration", ({ value }) => {
-          myFcmToken = value || "";
-          lastPushError = "";
-          const user = getAuth()?.currentUser;
-          const db = getDb();
-          if (value && user && db) {
-            setDoc(doc(db, "status", user.uid), { fcmToken: value }, { merge: true }).catch(() => {});
-          }
-        });
-        Push.addListener("registrationError", err => {
-          lastPushError = "FCM Reg Error: " + (err?.error || JSON.stringify(err));
-        });
-        Push.addListener("pushNotificationReceived", notif => {
-          const kind = notif?.data?.kind || "message";
-          if (kind === "call" && isNotesVisible()) {
-            onIncomingCallPush?.();
-          }
-          if (isNotesVisible()) {
-            window.AndroidCallBridge?.showSyncNotification?.(kind);
-          }
-        });
-        Push.addListener("pushNotificationActionPerformed", () => {});
-      }
-
-      let perm = await Push.checkPermissions();
-      if (perm.receive === "prompt" || perm.receive === "prompt-with-rationale") {
-        perm = await Push.requestPermissions();
-      }
-      if (perm.receive !== "granted") {
-        lastPushError = "Permission denied (" + perm.receive + ")";
+    if (pushInitPromise) return pushInitPromise;
+    pushInitPromise = (async () => {
+      ensureServiceWorker();
+      const Push = window.Capacitor?.Plugins?.PushNotifications;
+      if (!Push) {
+        lastPushError = "Browser mode";
+        if ("Notification" in window && Notification.permission === "granted") {
+          subscribeWebPush();
+        }
         return;
       }
-      await Push.register();
-    } catch (e) {
-      lastPushError = e?.message || "Push init error";
+      try {
+        await new Promise(r => setTimeout(r, 350));
+
+        if (window.AndroidCallBridge?.canUseFcm) {
+          const ok = window.AndroidCallBridge.canUseFcm();
+          if (!ok) {
+            lastPushError = window.AndroidCallBridge.getFcmInitError?.() || "FCM unavailable on device";
+            return;
+          }
+        }
+
+        await Push.createChannel({
+          id: "notes_sync",
+          name: "Notes Sync",
+          description: "Notes backup and reminders",
+          importance: 4,
+          visibility: 0,
+          vibration: true
+        }).catch(() => {});
+
+        if (!pushListenersSet) {
+          pushListenersSet = true;
+          Push.addListener("registration", ({ value }) => {
+            myFcmToken = value || "";
+            lastPushError = "";
+            const user = getAuth()?.currentUser;
+            const db = getDb();
+            if (value && user && db) {
+              setDoc(doc(db, "status", user.uid), { fcmToken: value }, { merge: true }).catch(() => {});
+            }
+          });
+          Push.addListener("registrationError", err => {
+            lastPushError = "FCM Reg Error: " + (err?.error || JSON.stringify(err));
+          });
+          Push.addListener("pushNotificationReceived", notif => {
+            const kind = notif?.data?.kind || "message";
+            if (kind === "call" && isNotesVisible()) {
+              onIncomingCallPush?.();
+            }
+            if (isNotesVisible()) {
+              window.AndroidCallBridge?.showSyncNotification?.(kind);
+            }
+          });
+          Push.addListener("pushNotificationActionPerformed", () => {});
+        }
+
+        let perm = await Push.checkPermissions();
+        if (perm.receive === "prompt" || perm.receive === "prompt-with-rationale") {
+          perm = await Push.requestPermissions();
+        }
+        if (perm.receive !== "granted") {
+          lastPushError = "Permission denied (" + perm.receive + ")";
+          return;
+        }
+        await Push.register();
+      } catch (e) {
+        lastPushError = e?.message || "Push init error";
+      }
+    })();
+    try {
+      await pushInitPromise;
+    } finally {
+      pushInitPromise = null;
     }
   }
 

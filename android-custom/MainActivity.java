@@ -265,6 +265,33 @@ public class MainActivity extends BridgeActivity {
                 } catch (Throwable ignored) {}
             });
         }
+
+        private String fcmInitError = "";
+
+        @JavascriptInterface
+        public boolean canUseFcm() {
+            try {
+                Class<?> faClass = Class.forName("com.google.firebase.FirebaseApp");
+                Object appsObj = faClass.getMethod("getApps", Context.class).invoke(null, MainActivity.this);
+                boolean empty = (appsObj instanceof java.util.List) && ((java.util.List<?>) appsObj).isEmpty();
+                if (empty) {
+                    faClass.getMethod("initializeApp", Context.class).invoke(null, MainActivity.this);
+                }
+                Class<?> fmClass = Class.forName("com.google.firebase.messaging.FirebaseMessaging");
+                fmClass.getMethod("getInstance").invoke(null);
+                fcmInitError = "";
+                return true;
+            } catch (Throwable t) {
+                Throwable cause = t.getCause() != null ? t.getCause() : t;
+                fcmInitError = cause.getClass().getSimpleName() + ": " + String.valueOf(cause.getMessage());
+                return false;
+            }
+        }
+
+        @JavascriptInterface
+        public String getFcmInitError() {
+            return fcmInitError;
+        }
     }
 
     @Override
