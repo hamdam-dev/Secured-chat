@@ -37,6 +37,7 @@ import {
   createSnakeState,
   stepSnakeState
 } from "../shared/gameLogic.js";
+import { createIntimateGamesManager } from "./intimateGames.js";
 
 const TDW_BANK = {
   easy: [
@@ -223,6 +224,11 @@ export function createGamesManager({ getAuth, chat }) {
   const modal = document.getElementById("games-modal");
   const openBtn = document.getElementById("games-btn");
   const closeBtn = document.getElementById("close-games-btn");
+  const intimateGames = createIntimateGamesManager({
+    getAuth,
+    chat,
+    openGamesModal: key => openGameSubtab(key || "intimate")
+  });
 
   const ludoBoardEl = document.getElementById("ludo-board-grid");
   const ludoTurnLabel = document.getElementById("ludo-turn-label");
@@ -458,7 +464,11 @@ export function createGamesManager({ getAuth, chat }) {
     const pane = modal?.querySelector(`[data-game-pane="${parentTab}"]`);
     if (pane) {
       pane.querySelectorAll("[data-subtab]").forEach(btn => {
-        btn.classList.toggle("active", btn.dataset.subtab === subKey);
+        const isAct = btn.dataset.subtab === subKey;
+        btn.classList.toggle("active", isAct);
+        if (isAct) {
+          btn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+        }
       });
       pane.querySelectorAll("[data-subpane]").forEach(sp => {
         sp.style.display = sp.dataset.subpane === subKey ? "flex" : "none";
@@ -506,13 +516,23 @@ export function createGamesManager({ getAuth, chat }) {
     }
   }
 
+  function stopTransientLoops() {
+    stopAllArcadeLoops();
+    stopPuzzleTimer();
+    intimateGames.stopLoops();
+    clearTimeout(ludoBotTimer);
+  }
+
   function showTab(tabKey, subKey = "") {
     activeTab = tabKey;
     stopAllArcadeLoops();
     if (tabKey !== "hard") stopPuzzleTimer();
+    if (tabKey !== "intimate") intimateGames.stopLoops();
 
     modal?.querySelectorAll("[data-game-tab]").forEach(b => {
-      b.classList.toggle("active", b.dataset.gameTab === tabKey);
+      const isAct = b.dataset.gameTab === tabKey;
+      b.classList.toggle("active", isAct);
+      if (isAct) b.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
     });
     modal?.querySelectorAll("[data-game-pane]").forEach(p => {
       const show = p.dataset.gamePane === tabKey;
@@ -522,6 +542,8 @@ export function createGamesManager({ getAuth, chat }) {
 
     if (tabKey === "ludo") {
       renderLudoBoard();
+    } else if (tabKey === "intimate") {
+      intimateGames.renderIntimateHub();
     } else {
       const targetSub = subKey && subKey.startsWith(`${tabKey}:`) ? subKey : activeSubtabs[tabKey];
       if (targetSub) showSubTab(targetSub);
@@ -530,8 +552,8 @@ export function createGamesManager({ getAuth, chat }) {
 
   function openGameSubtab(subKey) {
     if (!modal) return;
-    if (subKey === "ludo") {
-      showTab("ludo");
+    if (subKey === "ludo" || subKey === "intimate") {
+      showTab(subKey);
     } else if (subKey && subKey.includes(":")) {
       showTab(subKey.split(":")[0], subKey);
     } else {
@@ -554,9 +576,7 @@ export function createGamesManager({ getAuth, chat }) {
   });
 
   closeBtn?.addEventListener("click", () => {
-    stopAllArcadeLoops();
-    stopPuzzleTimer();
-    clearTimeout(ludoBotTimer);
+    stopTransientLoops();
     liveLudoMsg = null;
     modal.style.display = "none";
   });
@@ -2651,6 +2671,9 @@ export function createGamesManager({ getAuth, chat }) {
   function renderGameBubble(m) {
     const dec = m.decrypted || {};
     const gd = dec.gameData || {};
+    if (String(gd.kind || "").startsWith("intimate_")) {
+      return intimateGames.renderIntimateChatBubble(m, dec, gd);
+    }
     const uid = myUid();
     const box = document.createElement("div");
     box.className = "game-card-msg";
@@ -3421,5 +3444,10 @@ export function createGamesManager({ getAuth, chat }) {
   renderTdwPreview();
   renderSlidingPuzzle();
 
-  return { renderGameBubble, openGameSubtab };
+  return {
+    renderGameBubble,
+    openGameSubtab,
+    stopTransientLoops,
+    openWalletModal: intimateGames.openWalletModal
+  };
 }

@@ -14,6 +14,7 @@ import { createCallManager } from "./call.js";
 import { createCareManager } from "./care.js";
 import { createGamesManager } from "./games.js";
 import { createDoodleManager } from "./doodle.js";
+import { createVaultAndTogetherManager } from "./vaultAndTogether.js";
 
 const THEME_KEY = "sc_dark_mode_v1";
 const MY_MOOD_KEY = "sc_my_mood_v1";
@@ -22,6 +23,7 @@ const CHAT_TITLE_KEY = "sc_chat_title_v1";
 const CUSTOM_DP_KEY = "sc_custom_dp_v1";
 const WALL_DIM_KEY = "sc_wall_dim_v1";
 const PULSE_SEEN_KEY = "sc_last_pulse_seen_v1";
+const TOGETHER_PULSE_SEEN_KEY = "sc_last_together_pulse_v1";
 const CLEAR_SEEN_KEY = "sc_last_clear_seen_v1";
 
 let firebaseConfig = window.__FIREBASE_CONFIG__ || {};
@@ -85,6 +87,7 @@ let unsubStatus = null;
 let isFirstStatusLoad = true;
 let partnerTypingTimeout = null;
 let lastPulseSeen = Number(localStorage.getItem(PULSE_SEEN_KEY) || 0);
+let lastTogetherPulseSeen = Number(localStorage.getItem(TOGETHER_PULSE_SEEN_KEY) || 0);
 let lastClearSeen = Number(localStorage.getItem(CLEAR_SEEN_KEY) || 0);
 const signalState = { lastOfferTs: 0, lastAnswerTs: 0, lastHangupTs: 0 };
 
@@ -188,6 +191,15 @@ createCareManager({ chat });
 const games = createGamesManager({ getAuth: () => auth, chat });
 chat.setGameRenderer(games.renderGameBubble);
 createDoodleManager({ chat });
+const vaultTogether = createVaultAndTogetherManager({
+  getAuth: () => auth,
+  getDb: () => db,
+  doc,
+  setDoc,
+  notes,
+  notifications,
+  spawnFloatingHearts
+});
 
 function openChatScreen() {
   notes.notesScreen.style.display = "none";
@@ -207,12 +219,14 @@ function hideChatToNotes() {
   document.getElementById("more-dropdown").style.display = "none";
   document.getElementById("emoji-picker").style.display = "none";
   document.getElementById("reaction-popup").style.display = "none";
-  ["delete-msg-modal", "clear-confirm-modal", "push-debug-modal", "mood-modal", "gift-modal", "care-modal", "img-viewer-modal", "reaction-all-modal", "games-modal", "doodle-modal", "starred-modal", "privacy-settings-modal"].forEach(id => {
+  ["delete-msg-modal", "clear-confirm-modal", "push-debug-modal", "mood-modal", "gift-modal", "care-modal", "img-viewer-modal", "reaction-all-modal", "games-modal", "doodle-modal", "starred-modal", "privacy-settings-modal", "wallet-modal", "vault-modal", "together-modal"].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = "none";
   });
   document.getElementById("viewer-img").src = "";
   chat.stopTransientMedia();
+  games.stopTransientLoops?.();
+  vaultTogether.lockAll();
   notes.chatScreen.style.display = "none";
   notes.loginScreen.style.display = "none";
   notes.notesScreen.style.display = "flex";
@@ -228,10 +242,12 @@ window.handleAndroidBack = function () {
     document.getElementById("viewer-img").src = "";
     return true;
   }
-  for (const id of ["reaction-all-modal", "games-modal", "doodle-modal", "starred-modal", "privacy-settings-modal", "delete-msg-modal", "clear-confirm-modal", "push-debug-modal", "mood-modal", "gift-modal", "care-modal"]) {
+  for (const id of ["wallet-modal", "vault-modal", "together-modal", "reaction-all-modal", "games-modal", "doodle-modal", "starred-modal", "privacy-settings-modal", "delete-msg-modal", "clear-confirm-modal", "push-debug-modal", "mood-modal", "gift-modal", "care-modal"]) {
     const el = document.getElementById(id);
     if (el && el.style.display === "flex") {
       el.style.display = "none";
+      if (id === "games-modal") games.stopTransientLoops?.();
+      if (id === "vault-modal" || id === "together-modal") vaultTogether.lockAll();
       return true;
     }
   }
@@ -670,6 +686,26 @@ if (app) {
                 notifications.showBrowserAlert("ping");
               }
             }
+          }
+
+          if (data.togetherPulseAt && data.togetherPulseAt > lastTogetherPulseSeen) {
+            lastTogetherPulseSeen = data.togetherPulseAt;
+            try { localStorage.setItem(TOGETHER_PULSE_SEEN_KEY, String(lastTogetherPulseSeen)); } catch {}
+            if (!isFirstStatusLoad) {
+              if (notes.isChatVisible() && document.visibilityState === "visible") {
+                vaultTogether.handleRemoteTogetherPulse();
+              } else {
+                notifications.showBrowserAlert("ping");
+              }
+            }
+          }
+
+          const syncArr = [
+            ...(Array.isArray(data.reactionSyncLog) ? data.reactionSyncLog : []),
+            ...(data.reactionSync ? [data.reactionSync] : [])
+          ];
+          if (syncArr.length) {
+            chat.applyRemoteReactionSyncs(syncArr, d.id, isFirstStatusLoad);
           }
 
           const isReallyOnline = Boolean(data.online) && (!data.lastActiveAt || Date.now() - data.lastActiveAt < 75000);

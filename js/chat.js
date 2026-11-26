@@ -4,7 +4,9 @@ import {
   diffMessageIds,
   getBubblePreviewText,
   buildMessageSignature,
-  getIncomingAlertKind
+  getIncomingAlertKind,
+  mergeMessageReactions,
+  getDisplayReactionsList
 } from "../shared/chatLogic.js";
 import {
   EMOJI_SECTIONS,
@@ -18,6 +20,9 @@ const MSG_CACHE_KEY = "sc_msg_cache_v1";
 const DELETED_LOCAL_KEY = "sc_deleted_local_v1";
 const RECENT_EMOJIS_KEY = "sc_recent_emojis_v1";
 const RECENT_REACTS_KEY = "sc_recent_reacts_v1";
+const CUSTOM_QUICK_REACTS_KEY = "sc_custom_quick_reacts_v1";
+const REACT_SYNC_LOG_KEY = "sc_react_sync_log_v1";
+const LAST_REMOTE_REACT_AT_KEY = "sc_last_remote_react_at_v1";
 const STARRED_MSGS_KEY = "sc_starred_msgs_v1";
 const DISAPPEAR_HRS_KEY = "sc_disappear_hrs_v1";
 const PENDING_QUEUE_KEY = "sc_pending_msgs_v1";
@@ -54,6 +59,8 @@ export function createChatManager({
   const reactSearchInput = document.getElementById("react-search-input");
   const reactAllTabs = document.getElementById("react-all-tabs");
   const reactAllSections = document.getElementById("react-all-sections");
+  const togglePinReactBtn = document.getElementById("toggle-pin-react-btn");
+  const pinnedReactsPreview = document.getElementById("pinned-reacts-preview");
   const mediaBar = document.getElementById("media-actions-bar");
   const expandMediaBtn = document.getElementById("expand-media-btn");
   const emojiPicker = document.getElementById("emoji-picker");
@@ -82,6 +89,9 @@ export function createChatManager({
   let isTyping = false;
   let activePopupMsgId = null;
   let popupOpenedAt = 0;
+  let isPinReactMode = false;
+  let lastRemoteReactAt = Number(localStorage.getItem(LAST_REMOTE_REACT_AT_KEY) || 0);
+  const appliedRemoteReactKeys = new Set();
   let selectedIds = new Set();
   let activeAudioEl = null;
   let activeAudioBtn = null;
@@ -154,6 +164,7 @@ export function createChatManager({
             createdAtSec: m.createdAtSec,
             createdAtNs: m.createdAtNs,
             reaction: m.reaction || "",
+            reactions: m.reactions || null,
             decrypted: copy
           };
         });
@@ -300,19 +311,85 @@ export function createChatManager({
   async function applyReaction(msgId, emoji) {
     if (!msgId) return;
     const m = messagesMap.get(msgId);
-    const nextReaction = m && m.reaction === emoji ? "" : emoji;
+    const actorUid = myUid || getAuth()?.currentUser?.uid || "me";
+    const merged = mergeMessageReactions(m?.reactions || {}, m?.reaction || "", actorUid, emoji);
+    const myEmoji = merged.reactions[actorUid] || "";
+
     if (m) {
-      m.reaction = nextReaction;
+      m.reactions = merged.reactions;
+      m.reaction = merged.reaction;
       renderAllMessages(false, true);
       saveMsgCache();
     }
-    if (nextReaction) {
-      const rec = addRecentEmoji(readJson(RECENT_REACTS_KEY, []), nextReaction, 12);
+    if (myEmoji) {
+      const rec = addRecentEmoji(readJson(RECENT_REACTS_KEY, []), myEmoji, 12);
       writeJson(RECENT_REACTS_KEY, rec);
     }
+
+    const user = getAuth()?.currentUser;
     const db = getDb();
     if (db && !m?.isPending) {
-      try { await updateDoc(doc(db, "messages", msgId), { reaction: nextReaction }); } catch {}
+      // Channel 1: Direct update on message doc (if rules permit)
+      try {
+        await updateDoc(doc(db, "messages", msgId), {
+          reactions: merged.reactions,
+          reaction: merged.reaction
+        });
+      } catch {}
+
+      // Channel 2: Reliable user-owned status fallback sync so partner ALWAYS sees reaction even if rules block cross-user message update
+      if (user) {
+        const entry = { msgId, emoji: myEmoji, by: user.uid, at: Date.now() };
+        const prevLog = readJson(REACT_SYNC_LOG_KEY, []).filter(
+          x => !(x.msgId === msgId && x.by === user.uid)
+        );
+        const nextLog = [...prevLog, entry].slice(-15);
+        writeJson(REACT_SYNC_LOG_KEY, nextLog);
+        setDoc(
+          doc(db, "status", user.uid),
+          { reactionSync: entry, reactionSyncLog: nextLog },
+          { merge: true }
+        ).catch(() => {});
+        if (myEmoji) notifications.sendPushAlert("message");
+      }
+    }
+  }
+
+  function applyRemoteReactionSyncs(syncItems = [], partnerUid = "", isInitial = false) {
+    if (!Array.isArray(syncItems) || !syncItems.length) return;
+    let changed = false;
+    let newestNewEmojiAt = 0;
+    for (const item of syncItems) {
+      if (!item || !item.msgId) continue;
+      const actor = item.by || partnerUid;
+      if (!actor || actor === myUid) continue;
+      const key = `${item.msgId}|${actor}|${item.at || 0}|${item.emoji || ""}`;
+      if (appliedRemoteReactKeys.has(key)) continue;
+      appliedRemoteReactKeys.add(key);
+
+      const m = messagesMap.get(item.msgId);
+      if (m) {
+        const nextMap = { ...(m.reactions && typeof m.reactions === "object" ? m.reactions : {}) };
+        if (item.emoji) nextMap[actor] = item.emoji;
+        else delete nextMap[actor];
+        m.reactions = nextMap;
+        m.reaction = getDisplayReactionsList(nextMap).join(" ");
+        changed = true;
+      }
+      if (!isInitial && item.at && item.at > lastRemoteReactAt && item.emoji) {
+        newestNewEmojiAt = Math.max(newestNewEmojiAt, item.at);
+      }
+    }
+    if (changed) {
+      renderAllMessages(false, true);
+      saveMsgCache();
+    }
+    if (newestNewEmojiAt > lastRemoteReactAt) {
+      lastRemoteReactAt = newestNewEmojiAt;
+      try { localStorage.setItem(LAST_REMOTE_REACT_AT_KEY, String(lastRemoteReactAt)); } catch {}
+      if (notes.isChatVisible() && document.visibilityState === "visible") {
+        playEmotionSound("chime");
+      }
     }
   }
 
@@ -320,7 +397,8 @@ export function createChatManager({
     if (!rpScrollStrip) return;
     rpScrollStrip.innerHTML = "";
     const recentReacts = readJson(RECENT_REACTS_KEY, []);
-    const list = getQuickReactions(recentReacts);
+    const customPinned = readJson(CUSTOM_QUICK_REACTS_KEY, []);
+    const list = getQuickReactions(recentReacts, customPinned);
     list.forEach(emoji => {
       const b = document.createElement("button");
       b.type = "button";
@@ -342,7 +420,8 @@ export function createChatManager({
     activePopupMsgId = msgId;
     popupOpenedAt = Date.now();
     const m = messagesMap.get(msgId);
-    buildQuickReactionStrip(m?.reaction || "");
+    const myReact = (m?.reactions && myUid && m.reactions[myUid]) || m?.reaction || "";
+    buildQuickReactionStrip(myReact);
 
     const starBtn = document.getElementById("rp-star-btn");
     if (starBtn) {
@@ -466,13 +545,54 @@ export function createChatManager({
     });
   }
 
+  function renderPinnedReactsPreview() {
+    if (!pinnedReactsPreview) return;
+    const customPinned = readJson(CUSTOM_QUICK_REACTS_KEY, []);
+    if (!isPinReactMode && !customPinned.length) {
+      pinnedReactsPreview.style.display = "none";
+      return;
+    }
+    pinnedReactsPreview.style.display = "flex";
+    pinnedReactsPreview.innerHTML = "";
+    const lbl = document.createElement("span");
+    lbl.innerText = isPinReactMode
+      ? "Tap emojis below to Pin/Unpin Quick Bar:"
+      : "Pinned Quick Bar:";
+    pinnedReactsPreview.appendChild(lbl);
+
+    customPinned.forEach(em => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "pinned-react-chip";
+      chip.innerText = `${em} ✕`;
+      chip.setAttribute("aria-label", `Unpin ${em}`);
+      chip.onclick = e => {
+        e.stopPropagation();
+        const next = readJson(CUSTOM_QUICK_REACTS_KEY, []).filter(x => x !== em);
+        writeJson(CUSTOM_QUICK_REACTS_KEY, next);
+        renderPinnedReactsPreview();
+      };
+      pinnedReactsPreview.appendChild(chip);
+    });
+  }
+
   function renderFullReactionSheet() {
+    renderPinnedReactsPreview();
     renderSectionedEmojiBrowser({
       tabsEl: reactAllTabs,
       sectionsEl: reactAllSections,
       searchVal: reactSearchInput?.value || "",
       recentKey: RECENT_REACTS_KEY,
       onPick: em => {
+        if (isPinReactMode) {
+          const cur = readJson(CUSTOM_QUICK_REACTS_KEY, []);
+          const next = cur.includes(em)
+            ? cur.filter(x => x !== em)
+            : addRecentEmoji(cur, em, 10);
+          writeJson(CUSTOM_QUICK_REACTS_KEY, next);
+          renderPinnedReactsPreview();
+          return;
+        }
         const targetId = activePopupMsgId;
         reactionAllModal.style.display = "none";
         applyReaction(targetId, em);
@@ -580,6 +700,12 @@ export function createChatManager({
         box.appendChild(jBtn);
       }
       div.appendChild(box);
+    } else if (dec.walletRedeem) {
+      allowDoubleTapReact = true;
+      const wBox = document.createElement("div");
+      wBox.className = "wallet-redeem-card";
+      wBox.innerHTML = `<div class="wallet-redeem-head">🎟️ Love Coupon Redeemed!</div><div class="wallet-redeem-title">${escapeHtml(dec.walletRedeem.title || "Special Love Reward")}</div><div class="game-card-sub">${escapeHtml(dec.walletRedeem.source || "Love Wallet")} · Ab isko poora karne ka waqt hai! 💖</div>`;
+      div.appendChild(wBox);
     } else if (dec.carePing) {
       allowDoubleTapReact = true;
       const pBox = document.createElement("div");
@@ -871,10 +997,11 @@ export function createChatManager({
     }
     div.appendChild(meta);
 
-    if (m.reaction) {
+    const reactionDisplayList = getDisplayReactionsList(m.reactions, m.reaction);
+    if (reactionDisplayList.length) {
       const rPill = document.createElement("span");
       rPill.className = "msg-reaction-pill";
-      rPill.innerText = m.reaction;
+      rPill.innerText = reactionDisplayList.join(" ");
       rPill.title = "Tap to open reactions";
       rPill.onclick = e => {
         e.stopPropagation();
@@ -1043,12 +1170,18 @@ export function createChatManager({
         if (ch.type === "removed") {
           if (messagesMap.delete(ch.doc.id)) changed = true;
         } else if (!isMessageExpired(dec)) {
+          const prevLocal = messagesMap.get(ch.doc.id);
+          const mergedReactions = raw.reactions || prevLocal?.reactions || null;
+          const reactionSummary = mergedReactions
+            ? getDisplayReactionsList(mergedReactions, raw.reaction || "").join(" ")
+            : (raw.reaction || prevLocal?.reaction || "");
           messagesMap.set(ch.doc.id, {
             id: ch.doc.id,
             sender: raw.sender,
             createdAtSec: raw.createdAt?.seconds || Math.floor(Date.now() / 1000),
             createdAtNs: raw.createdAt?.nanoseconds || 0,
-            reaction: raw.reaction || "",
+            reaction: reactionSummary,
+            reactions: mergedReactions,
             decrypted: dec
           });
           if (ch.type === "added" && !isFirstMsgLoad && raw.sender !== myUid) {
@@ -1332,6 +1465,7 @@ export function createChatManager({
             createdAtSec: raw.createdAt?.seconds || 0,
             createdAtNs: raw.createdAt?.nanoseconds || 0,
             reaction: raw.reaction || "",
+            reactions: raw.reactions || null,
             decrypted: dec
           });
         }
@@ -1365,11 +1499,21 @@ export function createChatManager({
   document.getElementById("rp-more-react-btn")?.addEventListener("click", e => {
     e.stopPropagation();
     reactionPopup.style.display = "none";
+    isPinReactMode = false;
+    togglePinReactBtn?.classList.remove("active");
     if (reactSearchInput) reactSearchInput.value = "";
     renderFullReactionSheet();
     reactionAllModal.style.display = "flex";
   });
+  togglePinReactBtn?.addEventListener("click", e => {
+    e.stopPropagation();
+    isPinReactMode = !isPinReactMode;
+    togglePinReactBtn.classList.toggle("active", isPinReactMode);
+    renderPinnedReactsPreview();
+  });
   document.getElementById("close-react-all-btn")?.addEventListener("click", () => {
+    isPinReactMode = false;
+    togglePinReactBtn?.classList.remove("active");
     reactionAllModal.style.display = "none";
   });
   reactSearchInput?.addEventListener("input", renderFullReactionSheet);
@@ -1728,6 +1872,7 @@ export function createChatManager({
     showGameUpdateBanner,
     hideGameUpdateBanner,
     jumpToMessage,
+    applyRemoteReactionSyncs,
     loadMsgCache,
     startMessagesListener,
     markMessagesAsRead,

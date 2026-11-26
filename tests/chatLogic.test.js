@@ -7,8 +7,11 @@ import {
   sanitizeAiSnippets,
   buildMessageSignature,
   getIncomingAlertKind,
-  resolveApiUrl
+  resolveApiUrl,
+  mergeMessageReactions,
+  getDisplayReactionsList
 } from "../shared/chatLogic.js";
+import { getQuickReactions } from "../shared/emojiCatalog.js";
 
 test("sortMessages sorts deterministically by createdAtSec, createdAtNs, and id", () => {
   const input = [
@@ -40,9 +43,10 @@ test("diffMessageIds identifies removed IDs and marks new vs existing messages",
   );
 });
 
-test("getBubblePreviewText formats carePing, letterData, vibeCard, giftData, media, and text", () => {
+test("getBubblePreviewText formats carePing, letterData, walletRedeem, vibeCard, giftData, media, and text", () => {
   assert.equal(getBubblePreviewText({ carePing: { emoji: "🍲", label: "Khana Khaya?" } }), "🍲 Khana Khaya?");
   assert.equal(getBubblePreviewText({ letterData: { title: "Jab yaad aaye" } }), "💌 Jab yaad aaye");
+  assert.equal(getBubblePreviewText({ walletRedeem: { title: "2-Min Honey Pass" } }), "🎟️ Redeemed: 2-Min Honey Pass");
   assert.equal(getBubblePreviewText({ vibeCard: { headline: "Aaj Ka Vibe" } }), "✨ Aaj Ka Vibe");
   assert.equal(getBubblePreviewText({ giftData: { label: "Rose" } }), "🎁 Gift: Rose");
   assert.equal(getBubblePreviewText({ audioData: "data:audio/webm;base64,..." }), "🎤 Voice Note");
@@ -66,10 +70,36 @@ test("sanitizeAiSnippets filters media/call logs, maps Me vs Partner, and enforc
   ]);
 });
 
-test("buildMessageSignature changes when reaction or decrypted payload changes", () => {
-  const base = { reaction: "", decrypted: { text: "Hi", carePing: { label: "Hug" } } };
-  const withReaction = { reaction: "❤️", decrypted: { text: "Hi", carePing: { label: "Hug" } } };
+test("buildMessageSignature changes when reaction, reactions map, or decrypted payload changes", () => {
+  const base = { reaction: "", reactions: {}, decrypted: { text: "Hi", carePing: { label: "Hug" } } };
+  const withReaction = { reaction: "❤️", reactions: { u1: "❤️" }, decrypted: { text: "Hi", carePing: { label: "Hug" } } };
+  const withTwoReactions = { reaction: "❤️ 😘", reactions: { u1: "❤️", u2: "😘" }, decrypted: { text: "Hi", carePing: { label: "Hug" } } };
   assert.notEqual(buildMessageSignature(base), buildMessageSignature(withReaction));
+  assert.notEqual(buildMessageSignature(withReaction), buildMessageSignature(withTwoReactions));
+});
+
+test("mergeMessageReactions keeps both partners reactions side-by-side and toggles cleanly", () => {
+  const step1 = mergeMessageReactions({}, "", "u1", "❤️");
+  assert.deepEqual(step1.reactions, { u1: "❤️" });
+  assert.deepEqual(getDisplayReactionsList(step1.reactions, step1.reaction), ["❤️"]);
+
+  const step2 = mergeMessageReactions(step1.reactions, step1.reaction, "u2", "😘");
+  assert.deepEqual(step2.reactions, { u1: "❤️", u2: "😘" });
+  assert.deepEqual(getDisplayReactionsList(step2.reactions, step2.reaction), ["❤️", "😘"]);
+
+  // Toggling same emoji removes only actor's reaction
+  const step3 = mergeMessageReactions(step2.reactions, step2.reaction, "u1", "❤️");
+  assert.deepEqual(step3.reactions, { u2: "😘" });
+  assert.deepEqual(getDisplayReactionsList(step3.reactions, step3.reaction), ["😘"]);
+});
+
+test("getQuickReactions places customPinned emojis at front without duplicates", () => {
+  const quick = getQuickReactions(["🔥", "🫶🏻"], ["🍯", "🍫", "❤️"]);
+  assert.equal(quick[0], "🍯");
+  assert.equal(quick[1], "🍫");
+  assert.equal(quick[2], "❤️");
+  assert.equal(quick.filter(x => x === "❤️").length, 1);
+  assert.ok(quick.includes("🫶🏻"));
 });
 
 test("getIncomingAlertKind distinguishes ping, letter, and message payloads", () => {

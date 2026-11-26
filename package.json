@@ -6,9 +6,9 @@
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js",
-    "build": "node --check server.js && node --check shared/chatLogic.js && node --check shared/rtcLogic.js && node --check shared/emojiCatalog.js && node --check shared/gameLogic.js",
+    "build": "node --check server.js && node --check shared/chatLogic.js && node --check shared/rtcLogic.js && node --check shared/emojiCatalog.js && node --check shared/gameLogic.js && node --check shared/intimateLogic.js",
     "test": "node --test tests/*.test.js",
-    "lint": "node --check server.js && node --check server/auth.js && node --check server/push.js && node --check shared/chatLogic.js && node --check shared/rtcLogic.js && node --check shared/emojiCatalog.js && node --check shared/gameLogic.js && node --check js/app.js && node --check js/crypto.js && node --check js/notes.js && node --check js/chat.js && node --check js/call.js && node --check js/care.js && node --check js/games.js && node --check js/doodle.js && node --check js/notifications.js"
+    "lint": "node --check server.js && node --check server/auth.js && node --check server/push.js && node --check shared/chatLogic.js && node --check shared/rtcLogic.js && node --check shared/emojiCatalog.js && node --check shared/gameLogic.js && node --check shared/intimateLogic.js && node --check js/app.js && node --check js/crypto.js && node --check js/notes.js && node --check js/chat.js && node --check js/call.js && node --check js/care.js && node --check js/games.js && node --check js/intimateGames.js && node --check js/vaultAndTogether.js && node --check js/doodle.js && node --check js/notifications.js"
   },
   "dependencies": {
     "@capacitor/android": "^6.0.0",

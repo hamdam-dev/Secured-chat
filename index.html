@@ -108,6 +108,9 @@
         </div>
 
         <div class="hdr-dropdown" id="more-dropdown">
+            <button id="open-wallet-btn" type="button">🎟️ Love Wallet</button>
+            <button id="open-vault-btn" type="button">🔒 Secret Vault</button>
+            <button id="open-together-btn" type="button">🌙 Together Mode</button>
             <button id="open-search-btn" type="button">🔍 Search Chat</button>
             <button id="open-starred-btn" type="button">⭐ Starred & Backup</button>
             <button id="theme-btn" type="button">🌙 Dark Mode</button>
@@ -194,8 +197,12 @@
         <div class="modal-card wa-react-sheet">
             <div class="care-sheet-head">
                 <h4>React Karein 💖</h4>
-                <button class="ep-close-btn" id="close-react-all-btn" type="button" aria-label="Close">✕</button>
+                <div class="care-head-actions">
+                    <button type="button" id="toggle-pin-react-btn" class="game-mini-btn">⭐ Pin Quick Bar</button>
+                    <button class="ep-close-btn" id="close-react-all-btn" type="button" aria-label="Close">✕</button>
+                </div>
             </div>
+            <div id="pinned-reacts-preview" class="pinned-reacts-preview" style="display:none;"></div>
             <input type="search" id="react-search-input" class="care-input" placeholder="Emoji search karein..." aria-label="Search reaction emoji">
             <div class="ep-tabs" id="react-all-tabs"></div>
             <div class="ep-sections wa-react-sections" id="react-all-sections"></div>
@@ -246,11 +253,15 @@
         <div class="modal-card care-sheet-card games-hub-card">
             <div class="care-sheet-head">
                 <h4>Couple Games Arcade 🎮💖</h4>
-                <button class="ep-close-btn" id="close-games-btn" type="button" aria-label="Close">✕</button>
+                <div class="care-head-actions">
+                    <button type="button" id="games-open-wallet-btn" class="game-mini-btn">🎟️ Wallet</button>
+                    <button class="ep-close-btn" id="close-games-btn" type="button" aria-label="Close">✕</button>
+                </div>
             </div>
             <div class="game-tabs-row" role="tablist">
                 <button type="button" class="game-tab-btn active" data-game-tab="ludo">🎲 Ludo</button>
                 <button type="button" class="game-tab-btn" data-game-tab="flirty">😘 Flirty</button>
+                <button type="button" class="game-tab-btn" data-game-tab="intimate">🔥 Intimate</button>
                 <button type="button" class="game-tab-btn" data-game-tab="easy">🐣 Asan</button>
                 <button type="button" class="game-tab-btn" data-game-tab="hard">🧠 Hard</button>
                 <button type="button" class="game-tab-btn" data-game-tab="arcade">🕹️ Play</button>
@@ -603,6 +614,11 @@
                     <button type="button" id="reflex-share-btn" class="modal-btn primary">💬 Speed Challenge Bhejein</button>
                 </div>
             </div>
+
+            <!-- 6. 20 CUSTOMIZABLE INTIMACY GAMES (HONEY / CHOCOLATE / MAM) -->
+            <div class="game-pane" data-game-pane="intimate" style="display:none;">
+                <div id="intimate-games-root" class="intimate-games-root"></div>
+            </div>
         </div>
     </div>
 
@@ -666,6 +682,87 @@
             </div>
 
             <button type="button" class="modal-btn primary" id="save-privacy-btn">✅ Settings Save Karein</button>
+        </div>
+    </div>
+
+    <!-- LOVE WALLET MODAL -->
+    <div class="modal-backdrop" id="wallet-modal">
+        <div class="modal-card care-sheet-card">
+            <div class="care-sheet-head">
+                <h4>Redeemable Love Wallet 🎟️💖</h4>
+                <button class="ep-close-btn" id="close-wallet-btn" type="button" aria-label="Close">✕</button>
+            </div>
+            <div id="wallet-summary-text" class="game-card-sub">Jeete hue rewards & coupons yahan save hote hain!</div>
+            <div class="game-inline-reply">
+                <input type="text" id="wallet-custom-input" class="game-inline-input" placeholder="Apna Love Coupon add karein (e.g. 2-Min Honey Pass)..." maxlength="80" aria-label="Custom wallet coupon">
+                <button type="button" id="wallet-add-btn" class="game-mini-btn active">+ Add</button>
+            </div>
+            <div id="wallet-list" class="wallet-list"></div>
+        </div>
+    </div>
+
+    <!-- PRIVATE SECRET VAULT MODAL -->
+    <div class="modal-backdrop" id="vault-modal">
+        <div class="modal-card care-sheet-card">
+            <div class="care-sheet-head">
+                <h4>Private Secret Vault 🔒✨</h4>
+                <button class="ep-close-btn" id="close-vault-btn" type="button" aria-label="Close">✕</button>
+            </div>
+            <div id="vault-lock-screen" class="vault-lock-screen">
+                <div class="game-card-sub">Apna 4-digit Secret Vault PIN daalein (Default: 0000)</div>
+                <input type="password" inputmode="numeric" maxlength="6" id="vault-pin-input" class="care-input" placeholder="••••" aria-label="Vault PIN">
+                <p id="vault-pin-err" class="error" style="min-height:0;"></p>
+                <button type="button" id="vault-unlock-btn" class="modal-btn primary">🔓 Vault Kholen</button>
+            </div>
+            <div id="vault-content-screen" style="display:none;flex-direction:column;gap:10px;">
+                <div class="care-head-inline">
+                    <span class="care-section-title">Sirf Aapki Private Yaadein & Notes</span>
+                    <button type="button" id="vault-lock-btn" class="game-mini-btn">🔒 Lock</button>
+                </div>
+                <textarea id="vault-note-input" class="care-input" rows="2" placeholder="Koi private wish, note ya secret yaad likhein..." aria-label="Vault secret note"></textarea>
+                <div class="game-btn-row">
+                    <button type="button" id="vault-save-note-btn" class="modal-btn primary">💾 Note Save</button>
+                    <button type="button" id="vault-add-photo-btn" class="modal-btn">📸 Secret Photo</button>
+                    <input type="file" id="vault-photo-input" accept="image/*" style="display:none;">
+                </div>
+                <div id="vault-items-list" class="vault-grid"></div>
+                <div class="care-section-box">
+                    <div class="care-section-title">🔑 Vault PIN Badlein</div>
+                    <div class="game-inline-reply">
+                        <input type="password" inputmode="numeric" maxlength="6" id="vault-new-pin-input" class="game-inline-input" placeholder="Naya 4-digit PIN..." aria-label="New Vault PIN">
+                        <button type="button" id="vault-change-pin-btn" class="game-mini-btn">Save PIN</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- COZY TOGETHER MODE MODAL -->
+    <div class="modal-backdrop" id="together-modal">
+        <div class="modal-card care-sheet-card">
+            <div class="care-sheet-head">
+                <h4>Cozy Together Mode 🌙💓</h4>
+                <button class="ep-close-btn" id="close-together-btn" type="button" aria-label="Close">✕</button>
+            </div>
+            <div class="game-card-sub">Saath cuddle / night talk timer — slow heartbeat sound aur partner heartbeat sync ke saath!</div>
+            <div class="game-btn-row" id="together-duration-row">
+                <button type="button" class="game-mini-btn active" data-together-min="10">10 Min</button>
+                <button type="button" class="game-mini-btn" data-together-min="20">20 Min</button>
+                <button type="button" class="game-mini-btn" data-together-min="30">30 Min</button>
+            </div>
+            <div class="together-ring">
+                <div id="together-timer-display" class="together-timer-display tabular-nums">10:00</div>
+                <div id="together-status-label" class="game-card-sub">Ready for cozy calm time ✨</div>
+            </div>
+            <label class="privacy-toggle-row">
+                <span>💓 Soft Heartbeat Sound + Vibrate</span>
+                <input type="checkbox" id="together-pulse-toggle" checked>
+            </label>
+            <div class="game-btn-row">
+                <button type="button" id="together-start-btn" class="modal-btn primary">▶ Start Session</button>
+                <button type="button" id="together-stop-btn" class="modal-btn cancel">⏹️ Stop</button>
+            </div>
+            <button type="button" id="together-send-pulse-btn" class="modal-btn">💓 Love ko Live Heartbeat Sync Bhejein</button>
         </div>
     </div>
 

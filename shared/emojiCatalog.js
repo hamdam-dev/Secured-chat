@@ -152,11 +152,13 @@ export function dedupeEmojis(list = []) {
   return out;
 }
 
-export function getQuickReactions(recentReactions = []) {
+export function getQuickReactions(recentReactions = [], customPinned = []) {
+  const validPinned = dedupeEmojis(customPinned);
   const validRecent = dedupeEmojis(recentReactions).filter(
-    em => !PRIORITY_REACTIONS.includes(em)
+    em => !PRIORITY_REACTIONS.includes(em) && !validPinned.includes(em)
   );
   return dedupeEmojis([
+    ...validPinned,
     ...PRIORITY_REACTIONS,
     ...validRecent.slice(0, 6),
     ...USER_REACTION_STREAM

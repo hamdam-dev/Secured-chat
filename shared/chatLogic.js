@@ -24,6 +24,7 @@ export function getBubblePreviewText(dec) {
   if (!dec) return "";
   if (dec.isCallLog) return dec.text || "Call";
   if (dec.isGameResult) return dec.text || "🎮 Game Update";
+  if (dec.walletRedeem) return `🎟️ Redeemed: ${dec.walletRedeem.title || "Love Coupon"}`;
   if (dec.carePing) return `${dec.carePing.emoji || "💞"} ${dec.carePing.label || "Care Ping"}`;
   if (dec.letterData) return `💌 ${dec.letterData.title || "Surprise Letter"}`;
   if (dec.questionCard) return `🃏 ${dec.questionCard.question || "Dil Ki Baat"}`;
@@ -59,6 +60,7 @@ export function buildMessageSignature(m) {
   const dec = m?.decrypted || {};
   return JSON.stringify({
     r: m?.reaction || "",
+    rm: m?.reactions ? JSON.stringify(m.reactions) : "",
     t: dec.text || "",
     vo: Boolean(dec.viewOnce),
     hasImg: Boolean(dec.imageData),
@@ -68,6 +70,7 @@ export function buildMessageSignature(m) {
     letter: dec.letterData?.title || "",
     qcard: dec.questionCard?.answer || dec.questionCard?.question || "",
     game: dec.gameData ? JSON.stringify(dec.gameData) : "",
+    wal: dec.walletRedeem?.title || "",
     vibe: dec.vibeCard?.headline || "",
     exp: dec.expiresAtMs || 0,
     reply: dec.replyTo || ""
@@ -90,3 +93,34 @@ export function resolveApiUrl(path, { isNative = false, serverBaseUrl = "" } = {
   return cleanPath;
 }
 
+export function mergeMessageReactions(existingMap = {}, legacyReaction = "", actorUid = "", emoji = "") {
+  const next = { ...(existingMap && typeof existingMap === "object" ? existingMap : {}) };
+  if (legacyReaction && Object.keys(next).length === 0) {
+    next._legacy = legacyReaction;
+  }
+  if (actorUid) {
+    if (!emoji || next[actorUid] === emoji) {
+      delete next[actorUid];
+      // Clear _legacy if actor removed legacy single reaction
+      if (legacyReaction && next._legacy === emoji) delete next._legacy;
+    } else {
+      delete next._legacy;
+      next[actorUid] = emoji;
+    }
+  }
+  const summary = getDisplayReactionsList(next).join(" ");
+  return { reactions: next, reaction: summary };
+}
+
+export function getDisplayReactionsList(reactionsMap = {}, legacyReaction = "") {
+  const vals = [];
+  if (reactionsMap && typeof reactionsMap === "object") {
+    for (const v of Object.values(reactionsMap)) {
+      if (v && typeof v === "string") vals.push(v);
+    }
+  }
+  if (!vals.length && legacyReaction) {
+    return String(legacyReaction).split(/\s+/).filter(Boolean);
+  }
+  return [...new Set(vals)];
+}
