@@ -9,7 +9,11 @@ import {
   getIncomingAlertKind,
   resolveApiUrl,
   mergeMessageReactions,
-  getDisplayReactionsList
+  getDisplayReactionsList,
+  getPayloadUpdatedAtMs,
+  shouldApplyGameSync,
+  upsertGameSyncEntry,
+  isLiveGameFinished
 } from "../shared/chatLogic.js";
 import { getQuickReactions } from "../shared/emojiCatalog.js";
 
@@ -113,3 +117,33 @@ test("resolveApiUrl keeps relative paths on web and prepends https server URL on
   assert.equal(resolveApiUrl("/api/send-push", { isNative: true, serverBaseUrl: "https://my-app.run.app/" }), "https://my-app.run.app/api/send-push");
   assert.equal(resolveApiUrl("api/rtc-config", { isNative: true, serverBaseUrl: "" }), "/api/rtc-config");
 });
+
+test("dual-channel game sync helpers compare timestamps, deduplicate entries, and detect active live games", () => {
+  assert.equal(getPayloadUpdatedAtMs({ gameData: { updatedAtMs: 500 } }), 500);
+  assert.equal(getPayloadUpdatedAtMs({ questionCard: { updatedAtMs: 420 } }), 420);
+  assert.equal(getPayloadUpdatedAtMs({ text: "plain" }), 0);
+
+  assert.equal(shouldApplyGameSync(500, 600), true);
+  assert.equal(shouldApplyGameSync(600, 600), false);
+  assert.equal(shouldApplyGameSync(600, 500), false);
+  assert.equal(shouldApplyGameSync(0, 0), false);
+
+  let log = [];
+  log = upsertGameSyncEntry(log, { msgId: "m1", cipher: "c1", at: 100 }, 2);
+  log = upsertGameSyncEntry(log, { msgId: "m2", cipher: "c2", at: 200 }, 2);
+  log = upsertGameSyncEntry(log, { msgId: "m1", cipher: "c1_new", at: 300 }, 2);
+  assert.equal(log.length, 2);
+  assert.deepEqual(log.map(x => x.msgId), ["m2", "m1"]);
+  assert.equal(log[1].cipher, "c1_new");
+
+  // Older entry never overwrites newer entry for same msgId
+  log = upsertGameSyncEntry(log, { msgId: "m1", cipher: "c1_old", at: 150 }, 2);
+  assert.equal(log[1].cipher, "c1_new");
+
+  assert.equal(isLiveGameFinished({ kind: "ludo", ludoState: { winner: "" } }), false);
+  assert.equal(isLiveGameFinished({ kind: "ludo", ludoState: { winner: "A" } }), true);
+  assert.equal(isLiveGameFinished({ kind: "c4", winnerSymbol: "", draw: false }), false);
+  assert.equal(isLiveGameFinished({ kind: "c4", draw: true }), true);
+  assert.equal(isLiveGameFinished({ kind: "dots", dotsState: { winner: "" } }), false);
+});
+

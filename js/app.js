@@ -748,6 +748,13 @@ if (app) {
           if (data.pinnedMsg && (!latestPin || (data.pinnedMsg.at || 0) > (latestPin.at || 0))) {
             latestPin = data.pinnedMsg;
           }
+          const gameSyncArr = [
+            ...(Array.isArray(data.gameSyncLog) ? data.gameSyncLog : []),
+            ...(data.gameSync ? [data.gameSync] : [])
+          ];
+          if (gameSyncArr.length) {
+            chat.applyRemoteGameSyncs(gameSyncArr, d.id, isFirstStatusLoad || d.id === user.uid);
+          }
           if (d.id === user.uid) continue;
 
           if (data.fcmToken || data.webPushSub) {

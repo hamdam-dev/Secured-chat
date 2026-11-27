@@ -809,4 +809,34 @@ export function shouldNotifyCreatorOnMessageChange({
   return false;
 }
 
+// =========================================
+// TWO-PLAYER LIVE BOARD TURN OWNERSHIP
+// =========================================
+export function resolveTwoPlayerTurn({
+  playerA = "",
+  turnSide = "",
+  lastMover = "",
+  myUid = "",
+  finished = false
+} = {}) {
+  const isPlayerA = Boolean(myUid && playerA === myUid);
+  const mySide = isPlayerA ? "A" : "B";
+  const mySym = isPlayerA ? "❤️" : "😘";
+  let currentTurnSide = turnSide === "A" || turnSide === "B" ? turnSide : "";
+  if (!currentTurnSide) {
+    if (!lastMover) currentTurnSide = "A";
+    else currentTurnSide = lastMover === playerA ? "B" : "A";
+  }
+  const canMove = !finished && Boolean(myUid) && currentTurnSide === mySide;
+  const nextTurnSide = currentTurnSide === "A" ? "B" : "A";
+  return {
+    mySide,
+    mySym,
+    currentTurnSide,
+    nextTurnSide,
+    canMove
+  };
+}
+
+
 

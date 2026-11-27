@@ -35,7 +35,8 @@ import {
   isSlidingSolvable,
   createSnakeState,
   stepSnakeState,
-  shouldNotifyCreatorOnMessageChange
+  shouldNotifyCreatorOnMessageChange,
+  resolveTwoPlayerTurn
 } from "../shared/gameLogic.js";
 
 test("Tic-Tac-Toe detects win, winning line, and blocks occupied cells", () => {
@@ -242,5 +243,26 @@ test("Creator notification detector alerts creator when partner modifies a game 
     true
   );
 });
+
+test("resolveTwoPlayerTurn alternates turns cleanly between creator and partner", () => {
+  const t1A = resolveTwoPlayerTurn({ playerA: "u1", turnSide: "A", lastMover: "", myUid: "u1" });
+  assert.equal(t1A.mySym, "❤️");
+  assert.equal(t1A.canMove, true);
+  assert.equal(t1A.nextTurnSide, "B");
+
+  const t1B = resolveTwoPlayerTurn({ playerA: "u1", turnSide: "A", lastMover: "", myUid: "u2" });
+  assert.equal(t1B.mySym, "😘");
+  assert.equal(t1B.canMove, false);
+
+  const t2B = resolveTwoPlayerTurn({ playerA: "u1", turnSide: "B", lastMover: "u1", myUid: "u2" });
+  assert.equal(t2B.canMove, true);
+  assert.equal(t2B.nextTurnSide, "A");
+
+  // Backwards-compatible fallback when turnSide is absent and lastMover is creator
+  const legacyB = resolveTwoPlayerTurn({ playerA: "u1", lastMover: "u1", myUid: "u2" });
+  assert.equal(legacyB.canMove, true);
+  assert.equal(legacyB.currentTurnSide, "B");
+});
+
 
 

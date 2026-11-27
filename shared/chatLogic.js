@@ -137,3 +137,56 @@ export function getDisplayReactionsList(reactionsMap = {}, legacyReaction = "") 
   }
   return [...new Set(vals)];
 }
+
+export function getPayloadUpdatedAtMs(dec) {
+  if (!dec || typeof dec !== "object") return 0;
+  return Number(
+    dec.gameData?.updatedAtMs ||
+    dec.questionCard?.updatedAtMs ||
+    dec.updatedAtMs ||
+    0
+  );
+}
+
+export function shouldApplyGameSync(currentUpdatedMs = 0, incomingAt = 0) {
+  const cur = Number(currentUpdatedMs || 0);
+  const inc = Number(incomingAt || 0);
+  if (!inc || inc <= 0) return false;
+  return inc > cur;
+}
+
+export function upsertGameSyncEntry(log = [], entry, maxEntries = 12) {
+  const arr = Array.isArray(log) ? [...log] : [];
+  if (!entry || !entry.msgId || !entry.cipher) return arr.slice(-maxEntries);
+  const at = Number(entry.at || 0);
+  let best = entry;
+  const filtered = [];
+  for (const item of arr) {
+    if (!item || !item.msgId) continue;
+    if (item.msgId === entry.msgId) {
+      if (Number(item.at || 0) > Number(best.at || 0)) {
+        best = item;
+      }
+    } else {
+      filtered.push(item);
+    }
+  }
+  filtered.push({ ...best, at: Number(best.at || at) });
+  filtered.sort((a, b) => Number(a.at || 0) - Number(b.at || 0));
+  return filtered.slice(-maxEntries);
+}
+
+export function isLiveGameFinished(gd) {
+  if (!gd || typeof gd !== "object") return true;
+  if (gd.kind === "ludo") return Boolean(gd.ludoState?.winner);
+  if (gd.kind === "c4" || gd.kind === "ttt") return Boolean(gd.winnerSymbol || gd.draw);
+  if (gd.kind === "dots") return Boolean(gd.dotsState?.winner);
+  if (gd.kind === "rps") return Boolean(gd.moveB);
+  if (gd.kind === "lock") return Boolean(gd.solved || (gd.attempts || []).length >= 7);
+  if (gd.kind === "coupon") return Number.isInteger(gd.pickedIdx) && gd.pickedIdx >= 0;
+  if (gd.kind === "wyr") return Boolean(gd.choiceA && gd.choiceB);
+  if (gd.kind === "quiz") return Boolean(gd.completed);
+  if (gd.kind === "tdw") return Boolean(gd.replyText);
+  return true;
+}
+

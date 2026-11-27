@@ -6,7 +6,11 @@ import {
   buildMessageSignature,
   getIncomingAlertKind,
   mergeMessageReactions,
-  getDisplayReactionsList
+  getDisplayReactionsList,
+  getPayloadUpdatedAtMs,
+  shouldApplyGameSync,
+  upsertGameSyncEntry,
+  isLiveGameFinished
 } from "../shared/chatLogic.js";
 import {
   EMOJI_SECTIONS,
@@ -24,6 +28,8 @@ const RECENT_REACTS_KEY = "sc_recent_reacts_v1";
 const CUSTOM_QUICK_REACTS_KEY = "sc_custom_quick_reacts_v1";
 const REACT_SYNC_LOG_KEY = "sc_react_sync_log_v1";
 const LAST_REMOTE_REACT_AT_KEY = "sc_last_remote_react_at_v1";
+const GAME_SYNC_LOG_KEY = "sc_game_sync_log_v1";
+const LAST_REMOTE_GAME_AT_KEY = "sc_last_remote_game_at_v1";
 const STARRED_MSGS_KEY = "sc_starred_msgs_v1";
 const DISAPPEAR_HRS_KEY = "sc_disappear_hrs_v1";
 const PENDING_QUEUE_KEY = "sc_pending_msgs_v1";
@@ -95,6 +101,10 @@ export function createChatManager({
   let isPinReactMode = false;
   let lastRemoteReactAt = Number(localStorage.getItem(LAST_REMOTE_REACT_AT_KEY) || 0);
   const appliedRemoteReactKeys = new Set();
+  let lastRemoteGameAt = Number(localStorage.getItem(LAST_REMOTE_GAME_AT_KEY) || 0);
+  const appliedRemoteGameKeys = new Set();
+  const pendingGameSyncs = new Map();
+  const notifiedUpdateKeys = new Set();
   let selectedIds = new Set();
   let activeAudioEl = null;
   let activeAudioBtn = null;
@@ -666,17 +676,64 @@ export function createChatManager({
     if (gameUpdateBar) gameUpdateBar.style.display = "none";
   }
 
+  function buildGameUpdateLabel(dec) {
+    return (
+      dec?.gameData?.lastActionText ||
+      (dec?.questionCard?.answer ? `🃏 Jawab aaya: "${dec.questionCard.answer}"` : "") ||
+      `${getBubblePreviewText(dec)} update hua!`
+    );
+  }
+
   async function updateEncryptedMessage(msgId, nextPayloadObj, opts = {}) {
+    if (!msgId || !nextPayloadObj || typeof nextPayloadObj !== "object") return;
+    const prevAt = Math.max(
+      getPayloadUpdatedAtMs(messagesMap.get(msgId)?.decrypted),
+      Number(pendingGameSyncs.get(msgId)?.at || 0)
+    );
+    const updatedAtMs = Math.max(Date.now(), prevAt + 1);
+    const actorUid = myUid || getAuth()?.currentUser?.uid || "";
+
+    const stamped = { ...nextPayloadObj };
+    if (stamped.gameData && typeof stamped.gameData === "object") {
+      stamped.gameData = { ...stamped.gameData, updatedAtMs };
+    } else if (stamped.questionCard && typeof stamped.questionCard === "object") {
+      stamped.questionCard = { ...stamped.questionCard, updatedAtMs };
+    } else {
+      stamped.updatedAtMs = updatedAtMs;
+    }
+
+    pendingGameSyncs.set(msgId, { at: updatedAtMs, by: actorUid, decrypted: stamped });
+    notifiedUpdateKeys.add(`${msgId}|${updatedAtMs}`);
+
     const m = messagesMap.get(msgId);
     if (m) {
-      m.decrypted = nextPayloadObj;
+      m.decrypted = stamped;
       renderAllMessages(false, true);
       saveMsgCache();
+      if (stamped.gameData && gameUpdateHandler) {
+        gameUpdateHandler(m);
+      }
     }
+
     const db = getDb();
-    if (db && msgId && !m?.isPending) {
-      const cipher = await encryptPayload(nextPayloadObj);
+    const user = getAuth()?.currentUser;
+    if (db && !m?.isPending) {
+      const cipher = await encryptPayload(stamped);
+      // Channel 1: Direct update on message doc (if Firestore rules permit creator)
       await updateDoc(doc(db, "messages", msgId), { text: cipher }).catch(() => {});
+
+      // Channel 2: User-owned status doc sync so BOTH partners' moves always sync live!
+      if (user) {
+        const entry = { msgId, cipher, by: user.uid, at: updatedAtMs };
+        const nextLog = upsertGameSyncEntry(readJson(GAME_SYNC_LOG_KEY, []), entry, 12);
+        writeJson(GAME_SYNC_LOG_KEY, nextLog);
+        await setDoc(
+          doc(db, "status", user.uid),
+          { gameSync: entry, gameSyncLog: nextLog },
+          { merge: true }
+        ).catch(() => {});
+      }
+
       if (opts.notifyPartner !== false) {
         notifications.sendPushAlert(opts.alertKind || "letter");
       }
@@ -689,6 +746,67 @@ export function createChatManager({
           },
           opts.alertKind || "letter"
         );
+      }
+    }
+  }
+
+  async function applyRemoteGameSyncs(syncItems = [], ownerUid = "", isInitial = false) {
+    if (!Array.isArray(syncItems) || !syncItems.length) return;
+    let changed = false;
+    let newestRemoteAt = 0;
+    let latestUpdate = null;
+
+    for (const item of syncItems) {
+      if (!item || !item.msgId || !item.cipher) continue;
+      const actor = item.by || ownerUid || "";
+      const key = `${item.msgId}|${actor}|${item.at || 0}`;
+      if (appliedRemoteGameKeys.has(key)) continue;
+      appliedRemoteGameKeys.add(key);
+
+      const dec = await decryptPayload(item.cipher).catch(() => null);
+      if (!dec || typeof dec !== "object" || (!dec.gameData && !dec.questionCard && !dec.updatedAtMs)) {
+        continue;
+      }
+
+      const incomingAt = Number(item.at || getPayloadUpdatedAtMs(dec) || 0);
+      if (!incomingAt) continue;
+
+      const curPending = pendingGameSyncs.get(item.msgId);
+      if (!curPending || shouldApplyGameSync(curPending.at, incomingAt)) {
+        pendingGameSyncs.set(item.msgId, { at: incomingAt, by: actor, decrypted: dec });
+      }
+
+      const m = messagesMap.get(item.msgId);
+      if (m && shouldApplyGameSync(getPayloadUpdatedAtMs(m.decrypted), incomingAt)) {
+        m.decrypted = dec;
+        changed = true;
+        if (dec.gameData && gameUpdateHandler) {
+          gameUpdateHandler(m);
+        }
+        const nKey = `${item.msgId}|${incomingAt}`;
+        if (!isInitial && actor && actor !== myUid && !notifiedUpdateKeys.has(nKey)) {
+          notifiedUpdateKeys.add(nKey);
+          if (incomingAt > lastRemoteGameAt) {
+            newestRemoteAt = Math.max(newestRemoteAt, incomingAt);
+            latestUpdate = { id: item.msgId, label: buildGameUpdateLabel(dec) };
+          }
+        }
+      }
+    }
+
+    if (changed) {
+      renderAllMessages(false, true);
+      saveMsgCache();
+    }
+    if (newestRemoteAt > lastRemoteGameAt && latestUpdate) {
+      lastRemoteGameAt = newestRemoteAt;
+      try { localStorage.setItem(LAST_REMOTE_GAME_AT_KEY, String(lastRemoteGameAt)); } catch {}
+      showGameUpdateBanner(latestUpdate.id, latestUpdate.label);
+      if (notes.isChatVisible() && document.visibilityState === "visible") {
+        playEmotionSound("gift");
+        markMessagesAsRead();
+      } else {
+        notifications.showBrowserAlert("letter");
       }
     }
   }
@@ -1347,24 +1465,36 @@ export function createChatManager({
           if (messagesMap.delete(ch.doc.id)) changed = true;
         } else if (!isMessageExpired(dec)) {
           const prevLocal = messagesMap.get(ch.doc.id);
+          const msgAt = getPayloadUpdatedAtMs(dec);
+          const pending = pendingGameSyncs.get(ch.doc.id);
+          const effectiveDec = pending && shouldApplyGameSync(msgAt, pending.at)
+            ? pending.decrypted
+            : dec;
+          const effAt = getPayloadUpdatedAtMs(effectiveDec);
+          if (msgAt && (!pending || msgAt >= pending.at)) {
+            pendingGameSyncs.set(ch.doc.id, { at: msgAt, by: raw.sender, decrypted: dec });
+          }
+
           const mergedReactions = raw.reactions || prevLocal?.reactions || null;
           const reactionSummary = mergedReactions
             ? getDisplayReactionsList(mergedReactions, raw.reaction || "").join(" ")
             : (raw.reaction || prevLocal?.reaction || "");
-          messagesMap.set(ch.doc.id, {
+          const nextMsg = {
             id: ch.doc.id,
             sender: raw.sender,
             createdAtSec: raw.createdAt?.seconds || Math.floor(Date.now() / 1000),
             createdAtNs: raw.createdAt?.nanoseconds || 0,
             reaction: reactionSummary,
             reactions: mergedReactions,
-            decrypted: dec
-          });
+            decrypted: effectiveDec
+          };
+          messagesMap.set(ch.doc.id, nextMsg);
+
           if (ch.type === "added" && !isFirstMsgLoad && raw.sender !== myUid) {
             incomingNew = true;
-            incomingKind = getIncomingAlertKind(dec);
-            if (dec?.walletGift) {
-              walletGiftHandler?.(dec.walletGift);
+            incomingKind = getIncomingAlertKind(effectiveDec);
+            if (effectiveDec?.walletGift) {
+              walletGiftHandler?.(effectiveDec.walletGift);
             }
           } else if (
             shouldNotifyCreatorOnMessageChange({
@@ -1372,17 +1502,17 @@ export function createChatManager({
               isFirstLoad: isFirstMsgLoad,
               docSender: raw.sender,
               myUid,
-              nextDec: dec
+              nextDec: effectiveDec
             })
           ) {
-            const actionLabel =
-              dec?.gameData?.lastActionText ||
-              (dec?.questionCard?.answer ? `🃏 Jawab aaya: "${dec.questionCard.answer}"` : "") ||
-              `${getBubblePreviewText(dec)} update hua!`;
-            creatorGameUpdates.push({ id: ch.doc.id, label: actionLabel });
+            const nKey = `${ch.doc.id}|${effAt}`;
+            if (!notifiedUpdateKeys.has(nKey)) {
+              notifiedUpdateKeys.add(nKey);
+              creatorGameUpdates.push({ id: ch.doc.id, label: buildGameUpdateLabel(effectiveDec) });
+            }
           }
-          if (dec?.gameData && gameUpdateHandler) {
-            gameUpdateHandler({ id: ch.doc.id, sender: raw.sender, decrypted: dec });
+          if (effectiveDec?.gameData && gameUpdateHandler) {
+            gameUpdateHandler(nextMsg);
           }
           changed = true;
         }
@@ -1419,7 +1549,7 @@ export function createChatManager({
   async function sendEncryptedMessage(payloadObj, alertKind = "message") {
     const user = getAuth()?.currentUser;
     const db = getDb();
-    if (!user || !db) return;
+    if (!user || !db) return null;
     onActivity?.();
     if (replyingToText && !payloadObj.isCallLog && !payloadObj.isGameResult) {
       payloadObj.replyTo = replyingToText;
@@ -1437,13 +1567,27 @@ export function createChatManager({
         throw new Error("Offline");
       }
       const cipher = await encryptPayload(payloadObj);
-      await addDoc(collection(db, "messages"), {
+      const docRef = await addDoc(collection(db, "messages"), {
         text: cipher,
         sender: user.uid,
         read: false,
         createdAt: serverTimestamp()
       });
+      if (docRef?.id && !messagesMap.has(docRef.id)) {
+        messagesMap.set(docRef.id, {
+          id: docRef.id,
+          sender: user.uid,
+          createdAtSec: Math.floor(Date.now() / 1000),
+          createdAtNs: 0,
+          reaction: "",
+          reactions: null,
+          decrypted: payloadObj
+        });
+        renderAllMessages(true);
+        saveMsgCache();
+      }
       if (!payloadObj.isCallLog) notifications.sendPushAlert(alertKind);
+      return { id: docRef.id, payload: payloadObj };
     } catch {
       if (canQueue) {
         const tempId = "pending_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
@@ -1453,6 +1597,7 @@ export function createChatManager({
         loadPendingIntoMap();
         renderAllMessages(true);
       }
+      return null;
     }
   }
 
@@ -2115,9 +2260,28 @@ export function createChatManager({
     }
     myUid = null;
     messagesMap.clear();
+    pendingGameSyncs.clear();
+    appliedRemoteGameKeys.clear();
+    notifiedUpdateKeys.clear();
     renderAllMessages(false);
     setPinnedBarState(null);
     isTyping = false;
+  }
+
+  function getMessageById(msgId) {
+    return msgId ? messagesMap.get(msgId) || null : null;
+  }
+
+  function getLatestLiveGameMsg(kind, includeFinished = false) {
+    const sorted = sortMessages([...messagesMap.values()]);
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      const m = sorted[i];
+      const gd = m?.decrypted?.gameData;
+      if (!gd || gd.kind !== kind) continue;
+      if (!includeFinished && isLiveGameFinished(gd)) continue;
+      return m;
+    }
+    return null;
   }
 
   return {
@@ -2127,11 +2291,14 @@ export function createChatManager({
     setGameUpdateHandler(fn) { gameUpdateHandler = fn; },
     setWalletGiftHandler(fn) { walletGiftHandler = fn; },
     getLoadedMessages() { return [...messagesMap.values()]; },
+    getMessageById,
+    getLatestLiveGameMsg,
     setPinnedBarState,
     showGameUpdateBanner,
     hideGameUpdateBanner,
     jumpToMessage,
     applyRemoteReactionSyncs,
+    applyRemoteGameSyncs,
     loadMsgCache,
     startMessagesListener,
     markMessagesAsRead,
