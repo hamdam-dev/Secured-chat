@@ -247,8 +247,14 @@ public class MainActivity extends BridgeActivity {
                         .setContentText(body)
                         .setAutoCancel(true)
                         .setContentIntent(pi);
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                        builder.setVisibility(Notification.VISIBILITY_PRIVATE);
+                        if ("call".equals(kind)) {
+                            builder.setCategory(Notification.CATEGORY_CALL);
+                        }
+                    }
                     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-                        builder.setPriority(Notification.PRIORITY_HIGH);
+                        builder.setPriority("call".equals(kind) ? Notification.PRIORITY_MAX : Notification.PRIORITY_HIGH);
                     }
                     notificationManager.notify(SYNC_NOTIF_ID, builder.build());
                 } catch (Throwable ignored) {}

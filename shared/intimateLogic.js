@@ -26,7 +26,23 @@ export const INTIMATE_GAMES_META = [
   { id: "rapidfire", icon: "⚡", name: "Rapid Fire 10", cat: "timers", badge: "5s Timer" },
   { id: "boss", icon: "👑", name: "Boss Command", cat: "plan", badge: "1h Pass" },
   { id: "dart", icon: "🎯", name: "Mood Dartboard", cat: "dice", badge: "Canvas" },
-  { id: "nightplan", icon: "🌙", name: "Tonight's Plan", cat: "plan", badge: "4-Step" }
+  { id: "nightplan", icon: "🌙", name: "Tonight's Plan", cat: "plan", badge: "4-Step" },
+  { id: "bodymap", icon: "🗺️", name: "Body Map", cat: "spicy", badge: "Hot Tap" },
+  { id: "positions", icon: "💫", name: "Vibe Roulette", cat: "spicy", badge: "Spicy+" },
+  { id: "tasting", icon: "🍯", name: "Sweet Taste", cat: "spicy", badge: "Honey/Choc" },
+  { id: "doubletrouble", icon: "🔥", name: "Double Duel", cat: "spicy", badge: "Stakes" },
+  { id: "escalator", icon: "📈", name: "3-Phase Rush", cat: "spicy", badge: "Escalator" },
+  { id: "afterhours", icon: "🔞", name: "After Hours", cat: "spicy", badge: "Pass/Dare" },
+  { id: "auction", icon: "🔥", name: "Spicy Auction", cat: "saza", badge: "Bid War" },
+  { id: "risk2x", icon: "💥", name: "2x Risk Dare", cat: "saza", badge: "Double Risk" },
+  { id: "freeze", icon: "🧊", name: "Slow-Mo Freeze", cat: "timers", badge: "Freeze" },
+  { id: "kisszone", icon: "💋", name: "Kiss Roulette", cat: "dice", badge: "Zone+Style" },
+  { id: "lockbox", icon: "🔐", name: "Secret Lockbox", cat: "plan", badge: "Password" },
+  { id: "icefire", icon: "🌡️", name: "Ice & Fire", cat: "spicy", badge: "Temp Shift" },
+  { id: "blind4", icon: "🃏", name: "Blind 4-Card", cat: "saza", badge: "Mystery Pick" },
+  { id: "confess", icon: "⚖️", name: "Confess or Tax", cat: "saza", badge: "Truth/Tax" },
+  { id: "sazawheel", icon: "🎯", name: "Wheel of Saza", cat: "saza", badge: "Punishment" },
+  { id: "craving", icon: "🌙", name: "Craving Sync", cat: "spicy", badge: "Live Match" }
 ];
 
 export const DEFAULT_DICE_CONFIG = {
@@ -154,6 +170,41 @@ export const DEFAULT_NIGHT_PLAN = {
   aftercares: ["🤗 10-Min Chest Cuddle", "💧 Water + Forehead Kiss", "💬 Sweet Pillow Talk", "😴 Sleep In Arms"]
 };
 
+export const DEFAULT_POSITIONS_POOL = [
+  "🫶🏻 Cozy Spoon Cuddle + Slow Mam Hold (3 min)",
+  "💞 Face-to-Face Eye Lock + Neck Kisses",
+  "🔥 Partner Leads Top Pace — Zero Hands Mode",
+  "🪑 Lap Sit Tight Hug + Whispering Fantasies",
+  "🌙 Side-by-Side Slow Honey & Chocolate Focus",
+  "👑 Pillow Elevation + Deep Breath Sync"
+];
+
+export const DEFAULT_TASTING_POOL = {
+  treats: ["🍯 Real Honey Drop", "🍫 Melted Chocolate", "🍓 Strawberry Cream", "🧊 Cold Ice Trace", "💋 Warm Breath & Lips"],
+  zones: ["Neck & Jawline ✨", "Mam Curve 🎀", "Honey Point 🍯", "Chocolate Point 🍫", "Inner Wrist & Waist 🫶🏻"]
+};
+
+export const DEFAULT_DOUBLE_TROUBLE = [
+  "Loser owes Winner a 2-Min Honey/Chocolate VIP Pass 🍯🍫",
+  "Har round lose hone par 10 nonstop kisses on Mam/Neck 🎀",
+  "Winner gets full 1-Hour No-Say-No Boss Coupon 👑",
+  "Donon ko ek saath 30s deep eye lock + whisper voice note 🎙️",
+  "Loser must send a View-Once/Tease-Blur Surprise Photo 📸🔥"
+];
+
+export const DEFAULT_AFTER_HOURS = [
+  { truth: "Honey/Chocolate ke baare mein woh kaunsa fantasy hai jo tum bolne se sharmate ho? 🙈", dare: "Abhi 20s whisper voice note mein describe karo 🎙️🔥" },
+  { truth: "Mam kisses slow pasand hain ya thoda teasing bite ke saath? 🎀", dare: "Partner ko agle 45s non-stop attention coupon bhejo 💋" },
+  { truth: "Sabse zyaada turn-on meri kaunsi ek aadat ya aawaz se hota hai? ⚡", dare: "Us aadat/aawaz ko praise karte hue ek naughty line likho 💬" },
+  { truth: "Aaj raat kis zone par sabse pehle aur sabse zyada focus chahiye? 🍯🍫", dare: "Secret Vault / Love Wallet ke liye ek Naya Pass banao 🎟️" }
+];
+
+export const DEFAULT_ESCALATOR_PHASES = [
+  { phase: 1, title: "Phase 1 · Warm Spark (20s)", desc: "Slow eye contact, deep breath sync & gentle lip/neck kisses 💋" },
+  { phase: 2, title: "Phase 2 · Mam & Curve Tease (30s)", desc: "Soft hands & warm kisses around Mam + collarbone, buildup without rush 🎀" },
+  { phase: 3, title: "Phase 3 · Full Honey & Chocolate Wave (45s)", desc: "Unstoppable Honey & Chocolate focus — follow partner's heartbeat 🔥" }
+];
+
 export function rollNaughtyDice(config = DEFAULT_DICE_CONFIG, rng = Math.random) {
   const actions = Array.isArray(config.actions) && config.actions.length ? config.actions : DEFAULT_DICE_CONFIG.actions;
   const targets = Array.isArray(config.targets) && config.targets.length ? config.targets : DEFAULT_DICE_CONFIG.targets;
@@ -214,6 +265,44 @@ export function formatTonightPlan(plan = {}) {
   return parts.join("\n");
 }
 
+export function pickBodyMapAction(zone = "🍯 Honey", intensity = "Tease") {
+  const verbs = {
+    Soft: "Slow feather-light touches & warm kisses",
+    Tease: "Playful slow teasing + breathless pauses (30s)",
+    Wild: "Deep passionate focus — full intensity (60s)"
+  };
+  return `${zone} • ${intensity}: ${verbs[intensity] || verbs.Tease}`;
+}
+
+export function pickTastingCombo(cfg = DEFAULT_TASTING_POOL, rng = Math.random) {
+  const treats = cfg.treats?.length ? cfg.treats : DEFAULT_TASTING_POOL.treats;
+  const zones = cfg.zones?.length ? cfg.zones : DEFAULT_TASTING_POOL.zones;
+  const t = treats[Math.floor(rng() * treats.length)];
+  const z = zones[Math.floor(rng() * zones.length)];
+  return { treat: t, zone: z, summary: `${t} on ${z}` };
+}
+
+export function createMysteryBoxes(rewards = []) {
+  const fallback = DEFAULT_SCRATCH_REWARDS;
+  return Array.from({ length: 7 }, (_, i) => ({
+    day: i + 1,
+    reward: String(rewards[i] || fallback[i % fallback.length]).trim(),
+    opened: false
+  }));
+}
+
+export function unwrapMysteryBox(boxes = [], dayIdx = 0) {
+  let unlockedBox = null;
+  const next = (boxes || []).map((b, idx) => {
+    if (idx === dayIdx && !b.opened) {
+      unlockedBox = { ...b, opened: true };
+      return unlockedBox;
+    }
+    return b;
+  });
+  return { next, unlockedBox };
+}
+
 export function createWalletCoupon(title, source = "Game Reward") {
   return {
     id: `wal_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -223,6 +312,19 @@ export function createWalletCoupon(title, source = "Game Reward") {
     redeemed: false,
     redeemedAt: 0
   };
+}
+
+export function receiveWalletGift(wallet = [], giftObj = {}) {
+  const cleanTitle = String(giftObj.title || "").trim();
+  if (!cleanTitle) return { next: wallet || [], added: null };
+  if (giftObj.giftId && (wallet || []).some(w => w.giftId === giftObj.giftId)) {
+    return { next: wallet || [], added: null };
+  }
+  const item = {
+    ...createWalletCoupon(cleanTitle, giftObj.source || "Partner Gift 🎁"),
+    giftId: giftObj.giftId || ""
+  };
+  return { next: [item, ...(wallet || [])].slice(0, 60), added: item };
 }
 
 export function redeemWalletCoupon(wallet = [], id) {
@@ -236,3 +338,150 @@ export function redeemWalletCoupon(wallet = [], id) {
   });
   return { next, redeemedItem };
 }
+
+// =========================================
+// 10 NEW SPICY HOT GAMES & UNIVERSAL CUSTOM/SAZA POOLS
+// =========================================
+export const DEFAULT_SAZA_WHEEL = [
+  "💋 Saza: 15 Non-Stop Neck & Cheek Kisses!",
+  "🍯 Saza: 45s Honey Focus — No Hands!",
+  "🍫 Saza: 45s Chocolate Special Pampering!",
+  "🎀 Saza: 30s Soft Mam Kisses + Warm Hug!",
+  "🎙️ Saza: 20s Seductive Whisper Voice Note Abhi!",
+  "📸 Saza: Ek Tease-Blur / View-Once Surprise Photo!",
+  "👑 Inaam: 1 Ghante ka Full Boss Pass Unlocked!",
+  "💆 Saza: 5-Min Warm Oil Shoulder & Back Massage!"
+];
+
+export const DEFAULT_AUCTION_PRIZES = [
+  "🍯 2-Min VIP Honey Pass (Zero Refusal)",
+  "🍫 2-Min Sweet Chocolate Attention",
+  "🎀 3-Min Mam Cuddle & Slow Kisses",
+  "👑 Winner Commands Tonight's Entire Routine",
+  "🎙️ Custom Midnight Dirty-Sweet Voice Story",
+  "🔥 1 Wild Fantasy Unconditionally Unlocked"
+];
+
+export const DEFAULT_RISK_DARES = {
+  safe: [
+    "💋 20s Slow Lip & Forehead Kisses",
+    "🤗 45s Warm Tight Embrace + Whisper",
+    "🎀 25s Soft Mam Hug & Hair Play"
+  ],
+  double: [
+    "🔥 45s Honey / Chocolate Tease + Slow Breathing",
+    "🧊 Ice Trace from Neck to Mam Curve (30s)",
+    "🎙️ Abhi 20s unfiltered craving voice note bhejo!"
+  ],
+  triple: [
+    "🔞 60s Full Wild Focus on Honey & Chocolate — Partner Controls Speed!",
+    "😈 Blindfold 60s: Partner does ANY 2 chosen teasing acts!",
+    "👑 Instant 1-Hour No-Say-No Master Pass for Winner!"
+  ]
+};
+
+export const DEFAULT_KISS_ZONES = {
+  zones: ["Lips 💋", "Neck & Collarbone ✨", "Mam 🎀", "Honey 🍯", "Chocolate 🍫", "Ear & Jawline 👂", "Waist & Back 🫶🏻"],
+  styles: ["Ultra Slow & Soft 🌸", "Warm Breath + Tease Bite 😉", "Butterfly Rapid Kisses 🦋", "Deep & Passionate (30s) 🔥", "Eye-Locked Lingering Kiss 😘"]
+};
+
+export const DEFAULT_BLIND_CARDS = [
+  "🎁 Inaam: 60s Partner Choice Pampering!",
+  "💋 Saza: 10 Nonstop Kisses on Neck & Mam!",
+  "🍯🔥 Special: 45s Honey & Chocolate Dual Tease!",
+  "😈 Wild Card: Send 1 Tease Voice Whisper or Photo!"
+];
+
+export const DEFAULT_CONFESS_PROMPTS = [
+  "Mera kaunsa touch ya zone tumhe sabse zyada pagal banata hai?",
+  "Humare beech ka sabse wild fantasy moment kaunsa raha ya chahte ho?",
+  "Aaj raat lights off chahiye ya dim romantic lamp mein kareeb aana hai?",
+  "Jab hum door hote hain to meri kis body/romance baat ko sabse zyada miss karte ho?"
+];
+
+export const DEFAULT_CONFESS_TAXES = [
+  "🎟️ Tax Paid: 30s Honey / Chocolate Attention Token",
+  "💋 Tax Paid: 15 Slow Kisses + Whisper Voice Note",
+  "🎀 Tax Paid: 2-Min Mam Cuddle & Forehead Kisses"
+];
+
+export const DEFAULT_ICE_FIRE_ROUNDS = [
+  { mode: "🧊 ICE", title: "Round 1 · Cool Spark (20s)", desc: "Thandi saans ya ice cube trace Neck se Mam tak — slow & gentle!" },
+  { mode: "🔥 FIRE", title: "Round 2 · Warm Wave (30s)", desc: "Garam saans aur deep slow kisses Honey / Chocolate ke aas-paas!" },
+  { mode: "🧊🔥 SWITCH", title: "Round 3 · Contrast Rush (40s)", desc: "Har 10s mein cool whisper aur warm passionate kiss switch karo!" }
+];
+
+export const DEFAULT_CRAVING_CHOICES = [
+  "🍯 Slow Honey Attention",
+  "🍫 Sweet Chocolate Focus",
+  "🎀 Cozy Mam Cuddle & Kisses",
+  "🔥 Wild Unfiltered Night",
+  "💋 Deep Romantic Makeout",
+  "🎁 Partner's Total Surprise"
+];
+
+export const DEFAULT_FREEZE_ZONES = [
+  "💋 Lips & Jawline",
+  "🎀 Mam Soft Focus",
+  "🍯 Honey Tease Zone",
+  "🍫 Chocolate Tease Zone",
+  "🫶🏻 Waist & Lower Back"
+];
+
+export function rollKissZone(cfg = DEFAULT_KISS_ZONES, rng = Math.random) {
+  const zones = Array.isArray(cfg.zones) && cfg.zones.length ? cfg.zones : DEFAULT_KISS_ZONES.zones;
+  const styles = Array.isArray(cfg.styles) && cfg.styles.length ? cfg.styles : DEFAULT_KISS_ZONES.styles;
+  const zone = zones[Math.floor(rng() * zones.length)];
+  const style = styles[Math.floor(rng() * styles.length)];
+  return { zone, style, summary: `${zone} — ${style}` };
+}
+
+export function resolveRiskDare(multiplier = 1, cfg = DEFAULT_RISK_DARES, rng = Math.random) {
+  const key = multiplier >= 3 ? "triple" : (multiplier === 2 ? "double" : "safe");
+  const pool = Array.isArray(cfg[key]) && cfg[key].length ? cfg[key] : DEFAULT_RISK_DARES[key];
+  const prompt = pool[Math.floor(rng() * pool.length)];
+  return { multiplier: key === "triple" ? 3 : (key === "double" ? 2 : 1), tier: key, prompt };
+}
+
+export function pickBlindCards(pool = DEFAULT_BLIND_CARDS, rng = Math.random) {
+  const clean = Array.isArray(pool) && pool.length >= 4 ? pool : DEFAULT_BLIND_CARDS;
+  const copy = [...clean].sort(() => rng() - 0.5);
+  return copy.slice(0, 4);
+}
+
+export function checkLockboxPass(expected = "", attempt = "") {
+  const a = String(expected || "").trim().toLowerCase();
+  const b = String(attempt || "").trim().toLowerCase();
+  if (!a || !b) return false;
+  return a === b;
+}
+
+export function evaluateCravingSync(choiceA = "", choiceB = "") {
+  const a = String(choiceA || "").trim();
+  const b = String(choiceB || "").trim();
+  if (!a || !b) return { synced: false, summary: "Dono apni craving lock karein!" };
+  if (a === b) return { synced: true, summary: `🔥 100% Craving Match: Dono ne "${a}" chuna!` };
+  return { synced: false, summary: `💞 Double Treat Tonight: "${a}" + "${b}"!` };
+}
+
+export function getEffectivePool(customArr, fallbackArr = []) {
+  const cleaned = Array.isArray(customArr) ? customArr.map(s => String(s || "").trim()).filter(Boolean) : [];
+  return cleaned.length ? cleaned : [...fallbackArr];
+}
+
+export function addCustomItemToPool(currentArr, fallbackArr = [], itemText = "", maxItems = 60) {
+  const clean = String(itemText || "").trim();
+  if (!clean) return getEffectivePool(currentArr, fallbackArr);
+  const base = Array.isArray(currentArr) && currentArr.length ? [...currentArr] : [...fallbackArr];
+  if (base.some(x => String(x).toLowerCase() === clean.toLowerCase())) return base.slice(0, maxItems);
+  return [clean, ...base].slice(0, maxItems);
+}
+
+export function removeCustomItemFromPool(currentArr, fallbackArr = [], idx = 0) {
+  const base = Array.isArray(currentArr) && currentArr.length ? [...currentArr] : [...fallbackArr];
+  if (idx < 0 || idx >= base.length) return base;
+  const next = base.filter((_, i) => i !== idx);
+  return next.length ? next : [...fallbackArr];
+}
+
+

@@ -37,7 +37,15 @@ import {
   createSnakeState,
   stepSnakeState
 } from "../shared/gameLogic.js";
+import {
+  DEFAULT_SAZA_WHEEL,
+  getEffectivePool,
+  addCustomItemToPool,
+  removeCustomItemFromPool
+} from "../shared/intimateLogic.js";
 import { createIntimateGamesManager } from "./intimateGames.js";
+
+const UNIVERSAL_CUSTOM_KEY = "sc_custom_games_v2";
 
 const TDW_BANK = {
   easy: [
@@ -271,9 +279,87 @@ export function createGamesManager({ getAuth, chat }) {
   // Ludo state
   let ludoMode = "bot";
   let ludoQuick = true;
+  let ludoSelectedStake = "";
   let ludoState = buildInitialLudo("bot", true);
   let ludoBotTimer = null;
   let liveLudoMsg = null;
+  let ludoCellNodes = null;
+  const ludoStakeSelect = document.getElementById("ludo-stake-select");
+
+  // Universal Custom / Saza Bank state
+  let activeSazaCat = "saza";
+  const sazaModal = document.getElementById("saza-bank-modal");
+  const sazaListEl = document.getElementById("saza-bank-list");
+  const sazaInputEl = document.getElementById("saza-bank-input");
+
+  function readCustomBank() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(UNIVERSAL_CUSTOM_KEY) || "{}");
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function writeCustomBank(nextObj) {
+    try {
+      localStorage.setItem(UNIVERSAL_CUSTOM_KEY, JSON.stringify(nextObj || {}));
+    } catch {}
+  }
+
+  function getCategoryDefaults(cat) {
+    if (cat === "flirty") return WHEEL_BANK.flirty;
+    if (cat === "tdw") return TDW_BANK.flirty.map(x => `${x.type}: ${x.prompt}`);
+    if (cat === "coupons") return COUPON_POOL;
+    return DEFAULT_SAZA_WHEEL;
+  }
+
+  function getCategoryPool(cat) {
+    const store = readCustomBank();
+    return getEffectivePool(store[cat], getCategoryDefaults(cat));
+  }
+
+  function populateLudoStakeSelect() {
+    if (!ludoStakeSelect) return;
+    const prev = ludoStakeSelect.value || ludoSelectedStake;
+    const stakes = getCategoryPool("saza");
+    ludoStakeSelect.innerHTML = `<option value="">🎯 Match Shart / Saza (Optional)</option>`;
+    stakes.forEach(s => {
+      const opt = document.createElement("option");
+      opt.value = s;
+      opt.innerText = `🔥 ${s}`;
+      ludoStakeSelect.appendChild(opt);
+    });
+    if (prev && stakes.includes(prev)) ludoStakeSelect.value = prev;
+  }
+
+  function renderSazaBankModal() {
+    if (!sazaListEl) return;
+    const defaults = getCategoryDefaults(activeSazaCat);
+    const items = getCategoryPool(activeSazaCat);
+    sazaListEl.className = "custom-chip-list";
+    sazaListEl.innerHTML = "";
+    items.forEach((txt, idx) => {
+      const row = document.createElement("div");
+      row.className = "custom-chip-row";
+      const sp = document.createElement("span");
+      sp.innerText = txt;
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "custom-chip-del";
+      del.innerText = "✕";
+      del.setAttribute("aria-label", `Delete ${txt}`);
+      del.onclick = () => {
+        const store = readCustomBank();
+        store[activeSazaCat] = removeCustomItemFromPool(store[activeSazaCat], defaults, idx);
+        writeCustomBank(store);
+        renderSazaBankModal();
+        populateLudoStakeSelect();
+      };
+      row.append(sp, del);
+      sazaListEl.appendChild(row);
+    });
+  }
 
   // Flirty state
   let wheelMood = "sweet";
@@ -395,6 +481,9 @@ export function createGamesManager({ getAuth, chat }) {
       st.tokensB = [0, -1, -1, -1];
       st.statusText = "Quick Ludo! 1 token bahar hai — Dice roll karein 🎲";
     }
+    if (ludoSelectedStake) {
+      st.stakeText = ludoSelectedStake;
+    }
     return st;
   }
 
@@ -471,7 +560,13 @@ export function createGamesManager({ getAuth, chat }) {
         }
       });
       pane.querySelectorAll("[data-subpane]").forEach(sp => {
-        sp.style.display = sp.dataset.subpane === subKey ? "flex" : "none";
+        const show = sp.dataset.subpane === subKey;
+        sp.style.display = show ? "flex" : "none";
+        if (show) {
+          sp.classList.remove("game-stage-enter");
+          void sp.offsetWidth;
+          sp.classList.add("game-stage-enter");
+        }
       });
     }
 
@@ -537,7 +632,12 @@ export function createGamesManager({ getAuth, chat }) {
     modal?.querySelectorAll("[data-game-pane]").forEach(p => {
       const show = p.dataset.gamePane === tabKey;
       p.style.display = show ? "flex" : "none";
-      if (show) p.scrollTop = 0;
+      if (show) {
+        p.scrollTop = 0;
+        p.classList.remove("game-stage-enter");
+        void p.offsetWidth;
+        p.classList.add("game-stage-enter");
+      }
     });
 
     if (tabKey === "ludo") {
@@ -588,6 +688,7 @@ export function createGamesManager({ getAuth, chat }) {
   LUDO_MAIN_TRACK.forEach(([r, c], idx) => ludoTrackCoordMap.set(`${r},${c}`, idx));
   const ludoHomeAMap = new Set(LUDO_HOME_LANES.A.map(([r, c]) => `${r},${c}`));
   const ludoHomeBMap = new Set(LUDO_HOME_LANES.B.map(([r, c]) => `${r},${c}`));
+  const ludoBasePadSet = new Set(["1,1", "1,4", "4,1", "4,4", "10,10", "10,13", "13,10", "13,13"]);
 
   function currentLudoDisplayState() {
     return liveLudoMsg ? (liveLudoMsg.dec?.gameData?.ludoState || buildInitialLudo("chat", ludoQuick)) : ludoState;
@@ -600,8 +701,11 @@ export function createGamesManager({ getAuth, chat }) {
       renderLudoBoard();
       const homeA = (nextState.tokensA || []).filter(p => p === 56).length;
       const homeB = (nextState.tokensB || []).filter(p => p === 56).length;
+      const stakeSuffix = liveLudoMsg.dec.gameData.stakeText || nextState.stakeText
+        ? `\n🔥 Shart/Saza: ${liveLudoMsg.dec.gameData.stakeText || nextState.stakeText}`
+        : "";
       const winNotice = nextState.winner
-        ? `🏆 Ludo Couple Match khatam! ${nextState.winner === "A" ? "❤️ Player A" : "😘 Player B"} jeet gaya! (${homeA}/4 vs ${homeB}/4)`
+        ? `🏆 Ludo Couple Match khatam! ${nextState.winner === "A" ? "❤️ Player A" : "😘 Player B"} jeet gaya! (${homeA}/4 vs ${homeB}/4)${stakeSuffix}`
         : "";
       await chat.updateEncryptedMessage(
         liveLudoMsg.id,
@@ -678,9 +782,63 @@ export function createGamesManager({ getAuth, chat }) {
     }, 520);
   }
 
+  function ensureLudoGridBuilt() {
+    if (!ludoBoardEl) return;
+    if (ludoCellNodes && ludoBoardEl.children.length === 225) return;
+    ludoBoardEl.innerHTML = "";
+    ludoCellNodes = new Map();
+    for (let r = 0; r < 15; r++) {
+      for (let c = 0; c < 15; c++) {
+        const key = `${r},${c}`;
+        const cell = document.createElement("div");
+        let baseCls = "ludo-cell";
+        let defaultText = "";
+
+        if (r < 6 && c < 6) {
+          baseCls += " base-a";
+          if (ludoBasePadSet.has(key)) baseCls += " base-pad";
+        } else if (r < 6 && c > 8) {
+          baseCls += " base-inactive";
+          if (r === 2 && c === 11) defaultText = "💕";
+        } else if (r > 8 && c < 6) {
+          baseCls += " base-inactive";
+          if (r === 11 && c === 2) defaultText = "✨";
+        } else if (r > 8 && c > 8) {
+          baseCls += " base-b";
+          if (ludoBasePadSet.has(key)) baseCls += " base-pad";
+        } else if (r >= 6 && r <= 8 && c >= 6 && c <= 8) {
+          baseCls += " center-home";
+          if (r === 7 && c === 7) {
+            baseCls += " center-crown";
+            defaultText = "👑";
+          }
+        } else if (ludoHomeAMap.has(key)) {
+          baseCls += " lane-a";
+        } else if (ludoHomeBMap.has(key)) {
+          baseCls += " lane-b";
+        } else {
+          const tIdx = ludoTrackCoordMap.get(key);
+          if (tIdx === 0) baseCls += " start-a safe";
+          else if (tIdx === 26) baseCls += " start-b safe";
+          else if (LUDO_SAFE_TRACK_INDICES.has(tIdx)) baseCls += " safe";
+          if (r === 7 && c === 0) defaultText = "→";
+          else if (r === 7 && c === 14) defaultText = "←";
+          else if (baseCls.includes("safe")) defaultText = "★";
+        }
+
+        cell.className = baseCls;
+        cell.innerText = defaultText;
+        ludoBoardEl.appendChild(cell);
+        ludoCellNodes.set(key, { el: cell, baseCls, defaultText });
+      }
+    }
+  }
+
   function renderLudoBoard() {
     if (!ludoBoardEl) return;
+    ensureLudoGridBuilt();
     const st = currentLudoDisplayState();
+    const activeStake = liveLudoMsg?.dec?.gameData?.stakeText || st.stakeText || ludoSelectedStake || "";
     const movableSet = st.canMove && isMyLudoTurn(st)
       ? new Set(getMovableLudoTokens(st.turn === "A" ? st.tokensA : st.tokensB, st.dice))
       : new Set();
@@ -699,7 +857,10 @@ export function createGamesManager({ getAuth, chat }) {
             : `😘 B Ki Baari  •  Ghar: ❤️${homeA}/4 😘${homeB}/4`);
       }
     }
-    if (ludoStatusText) ludoStatusText.innerText = st.statusText || "";
+    if (ludoStatusText) {
+      const stakeTag = activeStake ? `  •  🎯 ${activeStake}` : "";
+      ludoStatusText.innerText = `${st.statusText || ""}${stakeTag}`;
+    }
     if (ludoDiceFace) {
       ludoDiceFace.innerText = st.dice ? `${DICE_GLYPHS[st.dice]} ${st.dice}` : "—";
     }
@@ -717,80 +878,55 @@ export function createGamesManager({ getAuth, chat }) {
     (st.tokensA || []).forEach((p, i) => pushTok("A", i, p));
     (st.tokensB || []).forEach((p, i) => pushTok("B", i, p));
 
-    ludoBoardEl.innerHTML = "";
-    for (let r = 0; r < 15; r++) {
-      for (let c = 0; c < 15; c++) {
-        const key = `${r},${c}`;
-        const cell = document.createElement("div");
-        let cls = "ludo-cell";
+    ludoCellNodes.forEach(({ el, baseCls, defaultText }, key) => {
+      const toks = cellTokens.get(key) || [];
+      const isLast = st.lastMoveKey === key;
+      const isMulti = toks.length > 1;
+      el.className = baseCls + (isLast ? " last-move" : "") + (isMulti ? " ludo-cell-multi" : "");
+      el.replaceChildren();
 
-        if (r < 6 && c < 6) cls += " base-a";
-        else if (r < 6 && c > 8) cls += " base-inactive";
-        else if (r > 8 && c < 6) cls += " base-inactive";
-        else if (r > 8 && c > 8) cls += " base-b";
-        else if (r >= 6 && r <= 8 && c >= 6 && c <= 8) cls += " center-home";
-        else if (ludoHomeAMap.has(key)) cls += " lane-a";
-        else if (ludoHomeBMap.has(key)) cls += " lane-b";
-        else {
-          const tIdx = ludoTrackCoordMap.get(key);
-          if (tIdx === 0) cls += " start-a safe";
-          else if (tIdx === 26) cls += " start-b safe";
-          else if (LUDO_SAFE_TRACK_INDICES.has(tIdx)) cls += " safe";
-        }
-        if (st.lastMoveKey === key) cls += " last-move";
-
-        cell.className = cls;
-        if (r === 7 && c === 7) cell.innerText = "👑";
-        else if (cls.includes("safe")) cell.innerText = "★";
-
-        const toks = cellTokens.get(key) || [];
-        if (toks.length) {
-          cell.innerText = "";
-          // Group tokens cleanly by side so stacked tokens show a crisp count badge while keeping movable token clickable
-          ["A", "B"].forEach(side => {
-            const sideToks = toks.filter(t => t.side === side);
-            if (!sideToks.length) return;
-            const movableTok = sideToks.find(t => t.side === st.turn && movableSet.has(t.idx));
-            const rep = movableTok || sideToks[0];
-            const canPick = Boolean(movableTok);
-
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className =
-              `ludo-tok tok-${side.toLowerCase()}` +
-              (canPick ? " movable" : "") +
-              (sideToks.length > 1 ? " ludo-tok-stack" : "");
-            btn.innerText = side === "A" ? "❤️" : "😘";
-            if (sideToks.length > 1) {
-              const badge = document.createElement("span");
-              badge.className = "ludo-tok-count";
-              badge.innerText = `×${sideToks.length}`;
-              btn.appendChild(badge);
-            }
-            btn.setAttribute("aria-label", `Player ${side} token ${rep.idx + 1}`);
-            btn.disabled = !canPick;
-            if (canPick) {
-              btn.onclick = async e => {
-                e.stopPropagation();
-                const cur = currentLudoDisplayState();
-                const movedSide = cur.turn;
-                const next = applyLudoTokenMove(cur, rep.idx);
-                if (!next) return;
-                const nextTokArr = movedSide === "A" ? next.tokensA : next.tokensB;
-                const [mr, mc] = getLudoGridCoord(movedSide, nextTokArr[rep.idx], rep.idx);
-                next.lastMoveKey = `${mr},${mc}`;
-                playEmotionSound(next.captured || next.winner ? "gift" : "happy");
-                await commitLudoState(next, `🎲 Ludo: ${next.statusText}`);
-                scheduleLudoBotTurn();
-              };
-            }
-            cell.appendChild(btn);
-          });
-        }
-        ludoBoardEl.appendChild(cell);
+      if (!toks.length) {
+        if (defaultText) el.textContent = defaultText;
+        return;
       }
-    }
+
+      const shownToks = toks.slice(0, 4);
+      shownToks.forEach(tok => {
+        const canPick = tok.side === st.turn && movableSet.has(tok.idx);
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = `ludo-tok tok-${tok.side.toLowerCase()}` + (canPick ? " movable" : "");
+        btn.textContent = tok.side === "A" ? "❤️" : "😘";
+        btn.setAttribute("aria-label", `Player ${tok.side} token ${tok.idx + 1}`);
+        btn.disabled = !canPick;
+        if (canPick) {
+          btn.onclick = async e => {
+            e.stopPropagation();
+            const cur = currentLudoDisplayState();
+            const movedSide = cur.turn;
+            const next = applyLudoTokenMove(cur, tok.idx);
+            if (!next) return;
+            const nextTokArr = movedSide === "A" ? next.tokensA : next.tokensB;
+            const [mr, mc] = getLudoGridCoord(movedSide, nextTokArr[tok.idx], tok.idx);
+            next.lastMoveKey = `${mr},${mc}`;
+            if (cur.stakeText) next.stakeText = cur.stakeText;
+            playEmotionSound(next.captured || next.winner ? "gift" : "happy");
+            await commitLudoState(next, `🎲 Ludo: ${next.statusText}`);
+            scheduleLudoBotTurn();
+          };
+        }
+        el.appendChild(btn);
+      });
+    });
   }
+
+  ludoStakeSelect?.addEventListener("change", () => {
+    ludoSelectedStake = ludoStakeSelect.value || "";
+    if (!liveLudoMsg) {
+      ludoState.stakeText = ludoSelectedStake;
+      renderLudoBoard();
+    }
+  });
 
   modal?.querySelectorAll("[data-ludo-mode]").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -819,6 +955,7 @@ export function createGamesManager({ getAuth, chat }) {
     const roll = Math.floor(Math.random() * 6) + 1;
     const next = applyLudoDiceRoll(cur, roll);
     if (!next) return;
+    if (cur.stakeText) next.stakeText = cur.stakeText;
     triggerDiceSpinAnim();
     playEmotionSound("chime");
     await commitLudoState(next, `🎲 Ludo dice ${roll}: ${next.statusText}`);
@@ -836,6 +973,7 @@ export function createGamesManager({ getAuth, chat }) {
     const st = currentLudoDisplayState();
     const homeA = (st.tokensA || []).filter(p => p === 56).length;
     const homeB = (st.tokensB || []).filter(p => p === 56).length;
+    const stake = liveLudoMsg?.dec?.gameData?.stakeText || st.stakeText || ludoSelectedStake || "";
     modal.style.display = "none";
     playEmotionSound("gift");
     await chat.sendEncryptedMessage({
@@ -843,27 +981,83 @@ export function createGamesManager({ getAuth, chat }) {
         kind: "ludo_summary",
         challengeSubtab: "ludo",
         title: "Ludo Couple Match",
-        summary: st.winner
+        summary: (st.winner
           ? `${st.winner === "A" ? "❤️ Janan" : "😘 Partner"} Ludo jeet gaya! (${homeA}/4 vs ${homeB}/4)`
-          : `Ludo score: ❤️ ${homeA}/4 Ghar • 😘 ${homeB}/4 Ghar`
+          : `Ludo score: ❤️ ${homeA}/4 Ghar • 😘 ${homeB}/4 Ghar`) + (stake ? `\n🎯 Shart/Saza: ${stake}` : "")
       }
     }, "letter");
   });
 
   document.getElementById("send-ludo-chat-btn")?.addEventListener("click", async () => {
     const uid = myUid();
+    const stake = ludoSelectedStake || "";
     modal.style.display = "none";
     playEmotionSound("gift");
     await chat.sendEncryptedMessage({
       gameData: {
         kind: "ludo",
         title: "Ludo Couple Board",
+        stakeText: stake,
         playerA: uid,
         playerB: "",
         ludoState: buildInitialLudo("chat", ludoQuick)
       }
     }, "letter");
   });
+
+  // Wire Universal Custom Saza & Tasks Modal
+  document.getElementById("games-open-saza-btn")?.addEventListener("click", () => {
+    renderSazaBankModal();
+    if (sazaModal) sazaModal.style.display = "flex";
+  });
+  document.getElementById("close-saza-bank-btn")?.addEventListener("click", () => {
+    if (sazaModal) sazaModal.style.display = "none";
+  });
+  document.querySelectorAll("#saza-bank-tabs [data-saza-cat]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      activeSazaCat = btn.dataset.sazaCat || "saza";
+      document.querySelectorAll("#saza-bank-tabs [data-saza-cat]").forEach(b => {
+        b.classList.toggle("active", b === btn);
+      });
+      renderSazaBankModal();
+    });
+  });
+  function addSazaBankEntry() {
+    const val = (sazaInputEl?.value || "").trim();
+    if (!val) {
+      sazaInputEl?.focus();
+      return;
+    }
+    const defaults = getCategoryDefaults(activeSazaCat);
+    const store = readCustomBank();
+    store[activeSazaCat] = addCustomItemToPool(store[activeSazaCat], defaults, val, 60);
+    writeCustomBank(store);
+    sazaInputEl.value = "";
+    playEmotionSound("gift");
+    renderSazaBankModal();
+    populateLudoStakeSelect();
+    if (activeTab === "flirty") {
+      if (activeSubtabs.flirty === "flirty:coupons") shuffleLocalCoupons();
+      if (activeSubtabs.flirty === "flirty:tdw") pickFreshTdwCard(tdwTier);
+    }
+  }
+  document.getElementById("saza-bank-add-btn")?.addEventListener("click", addSazaBankEntry);
+  sazaInputEl?.addEventListener("keydown", e => {
+    if (e.key === "Enter") addSazaBankEntry();
+  });
+  document.getElementById("saza-bank-reset-btn")?.addEventListener("click", () => {
+    const store = readCustomBank();
+    delete store[activeSazaCat];
+    writeCustomBank(store);
+    playEmotionSound("chime");
+    renderSazaBankModal();
+    populateLudoStakeSelect();
+    if (activeTab === "flirty") {
+      if (activeSubtabs.flirty === "flirty:coupons") shuffleLocalCoupons();
+      if (activeSubtabs.flirty === "flirty:tdw") pickFreshTdwCard(tdwTier);
+    }
+  });
+  populateLudoStakeSelect();
 
   // =========================================
   // 2. FLIRTY & PYARE GAMES
@@ -879,7 +1073,12 @@ export function createGamesManager({ getAuth, chat }) {
     const disc = document.getElementById("flirty-wheel-disc");
     const resEl = document.getElementById("flirty-wheel-result");
     const sendBtn = document.getElementById("send-wheel-btn");
-    const list = WHEEL_BANK[wheelMood] || WHEEL_BANK.sweet;
+    const store = readCustomBank();
+    const customExtras = (store.flirty || []).filter(x => !WHEEL_BANK.flirty.includes(x));
+    const baseList = WHEEL_BANK[wheelMood] || WHEEL_BANK.sweet;
+    const list = wheelMood === "flirty" && Array.isArray(store.flirty) && store.flirty.length
+      ? store.flirty
+      : [...customExtras, ...baseList];
     const filtered = list.filter(x => x !== lastWheelResult);
     const pool = filtered.length ? filtered : list;
     const pick = pool[Math.floor(Math.random() * pool.length)];
@@ -922,6 +1121,9 @@ export function createGamesManager({ getAuth, chat }) {
       inp?.focus();
       return;
     }
+    const store = readCustomBank();
+    store.flirty = addCustomItemToPool(store.flirty, WHEEL_BANK.flirty, val, 60);
+    writeCustomBank(store);
     inp.value = "";
     modal.style.display = "none";
     playEmotionSound("gift");
@@ -938,7 +1140,7 @@ export function createGamesManager({ getAuth, chat }) {
   });
 
   function shuffleLocalCoupons() {
-    localCoupons = shuffleCopy(COUPON_POOL).slice(0, 3);
+    localCoupons = shuffleCopy(getCategoryPool("coupons")).slice(0, 3);
     localCouponPicked = -1;
     renderLocalCoupons();
   }
@@ -967,7 +1169,7 @@ export function createGamesManager({ getAuth, chat }) {
   document.getElementById("reset-coupon-btn")?.addEventListener("click", shuffleLocalCoupons);
 
   document.getElementById("send-coupon-btn")?.addEventListener("click", async () => {
-    const shuffled = shuffleCopy(COUPON_POOL).slice(0, 3);
+    const shuffled = shuffleCopy(getCategoryPool("coupons")).slice(0, 3);
     modal.style.display = "none";
     playEmotionSound("love");
     await chat.sendEncryptedMessage({
@@ -1086,7 +1288,12 @@ export function createGamesManager({ getAuth, chat }) {
   });
 
   function pickFreshTdwCard(tier) {
-    const pool = TDW_BANK[tier] || TDW_BANK.easy;
+    const store = readCustomBank();
+    const defaultTdwLabels = TDW_BANK.flirty.map(x => `${x.type}: ${x.prompt}`);
+    const customTdwExtras = (store.tdw || [])
+      .filter(s => !defaultTdwLabels.includes(s))
+      .map(s => ({ type: "Custom / Saza", prompt: s }));
+    const pool = [...customTdwExtras, ...(TDW_BANK[tier] || TDW_BANK.easy)];
     const filtered = pool.filter(c => c.prompt !== currentTdwCard?.prompt);
     const arr = filtered.length ? filtered : pool;
     currentTdwCard = arr[Math.floor(Math.random() * arr.length)];
@@ -1136,6 +1343,9 @@ export function createGamesManager({ getAuth, chat }) {
       inp?.focus();
       return;
     }
+    const store = readCustomBank();
+    store.tdw = addCustomItemToPool(store.tdw, getCategoryDefaults("tdw"), val, 60);
+    writeCustomBank(store);
     inp.value = "";
     modal.style.display = "none";
     playEmotionSound("gift");
@@ -2693,7 +2903,7 @@ export function createGamesManager({ getAuth, chat }) {
 
       const sub = document.createElement("div");
       sub.className = "game-card-sub";
-      sub.innerText = `❤️ Ghar: ${homeA}/4 · 😘 Ghar: ${homeB}/4\n${st.statusText || ""}`;
+      sub.innerText = `❤️ Ghar: ${homeA}/4 · 😘 Ghar: ${homeB}/4\n${st.statusText || ""}${gd.stakeText ? `\n🎯 Shart/Saza: ${gd.stakeText}` : ""}`;
       box.appendChild(sub);
 
       const btn = document.createElement("button");
@@ -3439,6 +3649,16 @@ export function createGamesManager({ getAuth, chat }) {
     return box;
   }
 
+  function handleLiveMessageUpdate(m) {
+    if (!m || !m.id || !m.decrypted?.gameData) return;
+    if (liveLudoMsg && liveLudoMsg.id === m.id && m.decrypted.gameData.kind === "ludo") {
+      liveLudoMsg = { id: m.id, dec: m.decrypted };
+      if (modal?.style.display === "flex" && activeTab === "ludo") {
+        renderLudoBoard();
+      }
+    }
+  }
+
   // Initialize dynamic previews
   renderQuizSetup();
   renderTdwPreview();
@@ -3448,6 +3668,8 @@ export function createGamesManager({ getAuth, chat }) {
     renderGameBubble,
     openGameSubtab,
     stopTransientLoops,
-    openWalletModal: intimateGames.openWalletModal
+    handleLiveMessageUpdate,
+    openWalletModal: intimateGames.openWalletModal,
+    claimWalletGift: intimateGames.claimWalletGift
   };
 }

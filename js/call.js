@@ -4,6 +4,7 @@ import {
   filterNewIceCandidates,
   evaluateNetworkQuality
 } from "../shared/rtcLogic.js";
+import { rollNaughtyDice } from "../shared/intimateLogic.js";
 
 export function createCallManager({
   getAuth,
@@ -44,6 +45,36 @@ export function createCallManager({
   let faceDetector = null;
   let lastDetectedFaces = [];
   let consecutiveWeakCount = 0;
+  let lastCallDareTs = 0;
+
+  const CALL_DARES = [
+    "💋 Bina kuch bole 10 sec camera/mic par slow kiss sound bhejo!",
+    "🎀 Neck ya Mam ke baare mein 1 flirty line bolo abhi!",
+    "🔥 Honey / Chocolate codeword ke saath 1 secret wish batao!",
+    "😘 Cute smile ke saath aankh maaro (Wink Challenge)!",
+    "🎙️ Slow romantic voice mein 'I miss you Janan' bolo!"
+  ];
+
+  function showCallDareBanner(text) {
+    const card = document.getElementById("call-dare-card");
+    const txt = document.getElementById("call-dare-text");
+    if (!card || !txt || !text) return;
+    txt.innerText = text;
+    card.style.display = "flex";
+    playEmotionSound("gift");
+  }
+
+  function bindFunChannel(ch) {
+    if (!ch) return;
+    ch.onmessage = e => {
+      const val = String(e.data || "");
+      if (val.startsWith("DARE:")) {
+        showCallDareBanner(val.slice(5));
+      } else {
+        spawnFloatingHearts(val);
+      }
+    };
+  }
 
   const callOverlay = document.getElementById("call-overlay");
   const incomingOverlay = document.getElementById("incoming-call-overlay");
@@ -57,15 +88,23 @@ export function createCallManager({
 
   async function fetchIceServers() {
     const user = getAuth()?.currentUser;
-    if (!user) return { iceServers: DEFAULT_STUN_SERVERS };
-    try {
-      const idToken = await user.getIdToken();
-      const res = await fetch(notifications.buildEndpointUrl("/api/rtc-config"), {
-        headers: { Authorization: "Bearer " + idToken }
-      });
-      if (res.ok) return await res.json();
-    } catch {}
-    return { iceServers: DEFAULT_STUN_SERVERS };
+    if (!user) return { iceServers: DEFAULT_STUN_SERVERS, iceCandidatePoolSize: 4 };
+    const rtcUrl = notifications.buildEndpointUrl("/api/rtc-config");
+    if (!(notifications.isNativeApp?.() && rtcUrl.startsWith("/"))) {
+      try {
+        const idToken = await user.getIdToken();
+        const res = await fetch(rtcUrl, {
+          headers: { Authorization: "Bearer " + idToken }
+        });
+        if (res.ok) {
+          const cfg = await res.json();
+          if (Array.isArray(cfg?.iceServers)) {
+            return { iceServers: cfg.iceServers, iceCandidatePoolSize: 4 };
+          }
+        }
+      } catch {}
+    }
+    return { iceServers: DEFAULT_STUN_SERVERS, iceCandidatePoolSize: 4 };
   }
 
   function updateCallUiForMode(video) {
@@ -315,15 +354,16 @@ export function createCallManager({
         audioAvatar.style.display = "none";
       }
     };
-    pc.onconnectionstatechange = () => {
-      const state = pc?.connectionState;
-      if (state === "connected") {
+    const handleConnChange = state => {
+      if (state === "connected" || state === "completed") {
         clearTimeout(ringTimeoutInt);
-        callConnected = true;
-        consecutiveWeakCount = 0;
-        document.getElementById("call-status-text").innerText = isAudioFallback ? "Audio Saver Connected 🎧" : "Connected 💖";
-        netBadgeEl.innerText = isAudioFallback ? "📶 Audio Saver" : "📶 Good";
-        startCallTimer();
+        if (!callConnected) {
+          callConnected = true;
+          consecutiveWeakCount = 0;
+          document.getElementById("call-status-text").innerText = isAudioFallback ? "Audio Saver Connected 🎧" : "Connected 💖";
+          netBadgeEl.innerText = isAudioFallback ? "📶 Audio Saver" : "📶 Good";
+          startCallTimer();
+        }
       } else if (state === "failed" || state === "disconnected") {
         const evalRes = evaluateNetworkQuality({
           connectionState: state,
@@ -339,6 +379,13 @@ export function createCallManager({
         if (evalRes.shouldDowngradeToAudio) {
           downgradeToAudioOnly("Weak internet: Switched to Audio 🎧");
         }
+      }
+    };
+    pc.onconnectionstatechange = () => handleConnChange(pc?.connectionState);
+    pc.oniceconnectionstatechange = () => {
+      const iceState = pc?.iceConnectionState;
+      if (iceState === "connected" || iceState === "completed" || iceState === "failed" || iceState === "disconnected") {
+        handleConnChange(iceState);
       }
     };
     return pc;
@@ -443,7 +490,7 @@ export function createCallManager({
       const rtcConfig = await fetchIceServers();
       createPeerConnection(rtcConfig);
       funChannel = pc.createDataChannel("fun");
-      funChannel.onmessage = e => spawnFloatingHearts(e.data);
+      bindFunChannel(funChannel);
       await setupLocalMedia(video);
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
@@ -457,9 +504,15 @@ export function createCallManager({
       clearTimeout(ringTimeoutInt);
       ringTimeoutInt = setTimeout(() => {
         if (!callConnected && currentCallId) endCall(true);
-      }, 45000);
-    } catch {
-      endCall(true);
+      }, 60000);
+    } catch (err) {
+      const statusEl = document.getElementById("call-status-text");
+      if (statusEl) {
+        statusEl.innerText = err?.name === "NotAllowedError"
+          ? "⚠️ Mic/Camera permission Allow karein!"
+          : "⚠️ Call connect nahi ho saki";
+      }
+      setTimeout(() => endCall(true), 1600);
     }
   }
 
@@ -493,7 +546,7 @@ export function createCallManager({
       createPeerConnection(rtcConfig);
       pc.ondatachannel = e => {
         funChannel = e.channel;
-        funChannel.onmessage = ev => spawnFloatingHearts(ev.data);
+        bindFunChannel(funChannel);
       };
       await setupLocalMedia(video);
       await pc.setRemoteDescription(new RTCSessionDescription(incomingOffer.sdp));
@@ -504,8 +557,14 @@ export function createCallManager({
       await pc.setLocalDescription(ans);
       sendSignalField("callAnswer", { callId: currentCallId, sdp: { type: ans.type, sdp: ans.sdp } });
       window.AndroidCallBridge?.startProximity?.(isSpeaker);
-    } catch {
-      endCall(true);
+    } catch (err) {
+      const statusEl = document.getElementById("call-status-text");
+      if (statusEl) {
+        statusEl.innerText = err?.name === "NotAllowedError"
+          ? "⚠️ Mic/Camera permission Allow karein!"
+          : "⚠️ Call accept nahi ho saki";
+      }
+      setTimeout(() => endCall(true), 1600);
     }
   }
 
@@ -716,6 +775,23 @@ export function createCallManager({
     });
   });
 
+  document.getElementById("call-dare-btn")?.addEventListener("click", () => {
+    const useDice = Math.random() > 0.45;
+    const text = useDice
+      ? `🎲 Call Dice: ${rollNaughtyDice().summary}`
+      : CALL_DARES[Math.floor(Math.random() * CALL_DARES.length)];
+    showCallDareBanner(text);
+    if (funChannel?.readyState === "open") {
+      funChannel.send("DARE:" + text);
+    } else if (currentCallId) {
+      sendSignalField("callDare", { callId: currentCallId, text });
+    }
+  });
+  document.getElementById("call-dare-close")?.addEventListener("click", () => {
+    const card = document.getElementById("call-dare-card");
+    if (card) card.style.display = "none";
+  });
+
   notes.secretCallDot.addEventListener("click", () => {
     if (incomingOffer) {
       notes.secretCallDot.style.display = "none";
@@ -742,7 +818,7 @@ export function createCallManager({
     },
     async handleSignalingData(data, state) {
       const offer = data.callOffer;
-      if (offer && offer.ts > state.lastOfferTs && Date.now() - offer.ts < 45000) {
+      if (offer && offer.ts > state.lastOfferTs && Date.now() - offer.ts < 60000) {
         state.lastOfferTs = offer.ts;
         if (!currentCallId) {
           incomingOffer = offer;
@@ -790,6 +866,12 @@ export function createCallManager({
       if (hang && hang.ts > state.lastHangupTs && (hang.callId === currentCallId || hang.callId === incomingOffer?.callId)) {
         state.lastHangupTs = hang.ts;
         endCall(false);
+      }
+
+      const dare = data.callDare;
+      if (dare && dare.ts > lastCallDareTs && currentCallId && dare.callId === currentCallId && Date.now() - dare.ts < 25000) {
+        lastCallDareTs = dare.ts;
+        showCallDareBanner(dare.text);
       }
     }
   };

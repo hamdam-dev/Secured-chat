@@ -1,7 +1,16 @@
 import { playEmotionSound } from "./crypto.js";
+import { startNightAmbience, stopNightAmbience } from "./ambience.js";
 
 const VAULT_PIN_KEY = "sc_vault_pin_v1";
 const VAULT_ITEMS_KEY = "sc_private_vault_v1";
+
+const GUIDED_FOREPLAY_STEPS = [
+  "Step 1: Slow deep breaths + Aankhon mein dekh ke lip/neck kisses 💋",
+  "Step 2: Collarbone & 🎀 Mam par gentle warm hands aur soft kisses",
+  "Step 3: 🍯 Honey / 🍫 Chocolate tease zone par slow rhythmic focus",
+  "Step 4: Swap Roles — Partner guides pace & whispers secret wishes 🔥",
+  "Step 5: Deep Cuddle + Forehead Kiss Aftercare 🤗💖"
+];
 
 function readJson(key, fallback) {
   try {
@@ -124,6 +133,7 @@ export function createVaultAndTogetherManager({
   function tryUnlockVault() {
     const entered = (pinInput?.value || "").trim();
     if (entered !== getVaultPin()) {
+      notes?.logIntruderAttempt?.("Secret Vault", `Wrong PIN (${entered.length} digits)`);
       if (pinErr) pinErr.innerText = "Galat PIN! Dobara try karein (Default: 0000)";
       return;
     }
@@ -208,19 +218,38 @@ export function createVaultAndTogetherManager({
   });
 
   // ==============================
-  // 2. COZY TOGETHER MODE
+  // 2. LIVE SYNCED COZY TOGETHER / GUIDED SESSION
   // ==============================
   const togetherModal = document.getElementById("together-modal");
   const timerDisp = document.getElementById("together-timer-display");
   const statusLbl = document.getElementById("together-status-label");
+  const guidedStepEl = document.getElementById("together-guided-step");
   const pulseToggle = document.getElementById("together-pulse-toggle");
   const startBtn = document.getElementById("together-start-btn");
   const ringEl = togetherModal?.querySelector(".together-ring");
 
+  let togetherMode = "cozy"; // cozy | guided
   let selectedMinutes = 10;
   let secondsLeft = 600;
   let togetherInt = null;
   let pulseCounter = 0;
+  let lastSyncedSessionAt = 0;
+
+  function updateGuidedStepBanner() {
+    if (!guidedStepEl) return;
+    if (togetherMode !== "guided") {
+      guidedStepEl.style.display = "none";
+      return;
+    }
+    guidedStepEl.style.display = "block";
+    const totalSec = Math.max(60, selectedMinutes * 60);
+    const elapsed = Math.max(0, totalSec - secondsLeft);
+    const idx = Math.min(
+      GUIDED_FOREPLAY_STEPS.length - 1,
+      Math.floor((elapsed / totalSec) * GUIDED_FOREPLAY_STEPS.length)
+    );
+    guidedStepEl.innerText = GUIDED_FOREPLAY_STEPS[idx];
+  }
 
   function renderTogetherDisplay() {
     if (timerDisp) {
@@ -228,42 +257,57 @@ export function createVaultAndTogetherManager({
       const s = Math.max(0, secondsLeft) % 60;
       timerDisp.innerText = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
     }
+    updateGuidedStepBanner();
   }
 
-  function stopTogetherMode() {
+  function pushTogetherSession(runningState) {
+    const user = getAuth()?.currentUser;
+    const db = getDb();
+    if (!user || !db) return;
+    const ts = Date.now();
+    lastSyncedSessionAt = ts;
+    setDoc(
+      doc(db, "status", user.uid),
+      {
+        togetherSession: {
+          running: runningState,
+          mode: togetherMode,
+          minutes: selectedMinutes,
+          secondsLeft,
+          ts
+        }
+      },
+      { merge: true }
+    ).catch(() => {});
+  }
+
+  function stopTogetherMode(syncRemote = false) {
     clearInterval(togetherInt);
     togetherInt = null;
     ringEl?.classList.remove("beating");
-    if (startBtn) startBtn.innerText = "▶ Start Session";
+    if (startBtn) startBtn.innerText = "▶ Sync Start";
     if (statusLbl) statusLbl.innerText = "Ready for cozy calm time ✨";
+    if (syncRemote) pushTogetherSession(false);
   }
 
-  document.querySelectorAll("#together-duration-row [data-together-min]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      stopTogetherMode();
-      selectedMinutes = Number(btn.dataset.togetherMin || 10);
-      secondsLeft = selectedMinutes * 60;
-      document.querySelectorAll("#together-duration-row [data-together-min]").forEach(b => {
-        b.classList.toggle("active", b === btn);
-      });
-      renderTogetherDisplay();
-    });
-  });
-
-  startBtn?.addEventListener("click", () => {
-    if (togetherInt) {
-      stopTogetherMode();
-      return;
-    }
+  function runTogetherCountdown(syncRemote = true) {
     if (secondsLeft <= 0) secondsLeft = selectedMinutes * 60;
+    clearInterval(togetherInt);
     ringEl?.classList.add("beating");
-    startBtn.innerText = "⏸ Pause Session";
-    if (statusLbl) statusLbl.innerText = "🌙 Cozy Together Mode Active — Bas saath raho 💓";
+    if (startBtn) startBtn.innerText = "⏸ Pause";
+    if (statusLbl) {
+      statusLbl.innerText =
+        togetherMode === "guided"
+          ? "🔥 Live Guided Tease Active — Dono Synced!"
+          : "🌙 Cozy Together Mode Active — Dono Synced 💓";
+    }
     pulseCounter = 0;
     if (pulseToggle?.checked) {
       playSoftHeartbeatTone();
       navigator.vibrate?.([40, 80, 40]);
     }
+    if (syncRemote) pushTogetherSession(true);
+
     togetherInt = setInterval(() => {
       secondsLeft--;
       pulseCounter++;
@@ -273,15 +317,52 @@ export function createVaultAndTogetherManager({
         navigator.vibrate?.([35, 70, 35]);
       }
       if (secondsLeft <= 0) {
-        stopTogetherMode();
+        stopTogetherMode(false);
         playEmotionSound("gift");
         if (statusLbl) statusLbl.innerText = "✨ Session Complete! Ek lambi hug banti hai 🤗";
       }
     }, 1000);
+  }
+
+  document.querySelectorAll("#together-mode-row [data-together-mode]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      togetherMode = btn.dataset.togetherMode || "cozy";
+      document.querySelectorAll("#together-mode-row [data-together-mode]").forEach(b => {
+        b.classList.toggle("active", b === btn);
+      });
+      renderTogetherDisplay();
+    });
+  });
+
+  document.querySelectorAll("#together-duration-row [data-together-min]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      stopTogetherMode(false);
+      selectedMinutes = Number(btn.dataset.togetherMin || 10);
+      secondsLeft = selectedMinutes * 60;
+      document.querySelectorAll("#together-duration-row [data-together-min]").forEach(b => {
+        b.classList.toggle("active", b === btn);
+      });
+      renderTogetherDisplay();
+    });
+  });
+
+  document.querySelectorAll("#together-ambience-row [data-ambience]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      startNightAmbience(btn.dataset.ambience || "off");
+    });
+  });
+
+  startBtn?.addEventListener("click", () => {
+    if (togetherInt) {
+      stopTogetherMode(true);
+      return;
+    }
+    runTogetherCountdown(true);
   });
 
   document.getElementById("together-stop-btn")?.addEventListener("click", () => {
-    stopTogetherMode();
+    stopTogetherMode(true);
+    stopNightAmbience();
     secondsLeft = selectedMinutes * 60;
     renderTogetherDisplay();
   });
@@ -304,7 +385,8 @@ export function createVaultAndTogetherManager({
     if (togetherModal) togetherModal.style.display = "flex";
   });
   document.getElementById("close-together-btn")?.addEventListener("click", () => {
-    stopTogetherMode();
+    stopTogetherMode(false);
+    stopNightAmbience();
     if (togetherModal) togetherModal.style.display = "none";
   });
 
@@ -314,11 +396,38 @@ export function createVaultAndTogetherManager({
     navigator.vibrate?.([50, 90, 50]);
   }
 
+  function handleRemoteTogetherSession(sess) {
+    if (!sess || !sess.ts || sess.ts <= lastSyncedSessionAt) return;
+    if (Date.now() - sess.ts > 30000) return;
+    lastSyncedSessionAt = sess.ts;
+    togetherMode = sess.mode || "cozy";
+    selectedMinutes = Number(sess.minutes || 10);
+    secondsLeft = Number(sess.secondsLeft || selectedMinutes * 60);
+
+    document.querySelectorAll("#together-mode-row [data-together-mode]").forEach(b => {
+      b.classList.toggle("active", b.dataset.togetherMode === togetherMode);
+    });
+    document.querySelectorAll("#together-duration-row [data-together-min]").forEach(b => {
+      b.classList.toggle("active", Number(b.dataset.togetherMin) === selectedMinutes);
+    });
+    renderTogetherDisplay();
+
+    if (sess.running) {
+      if (notes?.isChatVisible?.() && togetherModal) togetherModal.style.display = "flex";
+      runTogetherCountdown(false);
+    } else {
+      stopTogetherMode(false);
+    }
+  }
+
   return {
     lockAll() {
       lockVault();
-      stopTogetherMode();
+      stopTogetherMode(false);
+      stopNightAmbience();
     },
-    handleRemoteTogetherPulse
+    handleRemoteTogetherPulse,
+    handleRemoteTogetherSession
   };
 }
+

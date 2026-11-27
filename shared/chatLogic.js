@@ -25,6 +25,9 @@ export function getBubblePreviewText(dec) {
   if (dec.isCallLog) return dec.text || "Call";
   if (dec.isGameResult) return dec.text || "🎮 Game Update";
   if (dec.walletRedeem) return `🎟️ Redeemed: ${dec.walletRedeem.title || "Love Coupon"}`;
+  if (dec.walletGift) return `🎁 Love Coupon Gift: ${dec.walletGift.title || "Surprise Pass"}`;
+  if (dec.capsuleData) return `🕰️ Time Capsule Message`;
+  if (dec.songCard) return `🎶 Song: ${dec.songCard.title || "Special Song"}`;
   if (dec.carePing) return `${dec.carePing.emoji || "💞"} ${dec.carePing.label || "Care Ping"}`;
   if (dec.letterData) return `💌 ${dec.letterData.title || "Surprise Letter"}`;
   if (dec.questionCard) return `🃏 ${dec.questionCard.question || "Dil Ki Baat"}`;
@@ -32,7 +35,12 @@ export function getBubblePreviewText(dec) {
   if (dec.vibeCard) return `✨ ${dec.vibeCard.headline || "Daily Vibe Summary"}`;
   if (dec.giftData) return `🎁 Gift: ${dec.giftData.label}`;
   if (dec.audioData) return dec.viewOnce ? "🔥 View-Once Voice Note" : "🎤 Voice Note";
-  if (dec.imageData) return dec.doodle ? "🎨 Love Doodle" : (dec.viewOnce ? "🔥 View-Once Photo" : "🖼️ Photo");
+  if (dec.imageData) {
+    if (dec.polaroid) return "📸 Couple Polaroid";
+    if (dec.doodle) return "🎨 Love Doodle";
+    if (dec.teaseBlur) return "🫥 Scratch-to-Reveal Tease Photo";
+    return dec.viewOnce ? "🔥 View-Once Photo" : "🖼️ Photo";
+  }
   return dec.text || "";
 }
 
@@ -62,10 +70,15 @@ export function buildMessageSignature(m) {
     r: m?.reaction || "",
     rm: m?.reactions ? JSON.stringify(m.reactions) : "",
     t: dec.text || "",
+    ed: Boolean(dec.edited),
     vo: Boolean(dec.viewOnce),
+    tb: Boolean(dec.teaseBlur),
     hasImg: Boolean(dec.imageData),
     hasAud: Boolean(dec.audioData),
     gift: dec.giftData?.label || "",
+    wg: dec.walletGift?.giftId || "",
+    cap: dec.capsuleData ? `${dec.capsuleData.unlockAtMs}` : "",
+    song: dec.songCard?.title || "",
     ping: dec.carePing?.label || "",
     letter: dec.letterData?.title || "",
     qcard: dec.questionCard?.answer || dec.questionCard?.question || "",
@@ -80,7 +93,7 @@ export function buildMessageSignature(m) {
 export function getIncomingAlertKind(dec) {
   if (!dec || typeof dec !== "object") return "message";
   if (dec.carePing) return "ping";
-  if (dec.letterData || dec.questionCard || dec.gameData) return "letter";
+  if (dec.letterData || dec.questionCard || dec.gameData || dec.walletGift || dec.capsuleData || dec.songCard) return "letter";
   return "message";
 }
 

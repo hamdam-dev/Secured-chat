@@ -5,14 +5,17 @@ export const DEFAULT_STUN_SERVERS = [
 
 export function normalizeIceServers(turnConfig = {}) {
   const servers = [...DEFAULT_STUN_SERVERS];
-  const turnUrl = String(turnConfig.url || "").trim();
-  if (turnUrl) {
-    const entry = { urls: turnUrl };
-    if (turnConfig.username) entry.username = String(turnConfig.username);
+  const rawUrls = String(turnConfig.url || "")
+    .split(",")
+    .map(u => u.trim())
+    .filter(Boolean);
+  if (rawUrls.length > 0) {
+    const entry = { urls: rawUrls.length === 1 ? rawUrls[0] : rawUrls };
+    if (turnConfig.username) entry.username = String(turnConfig.username).trim();
     if (turnConfig.credential) entry.credential = String(turnConfig.credential);
     servers.push(entry);
   }
-  return { iceServers: servers, hasTurn: Boolean(turnUrl) };
+  return { iceServers: servers, hasTurn: rawUrls.length > 0 };
 }
 
 export function filterNewIceCandidates(icePayload, activeCallId, processedCount = 0) {

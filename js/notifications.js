@@ -30,10 +30,16 @@ export function createNotificationManager({ getAuth, getDb, doc, setDoc, isNotes
 
   function getServerBaseUrl() {
     try {
-      return (localStorage.getItem(SERVER_URL_KEY) || "").trim();
-    } catch {
-      return "";
-    }
+      const saved = (localStorage.getItem(SERVER_URL_KEY) || "").trim();
+      if (saved) return saved;
+    } catch {}
+    const cfgUrl = String(window.__APP_CONFIG__?.serverBaseUrl || "").trim().replace(/\/+$/, "");
+    return /^https?:\/\//i.test(cfgUrl) ? cfgUrl : "";
+  }
+
+  function getPushWorkerUrl() {
+    const cfgUrl = String(window.__APP_CONFIG__?.pushWorkerUrl || "").trim().replace(/\/+$/, "");
+    return /^https?:\/\//i.test(cfgUrl) ? cfgUrl : "";
   }
 
   function setServerBaseUrl(url) {
@@ -259,7 +265,18 @@ export function createNotificationManager({ getAuth, getDb, doc, setDoc, isNotes
               window.AndroidCallBridge?.showSyncNotification?.(kind);
             }
           });
-          Push.addListener("pushNotificationActionPerformed", () => {});
+          Push.addListener("pushNotificationActionPerformed", action => {
+            const kind = action?.notification?.data?.kind || "message";
+            if (kind === "call") {
+              onIncomingCallPush?.();
+            }
+          });
+        }
+
+        const currentUser = getAuth()?.currentUser;
+        const currentDb = getDb();
+        if (myFcmToken && currentUser && currentDb) {
+          setDoc(doc(currentDb, "status", currentUser.uid), { fcmToken: myFcmToken }, { merge: true }).catch(() => {});
         }
 
         let perm = await Push.checkPermissions();
@@ -289,29 +306,54 @@ export function createNotificationManager({ getAuth, getDb, doc, setDoc, isNotes
       return returnDebug ? "Love ne abhi notifications Allow nahi ki hain" : null;
     }
     const url = buildEndpointUrl("/api/send-push");
-    if (isNativeApp() && url.startsWith("/")) {
+    const workerUrl = getPushWorkerUrl();
+    const canCallServer = !(isNativeApp() && url.startsWith("/"));
+    if (!canCallServer && !(partnerFcmToken && workerUrl)) {
       return returnDebug ? "APK ke liye neeche Live Server URL add karein" : null;
     }
     try {
       const idToken = await user.getIdToken();
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + idToken
-        },
-        body: JSON.stringify({
-          targetToken: partnerFcmToken || "",
-          targetWebSub: partnerWebSub || null,
-          kind
-        })
-      });
-      const data = await res.json().catch(() => ({}));
-      if (returnDebug) {
-        if (data.ok) return `Server Push OK (${data.mode || "push"})`;
-        return data.reason || data.error || `HTTP ${res.status}`;
+      if (canCallServer) {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + idToken
+          },
+          body: JSON.stringify({
+            targetToken: partnerFcmToken || "",
+            targetWebSub: partnerWebSub || null,
+            kind
+          })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (data.ok) {
+          return returnDebug ? `Server Push OK (${data.mode || "push"})` : data;
+        }
+        if (!(partnerFcmToken && workerUrl)) {
+          return returnDebug ? (data.reason || data.error || `HTTP ${res.status}`) : data;
+        }
       }
-      return data;
+
+      if (partnerFcmToken && workerUrl) {
+        const wRes = await fetch(workerUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + idToken
+          },
+          body: JSON.stringify({
+            targetToken: partnerFcmToken,
+            kind
+          })
+        });
+        const wData = await wRes.json().catch(() => ({}));
+        if (returnDebug) {
+          return wData.ok ? "Worker Push OK ✅" : (wData.error || `Worker HTTP ${wRes.status}`);
+        }
+        return wData;
+      }
+      return returnDebug ? "Push dispatch failed" : null;
     } catch (e) {
       if (returnDebug) return "Network error: " + e.message;
       return null;
@@ -329,6 +371,26 @@ export function createNotificationManager({ getAuth, getDb, doc, setDoc, isNotes
     return { perm, shown };
   }
 
+  async function checkRtcRelayStatus() {
+    const user = getAuth()?.currentUser;
+    if (!user) return "Not logged in";
+    const rtcUrl = buildEndpointUrl("/api/rtc-config");
+    if (isNativeApp() && rtcUrl.startsWith("/")) {
+      return "Live Server URL add karein (STUN Only ⚠️)";
+    }
+    try {
+      const idToken = await user.getIdToken();
+      const res = await fetch(rtcUrl, {
+        headers: { Authorization: "Bearer " + idToken }
+      });
+      if (!res.ok) return `HTTP ${res.status} (Check Server)`;
+      const data = await res.json();
+      return data?.hasTurn ? "TURN Relay Ready ✅" : "STUN Only (Set TURN_URL on server)";
+    } catch (e) {
+      return "Unreachable (" + (e?.message || "network") + ")";
+    }
+  }
+
   async function getDiagnostics() {
     await initPushNotifications();
     const browserPerm = isNativeApp()
@@ -341,15 +403,19 @@ export function createNotificationManager({ getAuth, getDb, doc, setDoc, isNotes
     const partnerState = partnerFcmToken && partnerWebSub
       ? "APK + Browser Ready ✅"
       : (partnerFcmToken ? "APK Ready ✅" : (partnerWebSub ? "Browser Push Ready ✅" : "Missing ❌"));
-    const serverRes = (partnerFcmToken || partnerWebSub)
-      ? await sendPushAlert("message", true)
-      : "Skipped (Love ne abhi Allow nahi kiya)";
+    const [serverRes, turnState] = await Promise.all([
+      (partnerFcmToken || partnerWebSub)
+        ? sendPushAlert("message", true)
+        : Promise.resolve("Skipped (Love ne abhi Allow nahi kiya)"),
+      checkRtcRelayStatus()
+    ]);
     return [
       `Permission: ${browserPerm}`,
       `My Browser Push: ${myWebState}`,
       `My APK Push: ${myApkState}`,
       `Love Push Target: ${partnerState}`,
-      `Server Dispatch: ${serverRes}`
+      `Server Dispatch: ${serverRes}`,
+      `Calls TURN Relay: ${turnState}`
     ].join("\n");
   }
 

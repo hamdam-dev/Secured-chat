@@ -26,6 +26,18 @@ test("normalizeIceServers appends TURN credentials when configured", () => {
     username: "janan",
     credential: "secret"
   });
+
+  const multi = normalizeIceServers({
+    url: "turn:global.relay.metered.ca:80, turns:global.relay.metered.ca:443?transport=tcp",
+    username: "u1",
+    credential: "p1"
+  });
+  assert.equal(multi.hasTurn, true);
+  assert.deepEqual(multi.iceServers.at(-1), {
+    urls: ["turn:global.relay.metered.ca:80", "turns:global.relay.metered.ca:443?transport=tcp"],
+    username: "u1",
+    credential: "p1"
+  });
 });
 
 test("filterNewIceCandidates ignores mismatched callId and slices only unseen candidates", () => {

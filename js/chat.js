@@ -15,6 +15,7 @@ import {
   addRecentEmoji
 } from "../shared/emojiCatalog.js";
 import { isMessageExpired, shouldNotifyCreatorOnMessageChange } from "../shared/gameLogic.js";
+import { isCapsuleUnlocked, formatCountdownMs, canEditMessage } from "../shared/featuresLogic.js";
 
 const MSG_CACHE_KEY = "sc_msg_cache_v1";
 const DELETED_LOCAL_KEY = "sc_deleted_local_v1";
@@ -63,6 +64,8 @@ export function createChatManager({
   const pinnedReactsPreview = document.getElementById("pinned-reacts-preview");
   const mediaBar = document.getElementById("media-actions-bar");
   const expandMediaBtn = document.getElementById("expand-media-btn");
+  const quickRepliesBar = document.getElementById("quick-replies-bar");
+  const quickRepliesBtn = document.getElementById("quick-replies-btn");
   const emojiPicker = document.getElementById("emoji-picker");
   const epSearchInput = document.getElementById("ep-search-input");
   const epTabs = document.getElementById("ep-tabs");
@@ -97,12 +100,19 @@ export function createChatManager({
   let activeAudioBtn = null;
   let pendingDeleteIds = [];
   let gameRenderer = null;
+  let gameUpdateHandler = null;
   let currentPinned = null;
   let activeGameUpdateMsgId = null;
   let searchQuery = "";
   let searchMatches = [];
   let searchIdx = 0;
   let flushingPending = false;
+  let walletGiftHandler = null;
+  let editingMsgId = null;
+  const viewOnceCheck = document.getElementById("view-once-checkbox");
+  const viewOnceBtn = document.getElementById("view-once-btn");
+  const teaseBlurCheck = document.getElementById("tease-blur-checkbox");
+  const teaseBlurBtn = document.getElementById("tease-blur-btn");
 
   function readJson(key, fallback) {
     try {
@@ -253,6 +263,25 @@ export function createChatManager({
     saveMsgCache();
   }
   setInterval(sweepExpiredMessages, 30000);
+
+  setInterval(() => {
+    const nodes = messagesContainer?.querySelectorAll(".capsule-countdown[data-unlock-ms]");
+    if (!nodes || !nodes.length) return;
+    const now = Date.now();
+    let anyUnlocked = false;
+    nodes.forEach(el => {
+      const target = Number(el.dataset.unlockMs || 0);
+      const rem = target - now;
+      if (rem <= 0) {
+        anyUnlocked = true;
+      } else {
+        el.innerText = `⏳ ${formatCountdownMs(rem)}`;
+      }
+    });
+    if (anyUnlocked) {
+      renderAllMessages(false, true);
+    }
+  }, 1000);
 
   function updateOldestCursor() {
     let minTs = null;
@@ -429,6 +458,11 @@ export function createChatManager({
       starBtn.innerText = starred ? "★ Unstar" : "⭐ Star";
     }
 
+    const editBtn = document.getElementById("rp-edit-btn");
+    if (editBtn) {
+      editBtn.style.display = canEditMessage(m, myUid) ? "inline-flex" : "none";
+    }
+
     const rect = bubbleEl.getBoundingClientRect();
     reactionPopup.style.display = "flex";
     const popupH = reactionPopup.offsetHeight || 96;
@@ -538,7 +572,7 @@ export function createChatManager({
         const pos = start + em.length;
         messageInput.setSelectionRange(pos, pos);
         messageInput.focus();
-        collapseMediaBar();
+        closeMediaBar();
         const nextRecents = addRecentEmoji(readJson(RECENT_EMOJIS_KEY, []), em, 24);
         writeJson(RECENT_EMOJIS_KEY, nextRecents);
       }
@@ -706,6 +740,65 @@ export function createChatManager({
       wBox.className = "wallet-redeem-card";
       wBox.innerHTML = `<div class="wallet-redeem-head">🎟️ Love Coupon Redeemed!</div><div class="wallet-redeem-title">${escapeHtml(dec.walletRedeem.title || "Special Love Reward")}</div><div class="game-card-sub">${escapeHtml(dec.walletRedeem.source || "Love Wallet")} · Ab isko poora karne ka waqt hai! 💖</div>`;
       div.appendChild(wBox);
+    } else if (dec.walletGift) {
+      allowDoubleTapReact = true;
+      const gCard = document.createElement("div");
+      gCard.className = "wallet-gift-card";
+      gCard.innerHTML = `<div class="wallet-redeem-head">🎁 Love Wallet Gift!</div><div class="wallet-redeem-title">${escapeHtml(dec.walletGift.title || "Special Surprise Pass")}</div><div class="game-card-sub">${escapeHtml(dec.walletGift.source || "Partner Gift")} · Sirf tumhare liye 💖</div>`;
+      if (!isMine) {
+        const saveBtn = document.createElement("button");
+        saveBtn.type = "button";
+        saveBtn.className = "game-mini-btn active";
+        saveBtn.innerText = "🎟️ Wallet Mein Save Karein";
+        saveBtn.onclick = e => {
+          e.stopPropagation();
+          walletGiftHandler?.(dec.walletGift);
+          saveBtn.innerText = "✅ Wallet Mein Saved!";
+          saveBtn.disabled = true;
+          playEmotionSound("gift");
+        };
+        gCard.appendChild(saveBtn);
+      }
+      div.appendChild(gCard);
+    } else if (dec.capsuleData) {
+      allowDoubleTapReact = true;
+      const cap = dec.capsuleData;
+      const unlocked = isCapsuleUnlocked(cap.unlockAtMs);
+      const cBox = document.createElement("div");
+      cBox.className = "capsule-card" + (unlocked ? " unlocked" : " locked");
+      if (unlocked) {
+        cBox.innerHTML = `<div class="game-card-head">🕰️ Time Capsule Unlocked!</div><div class="capsule-body">${escapeHtml(cap.text || "")}</div>`;
+      } else {
+        const rem = Math.max(0, Number(cap.unlockAtMs || 0) - Date.now());
+        cBox.innerHTML = `<div class="game-card-head">🔒 Time Capsule Sealed</div><div class="capsule-countdown tabular-nums" data-unlock-ms="${Number(cap.unlockAtMs || 0)}">⏳ ${formatCountdownMs(rem)}</div><div class="game-card-sub">Set waqt poora hone par yeh message khulega ✨</div>`;
+      }
+      div.appendChild(cBox);
+    } else if (dec.songCard) {
+      allowDoubleTapReact = true;
+      const sc = dec.songCard;
+      const sBox = document.createElement("div");
+      sBox.className = "song-card";
+      sBox.innerHTML = `
+        <div class="song-card-top">
+          <span class="song-disc" aria-hidden="true">💿</span>
+          <div class="song-meta">
+            <div class="song-title">${escapeHtml(sc.title || "Special Song")}</div>
+            ${sc.artist ? `<div class="song-artist">${escapeHtml(sc.artist)}</div>` : ""}
+          </div>
+        </div>
+        ${sc.lyrics ? `<div class="song-lyrics">"${escapeHtml(sc.lyrics)}"</div>` : ""}
+        ${sc.note ? `<div class="song-note">💌 ${escapeHtml(sc.note)}</div>` : ""}
+      `;
+      const chimeBtn = document.createElement("button");
+      chimeBtn.type = "button";
+      chimeBtn.className = "game-mini-btn";
+      chimeBtn.innerText = "🎶 Dil Chime";
+      chimeBtn.onclick = e => {
+        e.stopPropagation();
+        playEmotionSound("love");
+      };
+      sBox.appendChild(chimeBtn);
+      div.appendChild(sBox);
     } else if (dec.carePing) {
       allowDoubleTapReact = true;
       const pBox = document.createElement("div");
@@ -938,11 +1031,88 @@ export function createChatManager({
           }
         };
         div.appendChild(vo);
+      } else if (dec.teaseBlur) {
+        allowDoubleTapReact = true;
+        const wrap = document.createElement("div");
+        wrap.className = "tease-scratch-wrap";
+        const img = document.createElement("img");
+        img.className = "msg-img tease-blurred-img";
+        img.alt = "Tease blur photo";
+        img.src = dec.imageData;
+
+        const cvs = document.createElement("canvas");
+        cvs.className = "tease-scratch-canvas";
+        cvs.width = 230;
+        cvs.height = 190;
+        const hint = document.createElement("div");
+        hint.className = "tease-scratch-hint";
+        hint.innerText = "🫥 Ungli se ragad kar dekhein";
+
+        const ctx = cvs.getContext("2d");
+        const grad = ctx.createLinearGradient(0, 0, cvs.width, cvs.height);
+        grad.addColorStop(0, "rgba(216, 27, 96, 0.94)");
+        grad.addColorStop(1, "rgba(136, 14, 79, 0.96)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, cvs.width, cvs.height);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
+        ctx.font = "bold 14px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("✨ Scratch to Peek ✨", cvs.width / 2, cvs.height / 2);
+
+        let scratching = false;
+        let strokeHits = 0;
+        let revealed = false;
+
+        const finishReveal = () => {
+          if (revealed) return;
+          revealed = true;
+          img.classList.remove("tease-blurred-img");
+          cvs.style.opacity = "0";
+          cvs.style.pointerEvents = "none";
+          hint.innerText = "👀 Tap to view full";
+          playEmotionSound("gift");
+        };
+
+        const scratchAt = (cx, cy) => {
+          if (revealed) return;
+          const rect = cvs.getBoundingClientRect();
+          const x = ((cx - rect.left) / Math.max(1, rect.width)) * cvs.width;
+          const y = ((cy - rect.top) / Math.max(1, rect.height)) * cvs.height;
+          ctx.globalCompositeOperation = "destination-out";
+          ctx.beginPath();
+          ctx.arc(x, y, 22, 0, Math.PI * 2);
+          ctx.fill();
+          strokeHits++;
+          if (strokeHits >= 18) finishReveal();
+        };
+
+        cvs.addEventListener("pointerdown", e => {
+          if (selectedIds.size > 0) return;
+          e.stopPropagation();
+          scratching = true;
+          scratchAt(e.clientX, e.clientY);
+        });
+        cvs.addEventListener("pointermove", e => {
+          if (!scratching) return;
+          e.stopPropagation();
+          scratchAt(e.clientX, e.clientY);
+        });
+        window.addEventListener("pointerup", () => { scratching = false; });
+
+        img.onclick = e => {
+          if (selectedIds.size > 0 || !revealed) return;
+          e.stopPropagation();
+          document.getElementById("viewer-img").src = dec.imageData;
+          document.getElementById("img-viewer-modal").style.display = "flex";
+        };
+
+        wrap.append(img, cvs, hint);
+        div.appendChild(wrap);
       } else {
         allowDoubleTapReact = true;
         const img = document.createElement("img");
         img.className = "msg-img";
-        img.alt = dec.doodle ? "Love Doodle" : "Shared photo";
+        img.alt = dec.polaroid ? "Couple Polaroid" : (dec.doodle ? "Love Doodle" : "Shared photo");
         img.src = dec.imageData;
         img.onclick = e => {
           if (selectedIds.size > 0) return;
@@ -972,6 +1142,12 @@ export function createChatManager({
       expBadge.innerText = "⏳";
       expBadge.title = "Auto-delete message";
       meta.appendChild(expBadge);
+    }
+    if (dec.edited) {
+      const edSpan = document.createElement("span");
+      edSpan.className = "edited-tag";
+      edSpan.innerText = "(edited)";
+      meta.appendChild(edSpan);
     }
     const timeSpan = document.createElement("span");
     timeSpan.className = "msg-time";
@@ -1187,6 +1363,9 @@ export function createChatManager({
           if (ch.type === "added" && !isFirstMsgLoad && raw.sender !== myUid) {
             incomingNew = true;
             incomingKind = getIncomingAlertKind(dec);
+            if (dec?.walletGift) {
+              walletGiftHandler?.(dec.walletGift);
+            }
           } else if (
             shouldNotifyCreatorOnMessageChange({
               changeType: ch.type,
@@ -1201,6 +1380,9 @@ export function createChatManager({
               (dec?.questionCard?.answer ? `🃏 Jawab aaya: "${dec.questionCard.answer}"` : "") ||
               `${getBubblePreviewText(dec)} update hua!`;
             creatorGameUpdates.push({ id: ch.doc.id, label: actionLabel });
+          }
+          if (dec?.gameData && gameUpdateHandler) {
+            gameUpdateHandler({ id: ch.doc.id, sender: raw.sender, decrypted: dec });
           }
           changed = true;
         }
@@ -1274,23 +1456,29 @@ export function createChatManager({
     }
   }
 
-  function collapseMediaBar() {
-    mediaBar.classList.add("collapsed");
-    expandMediaBtn.style.display = "flex";
+  function closeMediaBar() {
+    mediaBar?.classList.remove("mobile-open");
+    expandMediaBtn?.classList.remove("active");
   }
 
-  function expandMediaBar() {
-    mediaBar.classList.remove("collapsed");
-    expandMediaBtn.style.display = "none";
+  function toggleMediaBar(e) {
+    e?.stopPropagation?.();
+    const isOpen = mediaBar?.classList.toggle("mobile-open");
+    expandMediaBtn?.classList.toggle("active", Boolean(isOpen));
+    if (isOpen && quickRepliesBar) {
+      quickRepliesBar.style.display = "none";
+      quickRepliesBtn?.classList.remove("active");
+    }
   }
 
   async function sendCurrentInput() {
     const txt = messageInput.value.trim();
     if (!txt) return;
     emojiPicker.style.display = "none";
+    if (quickRepliesBar) quickRepliesBar.style.display = "none";
     messageInput.value = "";
     messageInput.style.height = "auto";
-    expandMediaBar();
+    closeMediaBar();
     playEmotionSound("chime");
     clearTimeout(typingTimeout);
     isTyping = false;
@@ -1524,6 +1712,36 @@ export function createChatManager({
     if (m) triggerReply(getBubblePreviewText(m.decrypted));
   });
 
+  const editModal = document.getElementById("edit-msg-modal");
+  const editInput = document.getElementById("edit-msg-input");
+  document.getElementById("rp-edit-btn")?.addEventListener("click", () => {
+    const m = messagesMap.get(activePopupMsgId);
+    reactionPopup.style.display = "none";
+    if (!m || !canEditMessage(m, myUid)) return;
+    editingMsgId = m.id;
+    if (editInput) editInput.value = m.decrypted?.text || "";
+    if (editModal) editModal.style.display = "flex";
+    editInput?.focus();
+  });
+  document.getElementById("edit-msg-cancel-btn")?.addEventListener("click", () => {
+    editingMsgId = null;
+    if (editModal) editModal.style.display = "none";
+  });
+  document.getElementById("edit-msg-save-btn")?.addEventListener("click", async () => {
+    const nextText = (editInput?.value || "").trim();
+    if (!nextText || !editingMsgId) return;
+    const m = messagesMap.get(editingMsgId);
+    const targetId = editingMsgId;
+    editingMsgId = null;
+    if (editModal) editModal.style.display = "none";
+    if (!m) return;
+    await updateEncryptedMessage(
+      targetId,
+      { ...m.decrypted, text: nextText, edited: true },
+      { notifyPartner: false }
+    );
+  });
+
   document.getElementById("rp-pin-btn")?.addEventListener("click", () => {
     const id = activePopupMsgId;
     const m = messagesMap.get(id);
@@ -1632,10 +1850,33 @@ export function createChatManager({
     } catch {}
   });
 
-  messageInput.addEventListener("focus", collapseMediaBar);
-  expandMediaBtn.addEventListener("click", expandMediaBar);
-  messageInput.addEventListener("blur", () => {
-    if (!messageInput.value.trim()) setTimeout(expandMediaBar, 150);
+  messageInput.addEventListener("focus", closeMediaBar);
+  expandMediaBtn?.addEventListener("click", toggleMediaBar);
+  mediaBar?.addEventListener("click", e => e.stopPropagation());
+  document.addEventListener("click", () => closeMediaBar());
+
+  quickRepliesBtn?.addEventListener("click", e => {
+    e.stopPropagation();
+    if (!quickRepliesBar) return;
+    const opening = quickRepliesBar.style.display === "none" || !quickRepliesBar.style.display;
+    quickRepliesBar.style.display = opening ? "flex" : "none";
+    quickRepliesBtn.classList.toggle("active", opening);
+    closeMediaBar();
+  });
+
+  quickRepliesBar?.querySelectorAll(".quick-reply-chip[data-qr]").forEach(chip => {
+    chip.addEventListener("click", e => {
+      e.stopPropagation();
+      const qr = chip.dataset.qr || "";
+      if (!qr) return;
+      messageInput.value = messageInput.value ? `${messageInput.value.trimEnd()} ${qr}` : qr;
+      messageInput.style.height = "auto";
+      messageInput.style.height = Math.min(messageInput.scrollHeight, 100) + "px";
+      quickRepliesBar.style.display = "none";
+      quickRepliesBtn?.classList.remove("active");
+      messageInput.focus();
+      playEmotionSound("chime");
+    });
   });
 
   messageInput.addEventListener("keydown", e => {
@@ -1649,7 +1890,7 @@ export function createChatManager({
     onActivity?.();
     this.style.height = "auto";
     this.style.height = Math.min(this.scrollHeight, 100) + "px";
-    if (this.value.trim()) collapseMediaBar();
+    if (this.value.trim()) closeMediaBar();
     const user = getAuth()?.currentUser;
     const db = getDb();
     if (!user || !db) return;
@@ -1687,11 +1928,23 @@ export function createChatManager({
 
   document.getElementById("send-btn").addEventListener("click", sendCurrentInput);
 
-  const viewOnceCheck = document.getElementById("view-once-checkbox");
-  const viewOnceBtn = document.getElementById("view-once-btn");
-  viewOnceBtn.addEventListener("click", () => {
+  viewOnceBtn?.addEventListener("click", () => {
     viewOnceCheck.checked = !viewOnceCheck.checked;
     viewOnceBtn.classList.toggle("active", viewOnceCheck.checked);
+    if (viewOnceCheck.checked && teaseBlurCheck) {
+      teaseBlurCheck.checked = false;
+      teaseBlurBtn?.classList.remove("active");
+    }
+  });
+
+  teaseBlurBtn?.addEventListener("click", () => {
+    if (!teaseBlurCheck) return;
+    teaseBlurCheck.checked = !teaseBlurCheck.checked;
+    teaseBlurBtn.classList.toggle("active", teaseBlurCheck.checked);
+    if (teaseBlurCheck.checked && viewOnceCheck) {
+      viewOnceCheck.checked = false;
+      viewOnceBtn?.classList.remove("active");
+    }
   });
 
   document.getElementById("camera-btn").addEventListener("click", () => {
@@ -1727,11 +1980,14 @@ export function createChatManager({
       c.getContext("2d").drawImage(img, 0, 0, w, h);
       const dataUrl = c.toDataURL("image/jpeg", 0.72);
       URL.revokeObjectURL(url);
-      const isVO = viewOnceCheck.checked;
-      viewOnceCheck.checked = false;
-      viewOnceBtn.classList.remove("active");
+      const isVO = Boolean(viewOnceCheck?.checked);
+      const isTB = !isVO && Boolean(teaseBlurCheck?.checked);
+      if (viewOnceCheck) viewOnceCheck.checked = false;
+      viewOnceBtn?.classList.remove("active");
+      if (teaseBlurCheck) teaseBlurCheck.checked = false;
+      teaseBlurBtn?.classList.remove("active");
       playEmotionSound("chime");
-      await sendEncryptedMessage({ imageData: dataUrl, viewOnce: isVO, text: "" });
+      await sendEncryptedMessage({ imageData: dataUrl, viewOnce: isVO, teaseBlur: isTB, text: "" });
     };
     img.src = url;
   }
@@ -1868,6 +2124,9 @@ export function createChatManager({
     setMyUid(uid) { myUid = uid; },
     setPartnerLastReadMs(ms) { partnerLastReadMs = ms; refreshTicksInPlace(); },
     setGameRenderer(fn) { gameRenderer = fn; },
+    setGameUpdateHandler(fn) { gameUpdateHandler = fn; },
+    setWalletGiftHandler(fn) { walletGiftHandler = fn; },
+    getLoadedMessages() { return [...messagesMap.values()]; },
     setPinnedBarState,
     showGameUpdateBanner,
     hideGameUpdateBanner,
@@ -1890,7 +2149,7 @@ export function createChatManager({
       messageInput.value = text;
       messageInput.style.height = "auto";
       messageInput.style.height = Math.min(messageInput.scrollHeight, 100) + "px";
-      collapseMediaBar();
+      closeMediaBar();
       messageInput.focus();
     },
     getSelectedCount() { return selectedIds.size; },

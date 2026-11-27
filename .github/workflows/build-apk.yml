@@ -78,11 +78,14 @@ jobs:
           rsvg-convert -w 512 -h 512 notes-icon-full.svg -o www/icon-512.png
 
       - name: Prepare Web Files
+        env:
+          LIVE_SERVER_URL: ${{ vars.LIVE_SERVER_URL || secrets.LIVE_SERVER_URL || '' }}
+          PUSH_WORKER_URL: ${{ vars.PUSH_WORKER_URL || secrets.PUSH_WORKER_URL || '' }}
         run: |
           cp index.html style.css moods.css chat.css manifest.json sw.js www/
           cp -r js shared www/
           cp dp.png www/ || true
-          node -e 'const fs=require("fs");const c=fs.existsSync("firebase-web-config.json")?fs.readFileSync("firebase-web-config.json","utf8").trim():"{}";fs.writeFileSync("www/firebase-config.js","window.__FIREBASE_CONFIG__="+c+";\nwindow.__APP_CONFIG__={hasPushServer:true};\n");'
+          node -e 'const fs=require("fs");const c=fs.existsSync("firebase-web-config.json")?fs.readFileSync("firebase-web-config.json","utf8").trim():"{}";const appCfg={serverBaseUrl:(process.env.LIVE_SERVER_URL||"").trim(),pushWorkerUrl:(process.env.PUSH_WORKER_URL||"").trim(),hasPushServer:true};fs.writeFileSync("www/firebase-config.js","window.__FIREBASE_CONFIG__="+c+";\nwindow.__APP_CONFIG__="+JSON.stringify(appCfg)+";\n");'
 
       - name: Install & Build Android
         run: |
@@ -127,7 +130,7 @@ jobs:
           EOF
 
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          sed -i 's/<\/manifest>/<uses-permission android:name="android.permission.CAMERA" \/><uses-permission android:name="android.permission.RECORD_AUDIO" \/><uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" \/><uses-permission android:name="android.permission.WAKE_LOCK" \/><uses-permission android:name="android.permission.VIBRATE" \/><uses-permission android:name="android.permission.POST_NOTIFICATIONS" \/><\/manifest>/' $MANIFEST
+          sed -i 's/<\/manifest>/<uses-permission android:name="android.permission.INTERNET" \/><uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" \/><uses-permission android:name="android.permission.CAMERA" \/><uses-permission android:name="android.permission.RECORD_AUDIO" \/><uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" \/><uses-permission android:name="android.permission.BLUETOOTH" \/><uses-permission android:name="android.permission.BLUETOOTH_CONNECT" \/><uses-permission android:name="android.permission.WAKE_LOCK" \/><uses-permission android:name="android.permission.VIBRATE" \/><uses-permission android:name="android.permission.POST_NOTIFICATIONS" \/><\/manifest>/' $MANIFEST
           sed -i 's/<\/application>/<meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="notes_sync" \/><meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@android:drawable\/ic_menu_edit" \/><\/application>/' $MANIFEST
 
           npx cap sync android

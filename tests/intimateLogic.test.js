@@ -10,14 +10,26 @@ import {
   resolveStripRound,
   checkBlurredAnswer,
   formatTonightPlan,
+  pickBodyMapAction,
+  pickTastingCombo,
+  createMysteryBoxes,
+  unwrapMysteryBox,
   createWalletCoupon,
-  redeemWalletCoupon
+  receiveWalletGift,
+  redeemWalletCoupon,
+  rollKissZone,
+  resolveRiskDare,
+  pickBlindCards,
+  checkLockboxPass,
+  evaluateCravingSync,
+  addCustomItemToPool,
+  removeCustomItemFromPool
 } from "../shared/intimateLogic.js";
 
-test("INTIMATE_GAMES_META exposes 20 distinct intimacy games and 3 codewords", () => {
-  assert.equal(INTIMATE_GAMES_META.length, 20);
+test("INTIMATE_GAMES_META exposes 36 distinct intimacy & spicy games and 3 codewords", () => {
+  assert.equal(INTIMATE_GAMES_META.length, 36);
   const ids = new Set(INTIMATE_GAMES_META.map(g => g.id));
-  assert.equal(ids.size, 20);
+  assert.equal(ids.size, 36);
   assert.deepEqual(
     CODEWORD_GLOSSARY.map(c => c.key),
     ["honey", "chocolate", "mam"]
@@ -88,6 +100,34 @@ test("formatTonightPlan formats 4-step plan cleanly", () => {
   assert.match(txt, /4️⃣ Aftercare: Cuddle/);
 });
 
+test("pickBodyMapAction and pickTastingCombo build spicy combos cleanly", () => {
+  const bm = pickBodyMapAction("🍫 Chocolate", "Wild");
+  assert.match(bm, /Chocolate/);
+  assert.match(bm, /Wild/);
+  const tc = pickTastingCombo({ treats: ["🍯 Honey"], zones: ["🎀 Mam"] }, () => 0);
+  assert.equal(tc.summary, "🍯 Honey on 🎀 Mam");
+});
+
+test("createMysteryBoxes and unwrapMysteryBox unwrap 7 mystery gifts once", () => {
+  const boxes = createMysteryBoxes(["Box 1", "Box 2"]);
+  assert.equal(boxes.length, 7);
+  assert.equal(boxes[0].reward, "Box 1");
+  const { next, unlockedBox } = unwrapMysteryBox(boxes, 0);
+  assert.equal(unlockedBox.reward, "Box 1");
+  assert.equal(next[0].opened, true);
+  const twice = unwrapMysteryBox(next, 0);
+  assert.equal(twice.unlockedBox, null);
+});
+
+test("receiveWalletGift deduplicates by giftId and adds coupon to wallet", () => {
+  const { next, added } = receiveWalletGift([], { giftId: "g_1", title: "🍯 Honey VIP Pass", source: "Partner Gift" });
+  assert.equal(next.length, 1);
+  assert.equal(added.title, "🍯 Honey VIP Pass");
+  const dup = receiveWalletGift(next, { giftId: "g_1", title: "🍯 Honey VIP Pass" });
+  assert.equal(dup.added, null);
+  assert.equal(dup.next.length, 1);
+});
+
 test("createWalletCoupon and redeemWalletCoupon manage reward lifecycle", () => {
   const c1 = createWalletCoupon("🍯 Free 2-Min Honey Pass", "Scratch Card");
   const c2 = createWalletCoupon("🍫 Chocolate Token", "Dartboard");
@@ -103,3 +143,27 @@ test("createWalletCoupon and redeemWalletCoupon manage reward lifecycle", () => 
   const again = redeemWalletCoupon(next, c1.id);
   assert.equal(again.redeemedItem, null);
 });
+
+test("new spicy games pure helpers and custom task/saza deck CRUD work deterministically", () => {
+  const kiss = rollKissZone({ zones: ["🎀 Mam"], styles: ["Slow 🌸"] }, () => 0);
+  assert.equal(kiss.summary, "🎀 Mam — Slow 🌸");
+
+  const risk = resolveRiskDare(3, undefined, () => 0);
+  assert.equal(risk.multiplier, 3);
+  assert.equal(risk.tier, "triple");
+
+  const cards = pickBlindCards(["A", "B", "C", "D"], () => 0);
+  assert.equal(cards.length, 4);
+
+  assert.equal(checkLockboxPass("Honey123", " honey123 "), true);
+  assert.equal(checkLockboxPass("Honey123", "wrong"), false);
+
+  const match = evaluateCravingSync("🍫 Sweet Chocolate Focus", "🍫 Sweet Chocolate Focus");
+  assert.equal(match.synced, true);
+
+  const added = addCustomItemToPool([], ["Default 1"], "Custom Saza 💋");
+  assert.equal(added[0], "Custom Saza 💋");
+  const removed = removeCustomItemFromPool(added, ["Default 1"], 0);
+  assert.deepEqual(removed, ["Default 1"]);
+});
+

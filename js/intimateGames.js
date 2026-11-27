@@ -13,17 +13,45 @@ import {
   DEFAULT_SCRATCH_REWARDS,
   DEFAULT_DART_ZONES,
   DEFAULT_NIGHT_PLAN,
+  DEFAULT_POSITIONS_POOL,
+  DEFAULT_TASTING_POOL,
+  DEFAULT_DOUBLE_TROUBLE,
+  DEFAULT_AFTER_HOURS,
+  DEFAULT_ESCALATOR_PHASES,
+  DEFAULT_SAZA_WHEEL,
+  DEFAULT_AUCTION_PRIZES,
+  DEFAULT_RISK_DARES,
+  DEFAULT_KISS_ZONES,
+  DEFAULT_BLIND_CARDS,
+  DEFAULT_CONFESS_PROMPTS,
+  DEFAULT_CONFESS_TAXES,
+  DEFAULT_ICE_FIRE_ROUNDS,
+  DEFAULT_CRAVING_CHOICES,
+  DEFAULT_FREEZE_ZONES,
   rollNaughtyDice,
   stepHeatLevel,
   evaluateFantasyMatches,
   resolveStripRound,
   checkBlurredAnswer,
   formatTonightPlan,
+  pickBodyMapAction,
+  pickTastingCombo,
+  unwrapMysteryBox,
   createWalletCoupon,
-  redeemWalletCoupon
+  receiveWalletGift,
+  redeemWalletCoupon,
+  rollKissZone,
+  resolveRiskDare,
+  pickBlindCards,
+  checkLockboxPass,
+  evaluateCravingSync,
+  getEffectivePool,
+  addCustomItemToPool,
+  removeCustomItemFromPool
 } from "../shared/intimateLogic.js";
 
 const INTIMATE_CUSTOM_KEY = "sc_intimate_custom_v1";
+const UNIVERSAL_CUSTOM_KEY = "sc_custom_games_v2";
 const LOVE_WALLET_KEY = "sc_love_wallet_v1";
 const KISS_COUNTER_KEY = "sc_intimate_kisses_v1";
 
@@ -61,6 +89,8 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
   let activeCat = "all";
   let activeGameId = "dice";
   let showCustomize = false;
+  let showPickerGrid = true;
+  let searchQuery = "";
 
   // Ephemeral game states
   let lastDiceRes = null;
@@ -110,6 +140,44 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
   let whisperPrompt = "";
   let bossSelected = "";
 
+  // 6 New Spicy Games State
+  let bodyMapZone = "🍯 Honey";
+  let bodyMapIntensity = "Tease";
+  let bodyMapAction = pickBodyMapAction("🍯 Honey", "Tease");
+  let positionsResult = "";
+  let tastingCombo = null;
+  let doubleResult = "";
+  let escalatorPhaseIdx = 0;
+  let escalatorSecLeft = 20;
+  let escalatorRunning = false;
+  let escalatorTimerInt = null;
+  let afterHoursIdx = 0;
+  let afterHoursMode = "truth";
+
+  // 10 New Spicy / Saza Games State
+  let auctionPrizeIdx = 0;
+  let auctionBid = "💋 +5 Kisses";
+  let riskMult = 1;
+  let riskDareText = "";
+  let freezeZoneIdx = 0;
+  let freezeRunning = false;
+  let freezeSecLeft = 45;
+  let freezePausedCue = false;
+  let freezeTimerInt = null;
+  let kissResult = null;
+  let lockSecret = "Tonight 3-Min Honey & Chocolate Full VIP Pass Unlocked 🔥";
+  let lockHint = "Humara secret nickname ❤️";
+  let lockPass = "Janan";
+  let lockPreviewUnlocked = false;
+  let iceFireIdx = 0;
+  let blindCards = null;
+  let blindPickedIdx = -1;
+  let confessIdx = 0;
+  let confessTaxIdx = 0;
+  let confessRevealedTax = false;
+  let sazaSpinResult = "";
+  let cravingPicked = "";
+
   function myUid() {
     return getAuth()?.currentUser?.uid || "";
   }
@@ -123,6 +191,96 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
     writeJson(INTIMATE_CUSTOM_KEY, customCfg);
   }
 
+  function readUniversalSaza() {
+    const store = readJson(UNIVERSAL_CUSTOM_KEY, {});
+    return getEffectivePool(store?.saza, DEFAULT_SAZA_WHEEL);
+  }
+
+  function writeUniversalSaza(arr) {
+    const store = readJson(UNIVERSAL_CUSTOM_KEY, {});
+    const clean = getEffectivePool(arr, DEFAULT_SAZA_WHEEL);
+    writeJson(UNIVERSAL_CUSTOM_KEY, { ...store, saza: clean });
+    return clean;
+  }
+
+  function renderChipCustomizer(container, { title, items, defaults, onChange, placeholder = "Naya task / saza add karein..." }) {
+    const panel = document.createElement("div");
+    panel.className = "intimate-custom-panel";
+
+    if (title) {
+      const hdr = document.createElement("div");
+      hdr.className = "care-section-title";
+      hdr.innerText = title;
+      panel.appendChild(hdr);
+    }
+
+    const addRow = document.createElement("div");
+    addRow.className = "game-inline-reply";
+    const inp = document.createElement("input");
+    inp.type = "text";
+    inp.className = "care-input";
+    inp.placeholder = placeholder;
+    inp.setAttribute("aria-label", title || "Custom item input");
+
+    const addBtn = document.createElement("button");
+    addBtn.type = "button";
+    addBtn.className = "game-mini-btn active";
+    addBtn.innerText = "➕ Add";
+
+    const commitAdd = () => {
+      const val = inp.value.trim();
+      if (!val) {
+        inp.focus();
+        return;
+      }
+      const next = addCustomItemToPool(items, defaults, val, 60);
+      inp.value = "";
+      playEmotionSound("gift");
+      onChange(next);
+    };
+    addBtn.onclick = commitAdd;
+    inp.onkeydown = e => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        commitAdd();
+      }
+    };
+    addRow.append(inp, addBtn);
+    panel.appendChild(addRow);
+
+    const listWrap = document.createElement("div");
+    listWrap.className = "custom-chip-list";
+    const eff = getEffectivePool(items, defaults);
+    eff.forEach((txt, idx) => {
+      const row = document.createElement("div");
+      row.className = "custom-chip-row";
+      const sp = document.createElement("span");
+      sp.innerText = txt;
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "custom-chip-del";
+      del.innerText = "✕";
+      del.setAttribute("aria-label", `Delete ${txt}`);
+      del.onclick = () => {
+        const next = removeCustomItemFromPool(eff, defaults, idx);
+        onChange(next);
+      };
+      row.append(sp, del);
+      listWrap.appendChild(row);
+    });
+    panel.appendChild(listWrap);
+
+    const rstBtn = document.createElement("button");
+    rstBtn.type = "button";
+    rstBtn.className = "game-mini-btn";
+    rstBtn.innerText = "🔄 Reset Default";
+    rstBtn.onclick = () => onChange([...defaults]);
+    panel.appendChild(rstBtn);
+
+    container.appendChild(panel);
+    return panel;
+  }
+
   function stopLoops() {
     clearInterval(teaserTimerInt);
     teaserTimerInt = null;
@@ -130,6 +288,12 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
     clearInterval(rapidTimerInt);
     rapidTimerInt = null;
     rapidRunning = false;
+    clearInterval(escalatorTimerInt);
+    escalatorTimerInt = null;
+    escalatorRunning = false;
+    clearInterval(freezeTimerInt);
+    freezeTimerInt = null;
+    freezeRunning = false;
     if (bottleRaf) {
       cancelAnimationFrame(bottleRaf);
       bottleRaf = null;
@@ -183,6 +347,21 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
       card.appendChild(info);
 
       if (!item.redeemed) {
+        const giftBtn = document.createElement("button");
+        giftBtn.type = "button";
+        giftBtn.className = "game-mini-btn";
+        giftBtn.innerText = "🎁 Bhejo";
+        giftBtn.title = "Partner ke wallet mein bhejein";
+        giftBtn.onclick = async () => {
+          if (walletModal) walletModal.style.display = "none";
+          playEmotionSound("gift");
+          await chat.sendEncryptedMessage(
+            { walletGift: { giftId: item.id, title: item.title, source: item.source, from: myUid() } },
+            "letter"
+          );
+        };
+        card.appendChild(giftBtn);
+
         const redBtn = document.createElement("button");
         redBtn.type = "button";
         redBtn.className = "game-mini-btn active";
@@ -431,8 +610,16 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
     return b;
   }
 
+  function animateStageReveal(el) {
+    if (!el) return;
+    el.classList.remove("game-stage-enter");
+    void el.offsetWidth;
+    el.classList.add("game-stage-enter");
+  }
+
   function renderStage(stageEl) {
     stageEl.innerHTML = "";
+    animateStageReveal(stageEl);
     const meta = INTIMATE_GAMES_META.find(g => g.id === activeGameId) || INTIMATE_GAMES_META[0];
 
     const topRow = document.createElement("div");
@@ -440,6 +627,8 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
     const h = document.createElement("div");
     h.className = "game-card-head";
     h.innerText = `${meta.icon} ${meta.name}`;
+    const hdrActions = document.createElement("div");
+    hdrActions.className = "care-head-actions";
     const custToggle = document.createElement("button");
     custToggle.type = "button";
     custToggle.className = "game-mini-btn" + (showCustomize ? " active" : "");
@@ -448,8 +637,9 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
       showCustomize = !showCustomize;
       renderStage(stageEl);
     };
+    hdrActions.appendChild(custToggle);
     topRow.appendChild(h);
-    topRow.appendChild(custToggle);
+    topRow.appendChild(hdrActions);
     stageEl.appendChild(topRow);
 
     // 1. NAUGHTY DICE
@@ -1050,8 +1240,38 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
 
     // 10. SENSORY QUIZ
     if (activeGameId === "sensory") {
+      const defItems = ["🧊 Ice Cube", "🪶 Feather", "💋 Warm Kiss", "🕯️ Massage Oil"];
+      const defZones = ["🍯 Honey", "🍫 Chocolate", "🎀 Mam", "✨ Neck"];
+      const sCfg = cfg("sensoryCfg", { items: defItems, zones: defZones });
+      const sItems = getEffectivePool(sCfg.items, defItems);
+      const sZones = getEffectivePool(sCfg.zones, defZones);
+      if (!sItems.includes(sensorySel.item)) sensorySel.item = sItems[0];
+      if (!sZones.includes(sensorySel.zone)) sensorySel.zone = sZones[0];
+
+      if (showCustomize) {
+        renderChipCustomizer(stageEl, {
+          title: "Custom Sensory Props",
+          items: sItems,
+          defaults: defItems,
+          onChange: next => {
+            saveCfg("sensoryCfg", { ...sCfg, items: next });
+            renderStage(stageEl);
+          }
+        });
+        renderChipCustomizer(stageEl, {
+          title: "Custom Sensory Zones",
+          items: sZones,
+          defaults: defZones,
+          onChange: next => {
+            saveCfg("sensoryCfg", { ...sCfg, zones: next });
+            renderStage(stageEl);
+          }
+        });
+        return;
+      }
+
       const sRow = document.createElement("div"); sRow.className = "game-btn-row";
-      ["🧊 Ice Cube", "🪶 Feather", "💋 Warm Kiss", "🕯️ Massage Oil"].forEach(it => {
+      sItems.forEach(it => {
         const b = document.createElement("button");
         b.type = "button"; b.className = "game-mini-btn" + (sensorySel.item === it ? " active" : "");
         b.innerText = it;
@@ -1059,7 +1279,7 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
         sRow.appendChild(b);
       });
       const zRow = document.createElement("div"); zRow.className = "game-btn-row";
-      ["🍯 Honey", "🍫 Chocolate", "🎀 Mam", "✨ Neck"].forEach(zn => {
+      sZones.forEach(zn => {
         const b = document.createElement("button");
         b.type = "button"; b.className = "game-mini-btn" + (sensorySel.zone === zn ? " active" : "");
         b.innerText = zn;
@@ -1080,6 +1300,34 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
 
     // 11. WHISPER DARE
     if (activeGameId === "whisper") {
+      const defWhispers = [
+        "Dheemi saanson ke saath 15-second whisper voice note bhejo: aaj Chocolate / Honey / Mam par kya pasand hai? 🎙️🔥",
+        "Kaano mein bolo aaj raat sabse pehle kya karna hai 🎧💋",
+        "10s soft breathing + sweet secret promise whisper karo 🌙"
+      ];
+      const wPool = getEffectivePool(cfg("whisperPool", defWhispers), defWhispers);
+      if (showCustomize) {
+        renderChipCustomizer(stageEl, {
+          title: "Custom Whisper Dare Presets",
+          items: wPool,
+          defaults: defWhispers,
+          onChange: next => {
+            saveCfg("whisperPool", next);
+            renderStage(stageEl);
+          }
+        });
+        return;
+      }
+      const presetRow = document.createElement("div");
+      presetRow.className = "game-btn-row";
+      wPool.slice(0, 4).forEach((wp, i) => {
+        const pb = document.createElement("button");
+        pb.type = "button";
+        pb.className = "game-mini-btn" + (whisperPrompt === wp ? " active" : "");
+        pb.innerText = `🎙️ Preset ${i + 1}`;
+        pb.onclick = () => { whisperPrompt = wp; renderStage(stageEl); };
+        presetRow.appendChild(pb);
+      });
       const inp = document.createElement("input");
       inp.type = "text"; inp.className = "care-input";
       inp.placeholder = "Whisper line (e.g. 15s Honey/Chocolate ke liye apni khwahish bolo)...";
@@ -1091,7 +1339,7 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
       sendB.onclick = () => sendToChat({
         kind: "intimate_dare",
         title: "🎙️ Whisper Voice Dare",
-        prompt: whisperPrompt.trim() || "Dheemi saanson ke saath 15-second whisper voice note bhejo: aaj Chocolate / Honey / Mam par kya pasand hai? 🎙️🔥",
+        prompt: whisperPrompt.trim() || wPool[0],
         replyText: ""
       });
       const recB = document.createElement("button");
@@ -1101,15 +1349,30 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
         document.getElementById("voice-btn")?.click();
       };
       row.append(sendB, recB);
-      stageEl.append(inp, row);
+      stageEl.append(presetRow, inp, row);
       return;
     }
 
     // 12. TEASE FRAME (1x PHOTO)
     if (activeGameId === "teaseframe") {
+      const defPrompts = [
+        "Sirf mere liye 1 View-Once naughty/cute Tease Frame bhejo abhi! 🔥📸",
+        "Dim light mein cute neck/collarbone mirror peek 1x photo bhejo 💋📸",
+        "Aaj ke outfit ki 1-second secret hint photo bhejo 👀🔥"
+      ];
+      const pool = getEffectivePool(cfg("teaseFramePool", defPrompts), defPrompts);
+      if (showCustomize) {
+        renderChipCustomizer(stageEl, {
+          title: "Custom View-Once Photo Requests",
+          items: pool,
+          defaults: defPrompts,
+          onChange: next => { saveCfg("teaseFramePool", next); renderStage(stageEl); }
+        });
+        return;
+      }
       const info = document.createElement("div");
       info.className = "flirty-wheel-result";
-      info.innerText = "📸 Ek View-Once Tease Photo (neck, lips ya cute mirror hint) bhejo jo sirf 1 baar khulegi 🔥";
+      info.innerText = `📸 ${pool[0]}`;
       const row = document.createElement("div"); row.className = "game-btn-row";
       const camB = document.createElement("button");
       camB.type = "button"; camB.className = "modal-btn primary"; camB.innerText = "📸 1x View-Once Camera";
@@ -1126,7 +1389,7 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
       reqB.onclick = () => sendToChat({
         kind: "intimate_dare",
         title: "📸 View-Once Tease Request",
-        prompt: "Sirf mere liye 1 View-Once naughty/cute Tease Frame bhejo abhi! 🔥📸",
+        prompt: pool[Math.floor(Math.random() * pool.length)],
         replyText: ""
       });
       row.append(camB, reqB);
@@ -1187,18 +1450,39 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
 
     // 14. 3 SECRET WISHES
     if (activeGameId === "wishes") {
-      const w1 = document.createElement("input"); w1.type = "text"; w1.className = "care-input"; w1.placeholder = "Wish 1 (e.g. 🍯 Honey par slow kiss)...";
-      const w2 = document.createElement("input"); w2.type = "text"; w2.className = "care-input"; w2.placeholder = "Wish 2 (e.g. 🍫 Chocolate 2-min attention)...";
-      const w3 = document.createElement("input"); w3.type = "text"; w3.className = "care-input"; w3.placeholder = "Wish 3 (e.g. 🎀 Mam cuddle & sleep)...";
+      const defWishes = [
+        "🍯 Honey 2-Min Slow Focus",
+        "🍫 Chocolate Sweet Attention",
+        "🎀 Mam Tight Cuddle & Neck Kisses",
+        "💋 15 Slow Lip & Neck Kisses",
+        "💆 5-Min Warm Massage"
+      ];
+      const wishPool = getEffectivePool(cfg("wishesPool", defWishes), defWishes);
+      if (showCustomize) {
+        renderChipCustomizer(stageEl, {
+          title: "Custom Wish Ideas",
+          items: wishPool,
+          defaults: defWishes,
+          onChange: next => { saveCfg("wishesPool", next); renderStage(stageEl); }
+        });
+        return;
+      }
+      const w1 = document.createElement("input"); w1.type = "text"; w1.className = "care-input"; w1.placeholder = `Wish 1 (e.g. ${wishPool[0]})`;
+      const w2 = document.createElement("input"); w2.type = "text"; w2.className = "care-input"; w2.placeholder = `Wish 2 (e.g. ${wishPool[1] || wishPool[0]})`;
+      const w3 = document.createElement("input"); w3.type = "text"; w3.className = "care-input"; w3.placeholder = `Wish 3 (e.g. ${wishPool[2] || wishPool[0]})`;
+      const fillBtn = document.createElement("button");
+      fillBtn.type = "button"; fillBtn.className = "game-mini-btn"; fillBtn.innerText = "🎲 Auto-Fill from Custom Wishes";
+      fillBtn.onclick = () => {
+        const shuffled = [...wishPool].sort(() => Math.random() - 0.5);
+        w1.value = shuffled[0] || defWishes[0];
+        w2.value = shuffled[1] || defWishes[1];
+        w3.value = shuffled[2] || defWishes[2];
+      };
       const sendB = document.createElement("button");
       sendB.type = "button"; sendB.className = "modal-btn primary"; sendB.innerText = "💌 3 Sealed Wishes Bhejein";
       sendB.onclick = () => {
         const list = [w1.value.trim(), w2.value.trim(), w3.value.trim()].filter(Boolean);
-        const finalWishes = list.length ? list : [
-          "🍯 Honey 2-Min Slow Focus",
-          "🍫 Chocolate Sweet Attention",
-          "🎀 Mam Tight Cuddle & Neck Kisses"
-        ];
+        const finalWishes = list.length ? list : wishPool.slice(0, 3);
         sendToChat({
           kind: "intimate_wishes",
           title: "💌 3 Sealed Secret Wishes",
@@ -1206,20 +1490,30 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
           accepted: false
         });
       };
-      stageEl.append(w1, w2, w3, sendB);
+      stageEl.append(w1, w2, w3, fillBtn, sendB);
       return;
     }
 
     // 15. KISSES & MARKS COUNTER
     if (activeGameId === "counter") {
-      const stats = readJson(KISS_COUNTER_KEY, { kisses: 0, honey: 0, chocolate: 0, mam: 0 });
-      const items = [
-        ["kisses", "💋 Kisses"],
-        ["honey", "🍯 Honey"],
-        ["chocolate", "🍫 Chocolate"],
-        ["mam", "🎀 Mam"]
-      ];
-      items.forEach(([key, label]) => {
+      const defCounters = ["💋 Kisses", "🍯 Honey", "🍫 Chocolate", "🎀 Mam"];
+      const counterLabels = getEffectivePool(cfg("counterLabels", defCounters), defCounters);
+      const stats = readJson(KISS_COUNTER_KEY, {});
+      if (showCustomize) {
+        renderChipCustomizer(stageEl, {
+          title: "Custom Score Tracker Labels",
+          items: counterLabels,
+          defaults: defCounters,
+          onChange: next => { saveCfg("counterLabels", next); renderStage(stageEl); }
+        });
+        const resetScoreB = document.createElement("button");
+        resetScoreB.type = "button"; resetScoreB.className = "game-mini-btn"; resetScoreB.innerText = "🧹 Reset All Counts to 0";
+        resetScoreB.onclick = () => { writeJson(KISS_COUNTER_KEY, {}); renderStage(stageEl); };
+        stageEl.appendChild(resetScoreB);
+        return;
+      }
+      counterLabels.forEach(label => {
+        const key = label.toLowerCase().replace(/[^a-z0-9]/g, "") || label;
         const row = document.createElement("div");
         row.className = "care-head-inline";
         const lbl = document.createElement("span");
@@ -1239,18 +1533,39 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
       });
       const sendB = document.createElement("button");
       sendB.type = "button"; sendB.className = "modal-btn primary"; sendB.innerText = "📤 Score Chat Mein Share";
-      sendB.onclick = () => sendToChat({
-        kind: "score_card",
-        challengeSubtab: "intimate",
-        title: "💘 Intimate Scoreboard",
-        summary: `💋 Kisses: ${stats.kisses} • 🍯 Honey: ${stats.honey} • 🍫 Chocolate: ${stats.chocolate} • 🎀 Mam: ${stats.mam}`
-      });
+      sendB.onclick = () => {
+        const parts = counterLabels.map(label => {
+          const key = label.toLowerCase().replace(/[^a-z0-9]/g, "") || label;
+          return `${label}: ${stats[key] || 0}`;
+        });
+        sendToChat({
+          kind: "score_card",
+          challengeSubtab: "intimate",
+          title: "💘 Intimate Scoreboard",
+          summary: parts.join(" • ")
+        });
+      };
       stageEl.appendChild(sendB);
       return;
     }
 
     // 16. BLURRED RIDDLE CARD
     if (activeGameId === "blurcard") {
+      const defBlur = [
+        "Tonight 2-Min Slow Honey Focus Unlocked!",
+        "Unlimited Mam & Neck Kisses Tonight 🎀",
+        "1-Hour Full Boss Pass Activated 👑"
+      ];
+      const blurPool = getEffectivePool(cfg("blurPresets", defBlur), defBlur);
+      if (showCustomize) {
+        renderChipCustomizer(stageEl, {
+          title: "Custom Blurred Riddle Rewards",
+          items: blurPool,
+          defaults: defBlur,
+          onChange: next => { saveCfg("blurPresets", next); renderStage(stageEl); }
+        });
+        return;
+      }
       const box = document.createElement("div");
       box.className = "blur-secret-box" + (blurUnlocked ? "" : " blurred");
       box.innerText = blurMessage;
@@ -1264,16 +1579,18 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
       const row = document.createElement("div"); row.className = "game-btn-row";
       const prevB = document.createElement("button"); prevB.type = "button"; prevB.className = "modal-btn"; prevB.innerText = blurUnlocked ? "🙈 Blur Karein" : "👀 Preview";
       prevB.onclick = () => { blurUnlocked = !blurUnlocked; renderStage(stageEl); };
+      const randB = document.createElement("button"); randB.type = "button"; randB.className = "modal-btn"; randB.innerText = "🎲 Preset";
+      randB.onclick = () => { blurMessage = blurPool[Math.floor(Math.random() * blurPool.length)]; renderStage(stageEl); };
       const sendB = document.createElement("button"); sendB.type = "button"; sendB.className = "modal-btn primary"; sendB.innerText = "💬 Blurred Card Bhejein";
       sendB.onclick = () => sendToChat({
         kind: "intimate_blur",
         title: "🧩 Blurred Secret Card",
         hint: blurHint.trim() || "Password guess karo!",
         answer: blurWord.trim() || "Honey",
-        secretText: blurMessage.trim() || "Tonight 2-Min Honey / Chocolate Reward Unlocked!",
+        secretText: blurMessage.trim() || blurPool[0],
         unlocked: false
       });
-      row.append(prevB, sendB);
+      row.append(prevB, randB, sendB);
       stageEl.append(box, hintInp, keyInp, msgInp, row);
       return;
     }
@@ -1425,6 +1742,27 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
     // 20. TONIGHT'S 4-STEP PLANNER
     if (activeGameId === "nightplan") {
       const pl = cfg("nightPlan", DEFAULT_NIGHT_PLAN);
+      if (showCustomize) {
+        const panel = document.createElement("div"); panel.className = "intimate-custom-panel";
+        panel.innerHTML = `<div class="care-section-title">Har step mein 1 option per line edit karein</div>`;
+        const stTa = document.createElement("textarea"); stTa.rows = 2; stTa.value = (pl.starters || DEFAULT_NIGHT_PLAN.starters).join("\n");
+        const teTa = document.createElement("textarea"); teTa.rows = 2; teTa.value = (pl.teases || DEFAULT_NIGHT_PLAN.teases).join("\n");
+        const mnTa = document.createElement("textarea"); mnTa.rows = 2; mnTa.value = (pl.mains || DEFAULT_NIGHT_PLAN.mains).join("\n");
+        const afTa = document.createElement("textarea"); afTa.rows = 2; afTa.value = (pl.aftercares || DEFAULT_NIGHT_PLAN.aftercares).join("\n");
+        const saveB = document.createElement("button"); saveB.type = "button"; saveB.className = "game-mini-btn active"; saveB.innerText = "💾 Save 4-Step Plan";
+        saveB.onclick = () => {
+          saveCfg("nightPlan", {
+            starters: parseLines(stTa.value, DEFAULT_NIGHT_PLAN.starters),
+            teases: parseLines(teTa.value, DEFAULT_NIGHT_PLAN.teases),
+            mains: parseLines(mnTa.value, DEFAULT_NIGHT_PLAN.mains),
+            aftercares: parseLines(afTa.value, DEFAULT_NIGHT_PLAN.aftercares)
+          });
+          showCustomize = false; renderStage(stageEl);
+        };
+        panel.append(stTa, teTa, mnTa, afTa, saveB);
+        stageEl.appendChild(panel);
+        return;
+      }
       const curObj = {
         starter: pl.starters[planSel.starterIdx % pl.starters.length],
         tease: pl.teases[planSel.teaseIdx % pl.teases.length],
@@ -1460,6 +1798,762 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
         approved: false
       });
       stageEl.append(box, row, sendB);
+      return;
+    }
+
+    // 21. BODY MAP HOT TAP
+    if (activeGameId === "bodymap") {
+      const defZones = ["💋 Lips & Neck", "🎀 Mam", "🍯 Honey", "🍫 Chocolate", "🫶🏻 Waist"];
+      const zones = getEffectivePool(cfg("bodyMapZones", defZones), defZones);
+      if (showCustomize) {
+        renderChipCustomizer(stageEl, {
+          title: "Custom Body Map Zones",
+          items: zones,
+          defaults: defZones,
+          onChange: next => { saveCfg("bodyMapZones", next); renderStage(stageEl); }
+        });
+        return;
+      }
+      if (!zones.includes(bodyMapZone)) {
+        bodyMapZone = zones[0];
+        bodyMapAction = pickBodyMapAction(bodyMapZone, bodyMapIntensity);
+      }
+      const zRow = document.createElement("div");
+      zRow.className = "game-btn-row";
+      zones.forEach(z => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "game-mini-btn" + (bodyMapZone === z ? " active" : "");
+        b.innerText = z;
+        b.onclick = () => {
+          bodyMapZone = z;
+          bodyMapAction = pickBodyMapAction(bodyMapZone, bodyMapIntensity);
+          playEmotionSound("love");
+          renderStage(stageEl);
+        };
+        zRow.appendChild(b);
+      });
+      const iRow = document.createElement("div");
+      iRow.className = "game-btn-row";
+      ["Soft", "Tease", "Wild"].forEach(lvl => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "game-mini-btn" + (bodyMapIntensity === lvl ? " active" : "");
+        b.innerText = lvl === "Soft" ? "🌸 Soft" : lvl === "Tease" ? "😘 Tease" : "🔥 Wild";
+        b.onclick = () => {
+          bodyMapIntensity = lvl;
+          bodyMapAction = pickBodyMapAction(bodyMapZone, bodyMapIntensity);
+          playEmotionSound("love");
+          renderStage(stageEl);
+        };
+        iRow.appendChild(b);
+      });
+      const resBox = document.createElement("div");
+      resBox.className = "flirty-wheel-result wheel-pop";
+      resBox.innerText = bodyMapAction;
+      const actRow = document.createElement("div");
+      actRow.className = "game-btn-row";
+      const sendB = document.createElement("button");
+      sendB.type = "button"; sendB.className = "modal-btn primary"; sendB.innerText = "💬 Chat Bhejein";
+      sendB.onclick = () => sendToChat({
+        kind: "intimate_dare",
+        title: "🗺️ Body Map Challenge",
+        prompt: bodyMapAction,
+        replyText: ""
+      });
+      actRow.append(sendB, makeSaveWalletBtn(bodyMapAction, "Body Map"));
+      stageEl.append(zRow, iRow, resBox, actRow);
+      return;
+    }
+
+    // 22. VIBE / POSITION ROULETTE
+    if (activeGameId === "positions") {
+      const pool = cfg("positionsPool", DEFAULT_POSITIONS_POOL);
+      if (showCustomize) {
+        const panel = document.createElement("div"); panel.className = "intimate-custom-panel";
+        const ta = document.createElement("textarea"); ta.rows = 5; ta.value = pool.join("\n");
+        const saveB = document.createElement("button");
+        saveB.type = "button"; saveB.className = "game-mini-btn active"; saveB.innerText = "💾 Save Vibes";
+        saveB.onclick = () => {
+          saveCfg("positionsPool", parseLines(ta.value, DEFAULT_POSITIONS_POOL));
+          showCustomize = false; renderStage(stageEl);
+        };
+        panel.append(ta, saveB);
+        stageEl.appendChild(panel);
+        return;
+      }
+      const resBox = document.createElement("div");
+      resBox.className = "flirty-wheel-result wheel-pop";
+      resBox.innerText = positionsResult || "Spin karein aur dekhein aaj raat ka Romantic Vibe! 💫";
+      const row = document.createElement("div"); row.className = "game-btn-row";
+      const spinB = document.createElement("button");
+      spinB.type = "button"; spinB.className = "modal-btn primary"; spinB.innerText = "💫 Spin Vibe";
+      spinB.onclick = () => {
+        positionsResult = pool[Math.floor(Math.random() * pool.length)];
+        playEmotionSound("love");
+        renderStage(stageEl);
+      };
+      const sendB = document.createElement("button");
+      sendB.type = "button"; sendB.className = "modal-btn"; sendB.innerText = "💬 Chat Bhejein";
+      sendB.onclick = () => sendToChat({
+        kind: "intimate_dare",
+        title: "💫 Vibe Roulette",
+        prompt: positionsResult || pool[0],
+        replyText: ""
+      });
+      row.append(spinB, sendB);
+      if (positionsResult) row.appendChild(makeSaveWalletBtn(positionsResult, "Vibe Roulette"));
+      stageEl.append(resBox, row);
+      return;
+    }
+
+    // 23. SWEET TASTE LAB (HONEY / CHOCOLATE)
+    if (activeGameId === "tasting") {
+      const tCfg = cfg("tastingPool", DEFAULT_TASTING_POOL);
+      if (showCustomize) {
+        const panel = document.createElement("div"); panel.className = "intimate-custom-panel";
+        const trTa = document.createElement("textarea"); trTa.rows = 3; trTa.value = (tCfg.treats || DEFAULT_TASTING_POOL.treats).join("\n");
+        const znTa = document.createElement("textarea"); znTa.rows = 3; znTa.value = (tCfg.zones || DEFAULT_TASTING_POOL.zones).join("\n");
+        const saveB = document.createElement("button"); saveB.type = "button"; saveB.className = "game-mini-btn active"; saveB.innerText = "💾 Save Tasting Lab";
+        saveB.onclick = () => {
+          saveCfg("tastingPool", {
+            treats: parseLines(trTa.value, DEFAULT_TASTING_POOL.treats),
+            zones: parseLines(znTa.value, DEFAULT_TASTING_POOL.zones)
+          });
+          showCustomize = false; renderStage(stageEl);
+        };
+        panel.append(trTa, znTa, saveB);
+        stageEl.appendChild(panel);
+        return;
+      }
+      if (!tastingCombo) tastingCombo = pickTastingCombo(tCfg);
+      const resBox = document.createElement("div");
+      resBox.className = "flirty-wheel-result wheel-pop";
+      resBox.innerText = `🍯 ${tastingCombo.summary}`;
+      const row = document.createElement("div"); row.className = "game-btn-row";
+      const mixB = document.createElement("button"); mixB.type = "button"; mixB.className = "modal-btn primary"; mixB.innerText = "🍯 Naya Combo";
+      mixB.onclick = () => {
+        tastingCombo = pickTastingCombo(tCfg);
+        playEmotionSound("kiss");
+        renderStage(stageEl);
+      };
+      const sendB = document.createElement("button"); sendB.type = "button"; sendB.className = "modal-btn"; sendB.innerText = "💬 Chat Bhejein";
+      sendB.onclick = () => sendToChat({
+        kind: "intimate_dare",
+        title: "🍯 Sweet Taste Challenge",
+        prompt: `Tonight's Flavor: ${tastingCombo.summary} 😋🔥`,
+        replyText: ""
+      });
+      row.append(mixB, sendB, makeSaveWalletBtn(tastingCombo.summary, "Sweet Taste"));
+      stageEl.append(resBox, row);
+      return;
+    }
+
+    // 24. DOUBLE STAKES DUEL
+    if (activeGameId === "doubletrouble") {
+      const stakes = cfg("doubleTrouble", DEFAULT_DOUBLE_TROUBLE);
+      if (showCustomize) {
+        const panel = document.createElement("div"); panel.className = "intimate-custom-panel";
+        const ta = document.createElement("textarea"); ta.rows = 4; ta.value = stakes.join("\n");
+        const saveB = document.createElement("button"); saveB.type = "button"; saveB.className = "game-mini-btn active"; saveB.innerText = "💾 Save Stakes";
+        saveB.onclick = () => { saveCfg("doubleTrouble", parseLines(ta.value, DEFAULT_DOUBLE_TROUBLE)); showCustomize = false; renderStage(stageEl); };
+        panel.append(ta, saveB);
+        stageEl.appendChild(panel);
+        return;
+      }
+      const resBox = document.createElement("div");
+      resBox.className = "flirty-wheel-result";
+      resBox.innerText = doubleResult || "High-Card Duel kheliye — Jo haarega wo shart poori karega! 🔥";
+      const row = document.createElement("div"); row.className = "game-btn-row";
+      const duelB = document.createElement("button"); duelB.type = "button"; duelB.className = "modal-btn primary"; duelB.innerText = "🔥 Double Duel";
+      duelB.onclick = () => {
+        const pA = Math.floor(Math.random() * 13) + 2;
+        const pB = Math.floor(Math.random() * 13) + 2;
+        const stake = stakes[Math.floor(Math.random() * stakes.length)];
+        const outcome = pA === pB ? "Draw! Dono fulfill karenge 😈" : pA > pB ? "Aap Jeete 🏆 Partner ki shart!" : "Bot Jeeta 😈 Aapki shart!";
+        doubleResult = `Cards: Aap ${pA} vs Love ${pB}\n${outcome}\n${stake}`;
+        playEmotionSound(pA >= pB ? "gift" : "love");
+        renderStage(stageEl);
+      };
+      const sendB = document.createElement("button"); sendB.type = "button"; sendB.className = "modal-btn"; sendB.innerText = "💬 Chat Bhejein";
+      sendB.onclick = () => sendToChat({
+        kind: "intimate_dare",
+        title: "🔥 Double Trouble Stake",
+        prompt: doubleResult || stakes[0],
+        replyText: ""
+      });
+      row.append(duelB, sendB);
+      stageEl.append(resBox, row);
+      return;
+    }
+
+    // 25. 3-PHASE RUSH ESCALATOR
+    if (activeGameId === "escalator") {
+      const phases = cfg("escalatorPhases", DEFAULT_ESCALATOR_PHASES);
+      if (showCustomize) {
+        const panel = document.createElement("div"); panel.className = "intimate-custom-panel";
+        const inputs = phases.map(ph => {
+          const inp = document.createElement("input"); inp.type = "text"; inp.value = ph.desc;
+          panel.appendChild(inp);
+          return inp;
+        });
+        const saveB = document.createElement("button"); saveB.type = "button"; saveB.className = "game-mini-btn active"; saveB.innerText = "💾 Save Phases";
+        saveB.onclick = () => {
+          const next = phases.map((ph, i) => ({ ...ph, desc: inputs[i].value.trim() || ph.desc }));
+          saveCfg("escalatorPhases", next);
+          showCustomize = false; renderStage(stageEl);
+        };
+        panel.appendChild(saveB);
+        stageEl.appendChild(panel);
+        return;
+      }
+      const curPhase = phases[escalatorPhaseIdx] || phases[0];
+      const disp = document.createElement("div");
+      disp.className = "flirty-wheel-result tabular-nums";
+      disp.innerText = `${curPhase.title}\n${curPhase.desc}\n⏱️ ${escalatorSecLeft}s`;
+      const row = document.createElement("div"); row.className = "game-btn-row";
+      const startB = document.createElement("button");
+      startB.type = "button"; startB.className = "modal-btn primary";
+      startB.innerText = escalatorRunning ? "⏸ Pause" : "▶ Start Rush";
+      startB.onclick = () => {
+        if (escalatorRunning) {
+          clearInterval(escalatorTimerInt); escalatorRunning = false; renderStage(stageEl);
+          return;
+        }
+        escalatorRunning = true;
+        escalatorTimerInt = setInterval(() => {
+          escalatorSecLeft--;
+          if (escalatorSecLeft <= 0) {
+            if (escalatorPhaseIdx < phases.length - 1) {
+              escalatorPhaseIdx++;
+              escalatorSecLeft = escalatorPhaseIdx === 1 ? 30 : 45;
+              playEmotionSound("love");
+            } else {
+              clearInterval(escalatorTimerInt);
+              escalatorRunning = false;
+              playEmotionSound("gift");
+              disp.innerText = "🔥 All 3 Phases Complete! Full Honey/Chocolate Wave Unlocked!";
+              return;
+            }
+          }
+          const cp = phases[escalatorPhaseIdx] || phases[0];
+          disp.innerText = `${cp.title}\n${cp.desc}\n⏱️ ${escalatorSecLeft}s`;
+        }, 1000);
+        renderStage(stageEl);
+      };
+      const nextB = document.createElement("button"); nextB.type = "button"; nextB.className = "modal-btn"; nextB.innerText = "⏭ Next Phase";
+      nextB.onclick = () => {
+        clearInterval(escalatorTimerInt); escalatorRunning = false;
+        escalatorPhaseIdx = (escalatorPhaseIdx + 1) % phases.length;
+        escalatorSecLeft = escalatorPhaseIdx === 0 ? 20 : escalatorPhaseIdx === 1 ? 30 : 45;
+        renderStage(stageEl);
+      };
+      const sendB = document.createElement("button"); sendB.type = "button"; sendB.className = "modal-btn"; sendB.innerText = "💬 Chat Task";
+      sendB.onclick = () => sendToChat({
+        kind: "intimate_dare",
+        title: `📈 ${curPhase.title}`,
+        prompt: curPhase.desc,
+        replyText: ""
+      });
+      row.append(startB, nextB, sendB);
+      stageEl.append(disp, row);
+      return;
+    }
+
+    // 26. AFTER HOURS PASS OR DARE
+    if (activeGameId === "afterhours") {
+      const deck = cfg("afterHoursDeck", DEFAULT_AFTER_HOURS);
+      if (showCustomize) {
+        const panel = document.createElement("div"); panel.className = "intimate-custom-panel";
+        const tI = document.createElement("input"); tI.placeholder = "Custom Hot Truth...";
+        const dI = document.createElement("input"); dI.placeholder = "Custom Spicy Dare...";
+        const addB = document.createElement("button"); addB.type = "button"; addB.className = "game-mini-btn active"; addB.innerText = "➕ Add After-Hours Card";
+        addB.onclick = () => {
+          if (!tI.value.trim() && !dI.value.trim()) return;
+          const next = [{ truth: tI.value.trim() || "Apni secret desire batao 🔥", dare: dI.value.trim() || "30s Honey/Chocolate tease pass bhejo 💋" }, ...deck];
+          saveCfg("afterHoursDeck", next);
+          afterHoursIdx = 0; showCustomize = false; renderStage(stageEl);
+        };
+        const rstB = document.createElement("button"); rstB.type = "button"; rstB.className = "game-mini-btn"; rstB.innerText = "🔄 Reset Default";
+        rstB.onclick = () => { saveCfg("afterHoursDeck", DEFAULT_AFTER_HOURS); afterHoursIdx = 0; renderStage(stageEl); };
+        panel.append(tI, dI, addB, rstB);
+        stageEl.appendChild(panel);
+        return;
+      }
+      const card = deck[afterHoursIdx % deck.length];
+      const textVal = afterHoursMode === "truth" ? card.truth : card.dare;
+      const modeRow = document.createElement("div"); modeRow.className = "game-btn-row";
+      [["truth", "🤫 Hot Truth"], ["dare", "🔥 Spicy Dare"]].forEach(([mKey, lbl]) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "game-mini-btn" + (afterHoursMode === mKey ? " active" : "");
+        b.innerText = lbl;
+        b.onclick = () => { afterHoursMode = mKey; renderStage(stageEl); };
+        modeRow.appendChild(b);
+      });
+      const box = document.createElement("div");
+      box.className = "flirty-wheel-result wheel-pop";
+      box.innerText = textVal;
+      const row = document.createElement("div"); row.className = "game-btn-row";
+      const nextB = document.createElement("button"); nextB.type = "button"; nextB.className = "modal-btn"; nextB.innerText = "🎲 Naya Card";
+      nextB.onclick = () => { afterHoursIdx = (afterHoursIdx + 1) % deck.length; renderStage(stageEl); };
+      const sendB = document.createElement("button"); sendB.type = "button"; sendB.className = "modal-btn primary"; sendB.innerText = "💬 Chat Bhejein";
+      sendB.onclick = () => sendToChat({
+        kind: "intimate_dare",
+        title: `🔞 After Hours (${afterHoursMode === "truth" ? "Truth" : "Dare"})`,
+        prompt: textVal,
+        replyText: ""
+      });
+      row.append(nextB, sendB);
+      stageEl.append(modeRow, box, row);
+      return;
+    }
+
+    // 27. SPICY AUCTION
+    if (activeGameId === "auction") {
+      const prizes = getEffectivePool(cfg("auctionPrizes", DEFAULT_AUCTION_PRIZES), DEFAULT_AUCTION_PRIZES);
+      if (showCustomize) {
+        renderChipCustomizer(stageEl, {
+          title: "Custom Auction Rewards / Prizes",
+          items: prizes,
+          defaults: DEFAULT_AUCTION_PRIZES,
+          onChange: next => { saveCfg("auctionPrizes", next); auctionPrizeIdx = 0; renderStage(stageEl); }
+        });
+        return;
+      }
+      const curPrize = prizes[auctionPrizeIdx % prizes.length];
+      const box = document.createElement("div");
+      box.className = "flirty-wheel-result wheel-pop";
+      box.innerText = `🔥 Lot #${(auctionPrizeIdx % prizes.length) + 1}: ${curPrize}\nCurrent Bid: ${auctionBid}`;
+
+      const bidRow = document.createElement("div");
+      bidRow.className = "game-btn-row";
+      ["💋 +5 Kisses", "🍯 30s Honey", "🍫 30s Chocolate", "🎀 1m Mam", "👑 Full Wild Wish"].forEach(bStr => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "game-mini-btn" + (auctionBid === bStr ? " active" : "");
+        b.innerText = bStr;
+        b.onclick = () => { auctionBid = bStr; playEmotionSound("kiss"); renderStage(stageEl); };
+        bidRow.appendChild(b);
+      });
+
+      const actRow = document.createElement("div");
+      actRow.className = "game-btn-row";
+      const nextB = document.createElement("button"); nextB.type = "button"; nextB.className = "modal-btn"; nextB.innerText = "🔨 Next Prize";
+      nextB.onclick = () => { auctionPrizeIdx = (auctionPrizeIdx + 1) % prizes.length; renderStage(stageEl); };
+      const sendB = document.createElement("button"); sendB.type = "button"; sendB.className = "modal-btn primary"; sendB.innerText = "💬 Live Auction Bhejein";
+      sendB.onclick = () => sendToChat({
+        kind: "intimate_auction",
+        title: "🔥 Spicy Couple Auction",
+        prize: curPrize,
+        currentBid: auctionBid,
+        highestBidder: myUid(),
+        closed: false
+      });
+      actRow.append(nextB, sendB, makeSaveWalletBtn(curPrize, "Spicy Auction"));
+      stageEl.append(box, bidRow, actRow);
+      return;
+    }
+
+    // 28. 2X RISK DARE
+    if (activeGameId === "risk2x") {
+      const rCfg = cfg("riskDares", DEFAULT_RISK_DARES);
+      const tierKey = riskMult >= 3 ? "triple" : (riskMult === 2 ? "double" : "safe");
+      const tierPool = getEffectivePool(rCfg[tierKey], DEFAULT_RISK_DARES[tierKey]);
+      if (showCustomize) {
+        renderChipCustomizer(stageEl, {
+          title: `Custom ${tierMultLabel(riskMult)} Dares`,
+          items: tierPool,
+          defaults: DEFAULT_RISK_DARES[tierKey],
+          onChange: next => { saveCfg("riskDares", { ...rCfg, [tierKey]: next }); renderStage(stageEl); }
+        });
+        return;
+      }
+      function tierMultLabel(m) { return m >= 3 ? "3x Wild" : m === 2 ? "2x Double" : "1x Safe"; }
+      const mRow = document.createElement("div"); mRow.className = "game-btn-row";
+      [[1, "🌸 1x Safe"], [2, "🔥 2x Double"], [3, "🔞 3x Wild"]].forEach(([m, lbl]) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "game-mini-btn" + (riskMult === m ? " active" : "");
+        b.innerText = lbl;
+        b.onclick = () => { riskMult = m; riskDareText = ""; renderStage(stageEl); };
+        mRow.appendChild(b);
+      });
+      const box = document.createElement("div");
+      box.className = "flirty-wheel-result wheel-pop";
+      box.innerText = riskDareText || `${tierMultLabel(riskMult)} chunein aur Draw Risk dabao! 💥`;
+      const row = document.createElement("div"); row.className = "game-btn-row";
+      const drawB = document.createElement("button"); drawB.type = "button"; drawB.className = "modal-btn primary"; drawB.innerText = "💥 Draw Risk Dare";
+      drawB.onclick = () => {
+        const res = resolveRiskDare(riskMult, rCfg);
+        riskDareText = res.prompt;
+        playEmotionSound(riskMult >= 2 ? "gift" : "love");
+        renderStage(stageEl);
+      };
+      const sendB = document.createElement("button"); sendB.type = "button"; sendB.className = "modal-btn"; sendB.innerText = "💬 Chat Bhejein";
+      sendB.onclick = () => sendToChat({
+        kind: "intimate_dare",
+        title: `💥 ${tierMultLabel(riskMult)} Dare`,
+        prompt: riskDareText || tierPool[0],
+        replyText: ""
+      });
+      row.append(drawB, sendB);
+      if (riskDareText) row.appendChild(makeSaveWalletBtn(riskDareText, "2x Risk Dare"));
+      stageEl.append(mRow, box, row);
+      return;
+    }
+
+    // 29. SLOW-MO FREEZE TIMER
+    if (activeGameId === "freeze") {
+      const zones = getEffectivePool(cfg("freezeZones", DEFAULT_FREEZE_ZONES), DEFAULT_FREEZE_ZONES);
+      if (showCustomize) {
+        renderChipCustomizer(stageEl, {
+          title: "Custom Freeze Focus Zones",
+          items: zones,
+          defaults: DEFAULT_FREEZE_ZONES,
+          onChange: next => { saveCfg("freezeZones", next); freezeZoneIdx = 0; renderStage(stageEl); }
+        });
+        return;
+      }
+      const curZone = zones[freezeZoneIdx % zones.length];
+      const disp = document.createElement("div");
+      disp.className = "flirty-wheel-result tabular-nums";
+      disp.innerText = freezePausedCue
+        ? `🧊 FREEZE! Bilkul mat hilna — sirf deep eye contact! (${freezeSecLeft}s)`
+        : `${curZone}\nUltra Slow Tease • ⏱️ ${freezeSecLeft}s`;
+
+      const row = document.createElement("div"); row.className = "game-btn-row";
+      const startB = document.createElement("button");
+      startB.type = "button"; startB.className = "modal-btn primary";
+      startB.innerText = freezeRunning ? "⏸ Pause" : "▶ Start 45s";
+      startB.onclick = () => {
+        if (freezeRunning) {
+          clearInterval(freezeTimerInt); freezeRunning = false; renderStage(stageEl); return;
+        }
+        if (freezeSecLeft <= 0) freezeSecLeft = 45;
+        freezeRunning = true;
+        freezeTimerInt = setInterval(() => {
+          freezeSecLeft--;
+          if (freezeSecLeft <= 0) {
+            clearInterval(freezeTimerInt); freezeRunning = false; freezePausedCue = false;
+            playEmotionSound("gift");
+            disp.innerText = `🔥 ${curZone} Slow-Mo Session Complete!`;
+            return;
+          }
+          disp.innerText = freezePausedCue
+            ? `🧊 FREEZE! Bilkul mat hilna (${freezeSecLeft}s)`
+            : `${curZone}\nUltra Slow Tease • ⏱️ ${freezeSecLeft}s`;
+        }, 1000);
+        renderStage(stageEl);
+      };
+      const frzB = document.createElement("button"); frzB.type = "button"; frzB.className = "modal-btn";
+      frzB.innerText = freezePausedCue ? "🔥 Resume Motion" : "🧊 FREEZE CUE!";
+      frzB.onclick = () => { freezePausedCue = !freezePausedCue; playEmotionSound("chime"); renderStage(stageEl); };
+      const znB = document.createElement("button"); znB.type = "button"; znB.className = "modal-btn"; znB.innerText = "🔄 Zone";
+      znB.onclick = () => { freezeZoneIdx = (freezeZoneIdx + 1) % zones.length; renderStage(stageEl); };
+      const sendB = document.createElement("button"); sendB.type = "button"; sendB.className = "modal-btn"; sendB.innerText = "💬 Chat Task";
+      sendB.onclick = () => sendToChat({
+        kind: "intimate_dare",
+        title: "🧊 Slow-Mo Freeze Challenge",
+        prompt: `${curZone} par 45s ultra-slow tease — jab Partner 'FREEZE' bole to 10s bilkul statue! 🔥`,
+        replyText: ""
+      });
+      row.append(startB, frzB, znB, sendB);
+      stageEl.append(disp, row);
+      return;
+    }
+
+    // 30. KISS ROULETTE
+    if (activeGameId === "kisszone") {
+      const kCfg = cfg("kissZones", DEFAULT_KISS_ZONES);
+      const zones = getEffectivePool(kCfg.zones, DEFAULT_KISS_ZONES.zones);
+      const styles = getEffectivePool(kCfg.styles, DEFAULT_KISS_ZONES.styles);
+      if (showCustomize) {
+        renderChipCustomizer(stageEl, {
+          title: "Custom Kiss Zones",
+          items: zones,
+          defaults: DEFAULT_KISS_ZONES.zones,
+          onChange: next => { saveCfg("kissZones", { ...kCfg, zones: next }); renderStage(stageEl); }
+        });
+        renderChipCustomizer(stageEl, {
+          title: "Custom Kiss Styles",
+          items: styles,
+          defaults: DEFAULT_KISS_ZONES.styles,
+          onChange: next => { saveCfg("kissZones", { ...kCfg, styles: next }); renderStage(stageEl); }
+        });
+        return;
+      }
+      if (!kissResult) kissResult = rollKissZone(kCfg);
+      const box = document.createElement("div");
+      box.className = "flirty-wheel-result wheel-pop";
+      box.innerText = `💋 ${kissResult.summary}`;
+      const row = document.createElement("div"); row.className = "game-btn-row";
+      const spB = document.createElement("button"); spB.type = "button"; spB.className = "modal-btn primary"; spB.innerText = "💋 Spin Kiss Combo";
+      spB.onclick = () => { kissResult = rollKissZone(kCfg); playEmotionSound("kiss"); renderStage(stageEl); };
+      const sendB = document.createElement("button"); sendB.type = "button"; sendB.className = "modal-btn"; sendB.innerText = "💬 Chat Bhejein";
+      sendB.onclick = () => sendToChat({
+        kind: "intimate_dare",
+        title: "💋 Kiss Zone Roulette",
+        prompt: kissResult.summary,
+        replyText: ""
+      });
+      row.append(spB, sendB, makeSaveWalletBtn(kissResult.summary, "Kiss Roulette"));
+      stageEl.append(box, row);
+      return;
+    }
+
+    // 31. SECRET LOCKBOX
+    if (activeGameId === "lockbox") {
+      const defPresets = [
+        "Tonight 3-Min Honey & Chocolate Full VIP Pass Unlocked 🔥",
+        "1-Hour Unconditional Boss Mode Pass 👑",
+        "Midnight Candlelight + Slow Massage Voucher 🕯️"
+      ];
+      const presets = getEffectivePool(cfg("lockboxPresets", defPresets), defPresets);
+      if (showCustomize) {
+        renderChipCustomizer(stageEl, {
+          title: "Custom Lockbox Secret Rewards",
+          items: presets,
+          defaults: defPresets,
+          onChange: next => { saveCfg("lockboxPresets", next); renderStage(stageEl); }
+        });
+        return;
+      }
+      const box = document.createElement("div");
+      box.className = "blur-secret-box" + (lockPreviewUnlocked ? "" : " blurred");
+      box.innerText = lockSecret;
+      const hintI = document.createElement("input"); hintI.type = "text"; hintI.className = "care-input"; hintI.value = lockHint; hintI.placeholder = "Hint...";
+      const passI = document.createElement("input"); passI.type = "text"; passI.className = "care-input"; passI.value = lockPass; passI.placeholder = "Passcode (e.g. Janan)";
+      const secI = document.createElement("input"); secI.type = "text"; secI.className = "care-input"; secI.value = lockSecret; secI.placeholder = "Secret VIP Pass / Reward...";
+      hintI.oninput = () => { lockHint = hintI.value; };
+      passI.oninput = () => { lockPass = passI.value; };
+      secI.oninput = () => { lockSecret = secI.value; box.innerText = lockSecret; };
+      const row = document.createElement("div"); row.className = "game-btn-row";
+      const prevB = document.createElement("button"); prevB.type = "button"; prevB.className = "modal-btn"; prevB.innerText = lockPreviewUnlocked ? "🔒 Lock" : "👀 Peek";
+      prevB.onclick = () => { lockPreviewUnlocked = !lockPreviewUnlocked; renderStage(stageEl); };
+      const pickB = document.createElement("button"); pickB.type = "button"; pickB.className = "modal-btn"; pickB.innerText = "🎲 Preset";
+      pickB.onclick = () => { lockSecret = presets[Math.floor(Math.random() * presets.length)]; renderStage(stageEl); };
+      const sendB = document.createElement("button"); sendB.type = "button"; sendB.className = "modal-btn primary"; sendB.innerText = "🔐 Send Lockbox";
+      sendB.onclick = () => sendToChat({
+        kind: "intimate_lockbox",
+        title: "🔐 Secret VIP Lockbox",
+        hint: lockHint.trim() || "Humara secret word",
+        passcode: lockPass.trim() || "Janan",
+        secretText: lockSecret.trim() || presets[0],
+        unlocked: false
+      });
+      row.append(prevB, pickB, sendB);
+      stageEl.append(box, hintI, passI, secI, row);
+      return;
+    }
+
+    // 32. ICE & FIRE SENSORY SHIFT
+    if (activeGameId === "icefire") {
+      const rounds = cfg("iceFireRounds", DEFAULT_ICE_FIRE_ROUNDS);
+      if (showCustomize) {
+        const panel = document.createElement("div"); panel.className = "intimate-custom-panel";
+        const inputs = rounds.map(r => {
+          const inp = document.createElement("input"); inp.type = "text"; inp.value = r.desc;
+          panel.appendChild(inp);
+          return inp;
+        });
+        const saveB = document.createElement("button"); saveB.type = "button"; saveB.className = "game-mini-btn active"; saveB.innerText = "💾 Save Rounds";
+        saveB.onclick = () => {
+          saveCfg("iceFireRounds", rounds.map((r, i) => ({ ...r, desc: inputs[i].value.trim() || r.desc })));
+          showCustomize = false; renderStage(stageEl);
+        };
+        const rstB = document.createElement("button"); rstB.type = "button"; rstB.className = "game-mini-btn"; rstB.innerText = "🔄 Reset";
+        rstB.onclick = () => { saveCfg("iceFireRounds", DEFAULT_ICE_FIRE_ROUNDS); renderStage(stageEl); };
+        panel.append(saveB, rstB);
+        stageEl.appendChild(panel);
+        return;
+      }
+      const cur = rounds[iceFireIdx % rounds.length];
+      const box = document.createElement("div");
+      box.className = "flirty-wheel-result wheel-pop";
+      box.innerText = `${cur.mode} — ${cur.title}\n${cur.desc}`;
+      const row = document.createElement("div"); row.className = "game-btn-row";
+      const nextB = document.createElement("button"); nextB.type = "button"; nextB.className = "modal-btn primary"; nextB.innerText = "🌡️ Next Temp Shift";
+      nextB.onclick = () => { iceFireIdx = (iceFireIdx + 1) % rounds.length; playEmotionSound("love"); renderStage(stageEl); };
+      const sendB = document.createElement("button"); sendB.type = "button"; sendB.className = "modal-btn"; sendB.innerText = "💬 Chat Bhejein";
+      sendB.onclick = () => sendToChat({
+        kind: "intimate_dare",
+        title: `🌡️ ${cur.title}`,
+        prompt: cur.desc,
+        replyText: ""
+      });
+      row.append(nextB, sendB, makeSaveWalletBtn(cur.desc, "Ice & Fire"));
+      stageEl.append(box, row);
+      return;
+    }
+
+    // 33. BLIND 4-CARD PICK
+    if (activeGameId === "blind4") {
+      const pool = getEffectivePool(cfg("blindCardsPool", DEFAULT_BLIND_CARDS), DEFAULT_BLIND_CARDS);
+      if (showCustomize) {
+        renderChipCustomizer(stageEl, {
+          title: "Custom Blind Card Saza & Inaam",
+          items: pool,
+          defaults: DEFAULT_BLIND_CARDS,
+          onChange: next => { saveCfg("blindCardsPool", next); blindCards = null; blindPickedIdx = -1; renderStage(stageEl); }
+        });
+        return;
+      }
+      if (!blindCards) blindCards = pickBlindCards(pool);
+      const grid = document.createElement("div");
+      grid.className = "blind-card-grid";
+      blindCards.forEach((txt, idx) => {
+        const revealed = blindPickedIdx === idx;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "blind-card-btn" + (revealed ? " revealed" : "");
+        btn.innerText = revealed ? txt : `🃏 Mystery Card #${idx + 1}`;
+        btn.onclick = () => {
+          blindPickedIdx = idx;
+          playEmotionSound("gift");
+          renderStage(stageEl);
+        };
+        grid.appendChild(btn);
+      });
+      const row = document.createElement("div"); row.className = "game-btn-row";
+      const shfB = document.createElement("button"); shfB.type = "button"; shfB.className = "modal-btn"; shfB.innerText = "🔀 Shuffle 4";
+      shfB.onclick = () => { blindCards = pickBlindCards(pool); blindPickedIdx = -1; renderStage(stageEl); };
+      const sendB = document.createElement("button"); sendB.type = "button"; sendB.className = "modal-btn primary"; sendB.innerText = "💬 Love Se 4-Card Khilayein";
+      sendB.onclick = () => sendToChat({
+        kind: "intimate_blind4",
+        title: "🃏 Blind 4-Card Mystery",
+        cards: pickBlindCards(pool),
+        pickedIdx: -1
+      });
+      row.append(shfB, sendB);
+      if (blindPickedIdx >= 0 && blindCards[blindPickedIdx]) {
+        row.appendChild(makeSaveWalletBtn(blindCards[blindPickedIdx], "Blind 4-Card"));
+      }
+      stageEl.append(grid, row);
+      return;
+    }
+
+    // 34. CONFESS OR TAX
+    if (activeGameId === "confess") {
+      const prompts = getEffectivePool(cfg("confessPrompts", DEFAULT_CONFESS_PROMPTS), DEFAULT_CONFESS_PROMPTS);
+      const taxes = getEffectivePool(cfg("confessTaxes", DEFAULT_CONFESS_TAXES), DEFAULT_CONFESS_TAXES);
+      if (showCustomize) {
+        renderChipCustomizer(stageEl, {
+          title: "Custom Confess Questions",
+          items: prompts,
+          defaults: DEFAULT_CONFESS_PROMPTS,
+          onChange: next => { saveCfg("confessPrompts", next); confessIdx = 0; renderStage(stageEl); }
+        });
+        renderChipCustomizer(stageEl, {
+          title: "Custom Saza Taxes (If Refused)",
+          items: taxes,
+          defaults: DEFAULT_CONFESS_TAXES,
+          onChange: next => { saveCfg("confessTaxes", next); confessTaxIdx = 0; renderStage(stageEl); }
+        });
+        return;
+      }
+      const curQ = prompts[confessIdx % prompts.length];
+      const curTax = taxes[confessTaxIdx % taxes.length];
+      const box = document.createElement("div");
+      box.className = "flirty-wheel-result wheel-pop";
+      box.innerText = confessRevealedTax ? `⚖️ SAZA TAX PAID:\n${curTax}` : `⚖️ Confession:\n"${curQ}"`;
+      const row = document.createElement("div"); row.className = "game-btn-row";
+      const taxB = document.createElement("button"); taxB.type = "button"; taxB.className = "modal-btn";
+      taxB.innerText = confessRevealedTax ? "⚖️ Sawal Dekho" : "🙈 Pay Saza Tax";
+      taxB.onclick = () => { confessRevealedTax = !confessRevealedTax; playEmotionSound("kiss"); renderStage(stageEl); };
+      const nextB = document.createElement("button"); nextB.type = "button"; nextB.className = "modal-btn"; nextB.innerText = "🎲 Naya";
+      nextB.onclick = () => {
+        confessIdx = (confessIdx + 1) % prompts.length;
+        confessTaxIdx = (confessTaxIdx + 1) % taxes.length;
+        confessRevealedTax = false;
+        renderStage(stageEl);
+      };
+      const sendB = document.createElement("button"); sendB.type = "button"; sendB.className = "modal-btn primary"; sendB.innerText = "💬 Chat Bhejein";
+      sendB.onclick = () => sendToChat({
+        kind: "intimate_confess",
+        title: "⚖️ Confess or Pay Tax",
+        prompt: curQ,
+        tax: curTax,
+        answer: "",
+        paidTax: false
+      });
+      row.append(taxB, nextB, sendB);
+      stageEl.append(box, row);
+      return;
+    }
+
+    // 35. WHEEL OF SAZA (SYNCED TO UNIVERSAL SAZA POOL)
+    if (activeGameId === "sazawheel") {
+      const sazaPool = readUniversalSaza();
+      if (showCustomize) {
+        renderChipCustomizer(stageEl, {
+          title: "Custom Saza / Punishments (Synced with Ludo & Saza Bank!)",
+          items: sazaPool,
+          defaults: DEFAULT_SAZA_WHEEL,
+          onChange: next => {
+            writeUniversalSaza(next);
+            renderStage(stageEl);
+          }
+        });
+        return;
+      }
+      const box = document.createElement("div");
+      box.className = "saza-wheel-stage wheel-pop";
+      box.innerText = sazaSpinResult || `🎯 ${sazaPool.length} Saza & Rewards ready! Spin dabao 😈`;
+      const row = document.createElement("div"); row.className = "game-btn-row";
+      const spB = document.createElement("button"); spB.type = "button"; spB.className = "modal-btn primary"; spB.innerText = "🎯 Spin Saza Wheel";
+      spB.onclick = () => {
+        sazaSpinResult = sazaPool[Math.floor(Math.random() * sazaPool.length)];
+        playEmotionSound("gift");
+        renderStage(stageEl);
+      };
+      const sendB = document.createElement("button"); sendB.type = "button"; sendB.className = "modal-btn"; sendB.innerText = "💬 Chat Bhejein";
+      sendB.onclick = () => sendToChat({
+        kind: "intimate_dare",
+        title: "🎯 Wheel of Saza Result",
+        prompt: sazaSpinResult || sazaPool[0],
+        replyText: ""
+      });
+      row.append(spB, sendB);
+      if (sazaSpinResult) row.appendChild(makeSaveWalletBtn(sazaSpinResult, "Wheel of Saza"));
+      stageEl.append(box, row);
+      return;
+    }
+
+    // 36. CRAVING SYNC
+    if (activeGameId === "craving") {
+      const pool = getEffectivePool(cfg("cravingChoices", DEFAULT_CRAVING_CHOICES), DEFAULT_CRAVING_CHOICES);
+      if (showCustomize) {
+        renderChipCustomizer(stageEl, {
+          title: "Custom Craving Moods",
+          items: pool,
+          defaults: DEFAULT_CRAVING_CHOICES,
+          onChange: next => { saveCfg("cravingChoices", next); cravingPicked = ""; renderStage(stageEl); }
+        });
+        return;
+      }
+      if (!cravingPicked || !pool.includes(cravingPicked)) cravingPicked = pool[0];
+      const grid = document.createElement("div"); grid.className = "game-btn-row";
+      pool.forEach(c => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "game-mini-btn" + (cravingPicked === c ? " active" : "");
+        b.innerText = c;
+        b.onclick = () => { cravingPicked = c; playEmotionSound("love"); renderStage(stageEl); };
+        grid.appendChild(b);
+      });
+      const box = document.createElement("div");
+      box.className = "flirty-wheel-result";
+      box.innerText = `🌙 Aapki Craving: ${cravingPicked}\nBhejein aur dekhein Love bhi yahi chahta hai ya nahi!`;
+      const sendB = document.createElement("button"); sendB.type = "button"; sendB.className = "modal-btn primary"; sendB.innerText = "💬 Lock & Sync Craving";
+      sendB.onclick = () => sendToChat({
+        kind: "intimate_craving",
+        title: "🌙 Midnight Craving Sync",
+        choices: pool,
+        choiceA: cravingPicked,
+        choiceB: ""
+      });
+      stageEl.append(grid, box, sendB);
     }
   }
 
@@ -1467,17 +2561,31 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
     if (!rootEl) return;
     rootEl.innerHTML = "";
 
-    // Glossary bar explaining Honey / Chocolate / Mam codewords cleanly without dangling separator dots
+    // Glossary bar explaining Honey / Chocolate / Mam codewords cleanly
     const glossary = document.createElement("div");
     glossary.className = "intimate-glossary-bar";
     glossary.innerHTML = CODEWORD_GLOSSARY.map(c => `<span class="glossary-chip">${c.label}: ${c.hint}</span>`).join("");
     rootEl.appendChild(glossary);
 
-    // Category filter chips
+    // Search bar (lives outside picker grid so typing keeps focus!)
+    const searchInput = document.createElement("input");
+    searchInput.type = "search";
+    searchInput.className = "intimate-search-input";
+    searchInput.placeholder = "🔍 36 Games mein search karein (e.g. saza, kiss, honey, wheel)...";
+    searchInput.value = searchQuery;
+    searchInput.setAttribute("aria-label", "Search intimate games");
+    rootEl.appendChild(searchInput);
+
+    // Top bar: Category filter chips + Collapse/Expand picker toggle for Stage-First clarity
+    const navHeader = document.createElement("div");
+    navHeader.className = "care-head-inline";
+
     const catRow = document.createElement("div");
     catRow.className = "intimate-cat-row";
     [
-      ["all", "🔥 All (20)"],
+      ["all", `🔥 All (${INTIMATE_GAMES_META.length})`],
+      ["spicy", "🔞 Spicy+"],
+      ["saza", "💋 Saza/Tax"],
       ["dice", "🎲 Spin/Dart"],
       ["cards", "🃏 Cards"],
       ["timers", "⏱️ Timers"],
@@ -1489,40 +2597,72 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
       b.innerText = lbl;
       b.onclick = () => {
         activeCat = cat;
+        showPickerGrid = true;
         renderIntimateHub();
         b.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
       };
       catRow.appendChild(b);
     });
-    rootEl.appendChild(catRow);
 
-    // 20-game selector grid
-    const grid = document.createElement("div");
-    grid.className = "intimate-picker-grid";
-    const list = activeCat === "all"
-      ? INTIMATE_GAMES_META
-      : INTIMATE_GAMES_META.filter(g => g.cat === activeCat);
+    const toggleListBtn = document.createElement("button");
+    toggleListBtn.type = "button";
+    toggleListBtn.className = "game-mini-btn" + (showPickerGrid ? " active" : "");
+    toggleListBtn.innerText = showPickerGrid ? "🔼 Focus Stage" : "🔽 All Games";
+    toggleListBtn.onclick = () => {
+      showPickerGrid = !showPickerGrid;
+      renderIntimateHub();
+    };
+    navHeader.append(catRow, toggleListBtn);
+    rootEl.appendChild(navHeader);
 
-    list.forEach(g => {
-      const card = document.createElement("button");
-      card.type = "button";
-      card.className = "intimate-game-card" + (activeGameId === g.id ? " active" : "");
-      card.innerHTML = `<span class="intimate-game-icon">${g.icon}</span><span class="intimate-game-name">${g.name}</span><span class="intimate-game-badge">${g.badge}</span>`;
-      card.onclick = () => {
-        stopLoops();
-        activeGameId = g.id;
-        showCustomize = false;
-        renderIntimateHub();
-      };
-      grid.appendChild(card);
-    });
-    rootEl.appendChild(grid);
+    const gridWrap = document.createElement("div");
+    gridWrap.id = "intimate-picker-wrap";
+    rootEl.appendChild(gridWrap);
 
-    // Stage for currently selected game
     const stage = document.createElement("div");
     stage.className = "intimate-stage-box";
     renderStage(stage);
     rootEl.appendChild(stage);
+
+    const populatePickerGrid = () => {
+      gridWrap.innerHTML = "";
+      if (!showPickerGrid) return;
+      const grid = document.createElement("div");
+      grid.className = "intimate-picker-grid";
+      grid.id = "intimate-picker-grid";
+      const q = searchQuery.trim().toLowerCase();
+      const list = INTIMATE_GAMES_META.filter(g => {
+        const matchCat = activeCat === "all" || g.cat === activeCat;
+        const matchQ = !q || g.name.toLowerCase().includes(q) || g.badge.toLowerCase().includes(q) || g.cat.toLowerCase().includes(q);
+        return matchCat && matchQ;
+      });
+      if (!list.length) {
+        grid.innerHTML = `<p class="game-card-sub" style="grid-column:1/-1;text-align:center;">Koi game nahi mila "${searchQuery}" ke liye 🔍</p>`;
+      } else {
+        list.forEach(g => {
+          const card = document.createElement("button");
+          card.type = "button";
+          card.className = "intimate-game-card" + (activeGameId === g.id ? " active" : "");
+          card.innerHTML = `<span class="intimate-game-icon">${g.icon}</span><span class="intimate-game-name">${g.name}</span><span class="intimate-game-badge">${g.badge}</span>`;
+          card.onclick = () => {
+            stopLoops();
+            activeGameId = g.id;
+            showCustomize = false;
+            renderStage(stage);
+            populatePickerGrid();
+          };
+          grid.appendChild(card);
+        });
+      }
+      gridWrap.appendChild(grid);
+    };
+
+    populatePickerGrid();
+    searchInput.oninput = () => {
+      searchQuery = searchInput.value;
+      if (!showPickerGrid) showPickerGrid = true;
+      populatePickerGrid();
+    };
   }
 
   // =====================================
@@ -1785,6 +2925,252 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
       return box;
     }
 
+    if (gd.kind === "intimate_mystery") {
+      const boxes = gd.boxes || [];
+      const grid = document.createElement("div");
+      grid.className = "mystery-pack-grid";
+      boxes.forEach((b, idx) => {
+        const tile = document.createElement("button");
+        tile.type = "button";
+        tile.className = "mystery-box-tile" + (b.opened ? " opened" : "");
+        tile.innerText = b.opened ? `🎁 #${b.day}: ${b.reward}` : `🎁 Box ${b.day}`;
+        tile.disabled = Boolean(b.opened) || gd.creator === uid;
+        tile.onclick = async e => {
+          e.stopPropagation();
+          const { next, unlockedBox } = unwrapMysteryBox(boxes, idx);
+          if (!unlockedBox) return;
+          playEmotionSound("gift");
+          saveToWallet(unlockedBox.reward, "7-Box Mystery");
+          await chat.updateEncryptedMessage(
+            m.id,
+            {
+              ...dec,
+              gameData: {
+                ...gd,
+                boxes: next,
+                lastUpdatedBy: uid,
+                lastActionText: `🎁 Mystery Box ${unlockedBox.day} khula: ${unlockedBox.reward}`
+              }
+            },
+            {
+              notifyPartner: true,
+              alertKind: "letter",
+              gameNoticeText: `🎁 Mystery Box #${unlockedBox.day} khul gaya!\n✨ ${unlockedBox.reward}`
+            }
+          );
+        };
+        grid.appendChild(tile);
+      });
+      box.appendChild(grid);
+      const hint = document.createElement("div");
+      hint.className = "game-card-sub";
+      hint.innerText = gd.creator === uid ? "7 Mystery Boxes bhej diye — Love ke kholne ka intezar ⏳" : "Kisi bhi Box par tap karke apna surprise kholen!";
+      box.appendChild(hint);
+      return box;
+    }
+
+    if (gd.kind === "intimate_auction") {
+      const pr = document.createElement("div");
+      pr.className = "game-card-prompt";
+      pr.innerText = `🔥 Prize: ${gd.prize}\nHighest Bid: ${gd.currentBid}`;
+      box.appendChild(pr);
+      if (gd.closed) {
+        const ans = document.createElement("div");
+        ans.className = "game-card-answer";
+        ans.innerText = `🔨 Sold! Final Bid: ${gd.currentBid}`;
+        box.appendChild(ans);
+        const wBtn = document.createElement("button");
+        wBtn.type = "button"; wBtn.className = "game-mini-btn"; wBtn.innerText = "🎟️ Wallet Mein Save";
+        wBtn.onclick = e => { e.stopPropagation(); saveToWallet(gd.prize, "Spicy Auction"); wBtn.innerText = "✅ Saved!"; };
+        box.appendChild(wBtn);
+      } else {
+        const row = document.createElement("div"); row.className = "game-btn-row";
+        ["💋 +5 Kisses", "🍯 45s Honey", "🍫 45s Choc"].forEach(bidStr => {
+          const b = document.createElement("button");
+          b.type = "button"; b.className = "game-mini-btn"; b.innerText = bidStr;
+          b.onclick = async e => {
+            e.stopPropagation();
+            playEmotionSound("kiss");
+            await chat.updateEncryptedMessage(
+              m.id,
+              { ...dec, gameData: { ...gd, currentBid: bidStr, highestBidder: uid, lastUpdatedBy: uid, lastActionText: `🔨 New Bid: ${bidStr}` } },
+              { notifyPartner: true, alertKind: "letter", gameNoticeText: "" }
+            );
+          };
+          row.appendChild(b);
+        });
+        const lockB = document.createElement("button");
+        lockB.type = "button"; lockB.className = "game-mini-btn active"; lockB.innerText = "🔨 Lock Deal!";
+        lockB.onclick = async e => {
+          e.stopPropagation();
+          playEmotionSound("gift");
+          await chat.updateEncryptedMessage(
+            m.id,
+            { ...dec, gameData: { ...gd, closed: true, lastUpdatedBy: uid, lastActionText: `🔨 Auction Sold: ${gd.prize} (${gd.currentBid})` } },
+            { notifyPartner: true, alertKind: "letter", gameNoticeText: `🔨 Auction Sold! ${gd.prize} for ${gd.currentBid}` }
+          );
+        };
+        row.appendChild(lockB);
+        box.appendChild(row);
+      }
+      return box;
+    }
+
+    if (gd.kind === "intimate_lockbox") {
+      const p = document.createElement("div");
+      p.className = "blur-secret-box" + (gd.unlocked ? "" : " blurred");
+      p.innerText = gd.secretText || "";
+      box.appendChild(p);
+      const hintEl = document.createElement("div");
+      hintEl.className = "game-card-sub";
+      hintEl.innerText = `Hint: ${gd.hint || ""}`;
+      box.appendChild(hintEl);
+      if (gd.unlocked) {
+        const wBtn = document.createElement("button");
+        wBtn.type = "button"; wBtn.className = "game-mini-btn"; wBtn.innerText = "🎟️ Wallet Save";
+        wBtn.onclick = e => { e.stopPropagation(); saveToWallet(gd.secretText, "Secret Lockbox"); wBtn.innerText = "✅ Saved!"; };
+        box.appendChild(wBtn);
+      } else if (gd.creator !== uid) {
+        const row = document.createElement("div"); row.className = "game-inline-reply";
+        const inp = document.createElement("input"); inp.type = "text"; inp.className = "game-inline-input"; inp.placeholder = "Passcode daalein...";
+        inp.onclick = e => e.stopPropagation();
+        const b = document.createElement("button"); b.type = "button"; b.className = "game-mini-btn active"; b.innerText = "🔐 Unlock";
+        b.onclick = async e => {
+          e.stopPropagation();
+          if (!checkLockboxPass(gd.passcode, inp.value)) {
+            inp.placeholder = "Galat code! Dobara try karo...";
+            inp.value = "";
+            return;
+          }
+          playEmotionSound("gift");
+          await chat.updateEncryptedMessage(
+            m.id,
+            { ...dec, gameData: { ...gd, unlocked: true, lastUpdatedBy: uid, lastActionText: `🔐 Lockbox unlock ho gaya: ${gd.secretText}` } },
+            { notifyPartner: true, alertKind: "letter", gameNoticeText: `🔐 Love ne Lockbox unlock kar liya!\n"${gd.secretText}"` }
+          );
+        };
+        row.append(inp, b);
+        box.appendChild(row);
+      }
+      return box;
+    }
+
+    if (gd.kind === "intimate_blind4") {
+      const cards = gd.cards || [];
+      const picked = typeof gd.pickedIdx === "number" ? gd.pickedIdx : -1;
+      const grid = document.createElement("div");
+      grid.className = "blind-card-grid";
+      cards.forEach((txt, idx) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "blind-card-btn" + (picked === idx ? " revealed" : "");
+        btn.innerText = picked === idx ? txt : `🃏 Card #${idx + 1}`;
+        btn.disabled = picked >= 0 || gd.creator === uid;
+        btn.onclick = async e => {
+          e.stopPropagation();
+          playEmotionSound("gift");
+          saveToWallet(txt, "Blind 4-Card");
+          await chat.updateEncryptedMessage(
+            m.id,
+            { ...dec, gameData: { ...gd, pickedIdx: idx, lastUpdatedBy: uid, lastActionText: `🃏 Mystery Card #${idx + 1}: ${txt}` } },
+            { notifyPartner: true, alertKind: "letter", gameNoticeText: `🃏 Blind 4-Card khula!\n${txt}` }
+          );
+        };
+        grid.appendChild(btn);
+      });
+      box.appendChild(grid);
+      const sub = document.createElement("div");
+      sub.className = "game-card-sub";
+      sub.innerText = picked >= 0 ? `🎯 Selected: ${cards[picked]}` : (gd.creator === uid ? "4 Mystery Cards bheje — Love ke pick karne ka intezar ⏳" : "Kisi 1 Mystery Card par tap karein!");
+      box.appendChild(sub);
+      return box;
+    }
+
+    if (gd.kind === "intimate_confess") {
+      const pr = document.createElement("div");
+      pr.className = "game-card-prompt";
+      pr.innerText = gd.prompt || "";
+      box.appendChild(pr);
+      if (gd.paidTax) {
+        const ans = document.createElement("div");
+        ans.className = "game-card-answer";
+        ans.innerText = `🙈 Tax Paid: ${gd.tax}`;
+        box.appendChild(ans);
+      } else if (gd.answer) {
+        const ans = document.createElement("div");
+        ans.className = "game-card-answer";
+        ans.innerText = `💖 Confession: ${gd.answer}`;
+        box.appendChild(ans);
+      } else if (gd.creator !== uid) {
+        const row = document.createElement("div"); row.className = "game-inline-reply";
+        const inp = document.createElement("input"); inp.type = "text"; inp.className = "game-inline-input"; inp.placeholder = "Sach likhein...";
+        inp.onclick = e => e.stopPropagation();
+        const sendB = document.createElement("button"); sendB.type = "button"; sendB.className = "game-mini-btn active"; sendB.innerText = "Confess";
+        sendB.onclick = async e => {
+          e.stopPropagation();
+          const v = inp.value.trim();
+          if (!v) return;
+          playEmotionSound("love");
+          await chat.updateEncryptedMessage(
+            m.id,
+            { ...dec, gameData: { ...gd, answer: v, lastUpdatedBy: uid, lastActionText: `⚖️ Confession: ${v}` } },
+            { notifyPartner: true, alertKind: "letter", gameNoticeText: `⚖️ Love ne Confess kiya: ${v}` }
+          );
+        };
+        const taxB = document.createElement("button"); taxB.type = "button"; taxB.className = "game-mini-btn"; taxB.innerText = "🙈 Pay Tax";
+        taxB.onclick = async e => {
+          e.stopPropagation();
+          playEmotionSound("gift");
+          await chat.updateEncryptedMessage(
+            m.id,
+            { ...dec, gameData: { ...gd, paidTax: true, lastUpdatedBy: uid, lastActionText: `🙈 Saza Tax Paid: ${gd.tax}` } },
+            { notifyPartner: true, alertKind: "letter", gameNoticeText: `🙈 Love ne Saza Tax chuna: ${gd.tax}` }
+          );
+        };
+        row.append(inp, sendB, taxB);
+        box.appendChild(row);
+      }
+      return box;
+    }
+
+    if (gd.kind === "intimate_craving") {
+      if (gd.choiceB) {
+        const res = evaluateCravingSync(gd.choiceA, gd.choiceB);
+        const ans = document.createElement("div");
+        ans.className = "game-card-answer";
+        ans.innerText = res.summary;
+        box.appendChild(ans);
+      } else if (gd.creator === uid) {
+        const sub = document.createElement("div");
+        sub.className = "game-card-sub";
+        sub.innerText = `Aapki choice lock hai (${gd.choiceA}) — Love ki craving ka intezar ⏳`;
+        box.appendChild(sub);
+      } else {
+        const sub = document.createElement("div");
+        sub.className = "game-card-sub";
+        sub.innerText = "Apni craving chunein (Partner ki hidden hai jab tak dono lock na karein!):";
+        box.appendChild(sub);
+        const row = document.createElement("div"); row.className = "game-btn-row";
+        (gd.choices || []).forEach(c => {
+          const b = document.createElement("button");
+          b.type = "button"; b.className = "game-mini-btn active"; b.innerText = c;
+          b.onclick = async e => {
+            e.stopPropagation();
+            const res = evaluateCravingSync(gd.choiceA, c);
+            playEmotionSound("gift");
+            await chat.updateEncryptedMessage(
+              m.id,
+              { ...dec, gameData: { ...gd, choiceB: c, lastUpdatedBy: uid, lastActionText: res.summary } },
+              { notifyPartner: true, alertKind: "letter", gameNoticeText: res.summary }
+            );
+          };
+          row.appendChild(b);
+        });
+        box.appendChild(row);
+      }
+      return box;
+    }
+
     // intimate_plan
     const p = document.createElement("div");
     p.className = "game-card-sub";
@@ -1812,11 +3198,19 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
     return box;
   }
 
+  function claimWalletGift(giftObj) {
+    const { next, added } = receiveWalletGift(getWallet(), giftObj);
+    writeJson(LOVE_WALLET_KEY, next);
+    renderWalletModal();
+    return Boolean(added);
+  }
+
   return {
     renderIntimateHub,
     renderIntimateChatBubble,
     openWalletModal,
     saveToWallet,
+    claimWalletGift,
     stopLoops,
     openIntimateChallenge() {
       openGamesModal?.("intimate");

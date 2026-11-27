@@ -1,9 +1,13 @@
 import { escapeHtml } from "./crypto.js";
+import { DISGUISE_SKINS, recordIntruderAttempt } from "../shared/featuresLogic.js";
 
 const DEFAULT_SECRET_CODE = "Janan";
 const SECRET_CODE_KEY = "sc_secret_code_v1";
 const DECOY_CODE_KEY = "sc_decoy_code_v1";
 const SHAKE_HIDE_KEY = "sc_shake_hide_v1";
+const INSTANT_HIDE_KEY = "sc_instant_hide_v1";
+const DISGUISE_SKIN_KEY = "sc_disguise_skin_v1";
+const INTRUDER_LOG_KEY = "sc_intruder_log_v1";
 const NOTES_KEY = "sc_offline_phone_notes_v1";
 const AUTO_HIDE_KEY = "sc_auto_hide_min_v1";
 
@@ -11,6 +15,7 @@ export function createNotesManager({ onUnlock }) {
   const notesScreen = document.getElementById("notes-screen");
   const loginScreen = document.getElementById("login-screen");
   const chatScreen = document.getElementById("chat-screen");
+  const notesHeadingEl = notesScreen?.querySelector(".notes-header h2");
   const noteTitleEl = document.getElementById("note-title");
   const noteContentEl = document.getElementById("note-content");
   const noteStatusEl = document.getElementById("note-status");
@@ -43,6 +48,69 @@ export function createNotesManager({ onUnlock }) {
       dateTapCount = 0;
     }, 900);
   });
+
+  function getDisguiseSkin() {
+    try {
+      return localStorage.getItem(DISGUISE_SKIN_KEY) || "notepad";
+    } catch {
+      return "notepad";
+    }
+  }
+
+  function applyDisguiseSkin(skinKey = getDisguiseSkin()) {
+    const skin = DISGUISE_SKINS.find(s => s.key === skinKey) || DISGUISE_SKINS[0];
+    if (notesScreen) {
+      notesScreen.classList.remove("skin-notepad", "skin-todo", "skin-shopping");
+      notesScreen.classList.add(`skin-${skin.key}`);
+    }
+    if (notesHeadingEl) notesHeadingEl.innerText = skin.title;
+    if (noteContentEl) noteContentEl.placeholder = skin.placeholder;
+  }
+
+  function setDisguiseSkin(skinKey) {
+    try {
+      localStorage.setItem(DISGUISE_SKIN_KEY, skinKey || "notepad");
+    } catch {}
+    applyDisguiseSkin(skinKey);
+  }
+  applyDisguiseSkin();
+
+  function isInstantHideEnabled() {
+    try {
+      const val = localStorage.getItem(INSTANT_HIDE_KEY);
+      return val === null ? true : val === "1";
+    } catch {
+      return true;
+    }
+  }
+
+  function setInstantHideEnabled(val) {
+    try {
+      localStorage.setItem(INSTANT_HIDE_KEY, val ? "1" : "0");
+    } catch {}
+  }
+
+  function getIntruderLog() {
+    try {
+      return JSON.parse(localStorage.getItem(INTRUDER_LOG_KEY) || "[]");
+    } catch {
+      return [];
+    }
+  }
+
+  function logIntruderAttempt(source = "Notes", snippet = "Failed unlock") {
+    const next = recordIntruderAttempt(getIntruderLog(), { at: Date.now(), source, snippet }, 25);
+    try {
+      localStorage.setItem(INTRUDER_LOG_KEY, JSON.stringify(next));
+    } catch {}
+    return next;
+  }
+
+  function clearIntruderLog() {
+    try {
+      localStorage.removeItem(INTRUDER_LOG_KEY);
+    } catch {}
+  }
 
   function getSecretCode() {
     try {
@@ -229,6 +297,7 @@ export function createNotesManager({ onUnlock }) {
     const decoy = getDecoyCode();
 
     if (decoy && (t === decoy || b === decoy)) {
+      logIntruderAttempt("Decoy Trigger", (t || b).slice(0, 18));
       noteTitleEl.value = "";
       noteContentEl.value = "";
       editingNoteId = null;
@@ -289,6 +358,13 @@ export function createNotesManager({ onUnlock }) {
     getDecoyCode,
     setDecoyCode,
     isShakeHideEnabled,
-    setShakeHideEnabled
+    setShakeHideEnabled,
+    getDisguiseSkin,
+    setDisguiseSkin,
+    isInstantHideEnabled,
+    setInstantHideEnabled,
+    getIntruderLog,
+    logIntruderAttempt,
+    clearIntruderLog
   };
 }
