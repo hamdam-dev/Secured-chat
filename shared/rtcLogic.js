@@ -44,11 +44,12 @@ export function evaluateNetworkQuality({
 }) {
   if (connectionState === "failed" || connectionState === "disconnected") {
     const nextWeak = consecutiveWeakCount + 1;
+    const downgradeThreshold = connectionState === "failed" ? 2 : 3;
     return {
       badge: "📶 Reconnecting...",
       tier: "weak",
       shouldRestartIce: true,
-      shouldDowngradeToAudio: isVideoCall && !isAudioFallback && nextWeak >= 2,
+      shouldDowngradeToAudio: isVideoCall && !isAudioFallback && nextWeak >= downgradeThreshold,
       nextWeakCount: nextWeak
     };
   }
@@ -88,5 +89,60 @@ export function evaluateNetworkQuality({
     shouldRestartIce: false,
     shouldDowngradeToAudio: false,
     nextWeakCount: 0
+  };
+}
+
+export function isOfferActiveAndFresh({
+  offer = null,
+  hangup = null,
+  lastOfferTs = 0,
+  handledCallIds = [],
+  nowMs = Date.now(),
+  maxAgeMs = 60000
+} = {}) {
+  if (!offer || !offer.callId || !offer.sdp || !offer.ts) return false;
+  if (offer.iceRestart) return false;
+  if (offer.ts <= lastOfferTs) return false;
+  if (nowMs - offer.ts >= maxAgeMs) return false;
+  if (handledCallIds instanceof Set ? handledCallIds.has(offer.callId) : Array.isArray(handledCallIds) && handledCallIds.includes(offer.callId)) {
+    return false;
+  }
+  if (hangup && hangup.callId === offer.callId) return false;
+  return true;
+}
+
+export function shouldProcessIceRestartOffer({
+  offer = null,
+  currentCallId = null,
+  lastProcessedRestartTs = 0
+} = {}) {
+  if (!offer || !offer.iceRestart || !offer.sdp || !currentCallId) return false;
+  if (offer.callId !== currentCallId) return false;
+  return Number(offer.ts || 0) > Number(lastProcessedRestartTs || 0);
+}
+
+export function resolveCallLogOnEnd({
+  notifyPartner = true,
+  currentCallId = null,
+  wasConnected = false,
+  wasVideo = false,
+  durationStr = "00:00",
+  loggedCallIds = null
+} = {}) {
+  if (!notifyPartner || !currentCallId) return null;
+  if (loggedCallIds && loggedCallIds.has(currentCallId)) return null;
+  if (!wasConnected) {
+    return {
+      isCallLog: true,
+      missed: true,
+      callId: currentCallId,
+      text: `📵 Missed ${wasVideo ? "Video" : "Audio"} Call`
+    };
+  }
+  return {
+    isCallLog: true,
+    missed: false,
+    callId: currentCallId,
+    text: `${wasVideo ? "📹" : "📞"} Call Ended (${durationStr || "00:00"})`
   };
 }

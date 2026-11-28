@@ -6,6 +6,8 @@ const SECRET_CODE_KEY = "sc_secret_code_v1";
 const DECOY_CODE_KEY = "sc_decoy_code_v1";
 const SHAKE_HIDE_KEY = "sc_shake_hide_v1";
 const INSTANT_HIDE_KEY = "sc_instant_hide_v1";
+const PANIC_BLUR_KEY = "sc_panic_blur_v1";
+const PANIC_PIN_KEY = "sc_panic_pin_v1";
 const DISGUISE_SKIN_KEY = "sc_disguise_skin_v1";
 const INTRUDER_LOG_KEY = "sc_intruder_log_v1";
 const NOTES_KEY = "sc_offline_phone_notes_v1";
@@ -88,6 +90,38 @@ export function createNotesManager({ onUnlock }) {
     try {
       localStorage.setItem(INSTANT_HIDE_KEY, val ? "1" : "0");
     } catch {}
+  }
+
+  function isPanicBlurEnabled() {
+    try {
+      const val = localStorage.getItem(PANIC_BLUR_KEY);
+      return val === null ? true : val === "1";
+    } catch {
+      return true;
+    }
+  }
+
+  function setPanicBlurEnabled(val) {
+    try {
+      localStorage.setItem(PANIC_BLUR_KEY, val ? "1" : "0");
+    } catch {}
+  }
+
+  function getPanicPin() {
+    try {
+      return (localStorage.getItem(PANIC_PIN_KEY) || "").trim();
+    } catch {
+      return "";
+    }
+  }
+
+  function setPanicPin(pin) {
+    const clean = String(pin || "").trim();
+    try {
+      if (clean) localStorage.setItem(PANIC_PIN_KEY, clean);
+      else localStorage.removeItem(PANIC_PIN_KEY);
+    } catch {}
+    return getPanicPin();
   }
 
   function getIntruderLog() {
@@ -363,6 +397,10 @@ export function createNotesManager({ onUnlock }) {
     setDisguiseSkin,
     isInstantHideEnabled,
     setInstantHideEnabled,
+    isPanicBlurEnabled,
+    setPanicBlurEnabled,
+    getPanicPin,
+    setPanicPin,
     getIntruderLog,
     logIntruderAttempt,
     clearIntruderLog

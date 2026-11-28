@@ -684,6 +684,7 @@ export function createChatManager({
     return (
       dec?.gameData?.lastActionText ||
       (dec?.questionCard?.answer ? `🃏 Jawab aaya: "${dec.questionCard.answer}"` : "") ||
+      (dec?.ritualCard?.entryB ? `${dec.ritualCard.mode === "night" ? "🌙 Night" : "☀️ Morning"} Ritual poora hua!` : "") ||
       `${getBubblePreviewText(dec)} update hua!`
     );
   }
@@ -702,6 +703,8 @@ export function createChatManager({
       stamped.gameData = { ...stamped.gameData, updatedAtMs };
     } else if (stamped.questionCard && typeof stamped.questionCard === "object") {
       stamped.questionCard = { ...stamped.questionCard, updatedAtMs };
+    } else if (stamped.ritualCard && typeof stamped.ritualCard === "object") {
+      stamped.ritualCard = { ...stamped.ritualCard, updatedAtMs };
     } else {
       stamped.updatedAtMs = updatedAtMs;
     }
@@ -768,7 +771,7 @@ export function createChatManager({
       appliedRemoteGameKeys.add(key);
 
       const dec = await decryptPayload(item.cipher).catch(() => null);
-      if (!dec || typeof dec !== "object" || (!dec.gameData && !dec.questionCard && !dec.updatedAtMs)) {
+      if (!dec || typeof dec !== "object" || (!dec.gameData && !dec.questionCard && !dec.ritualCard && !dec.updatedAtMs)) {
         continue;
       }
 
@@ -988,6 +991,65 @@ export function createChatManager({
         qBox.appendChild(row);
       }
       div.appendChild(qBox);
+    } else if (dec.ritualCard) {
+      allowDoubleTapReact = true;
+      const rc = dec.ritualCard;
+      const isNight = rc.mode === "night";
+      const rBox = document.createElement("div");
+      rBox.className = "ritual-card-msg" + (isNight ? " night-mode" : "");
+      rBox.innerHTML = `<div class="game-card-head">${isNight ? "🌙 Goodnight Ritual" : "☀️ Morning Ritual"}</div><div class="game-card-prompt">${escapeHtml(rc.prompt || "")}</div>`;
+      if (rc.entryA) {
+        const aRow = document.createElement("div");
+        aRow.className = "ritual-entry-row";
+        aRow.innerText = `${isMine ? "✨ Aap" : "💖 Love"}: ${rc.entryA}`;
+        rBox.appendChild(aRow);
+      }
+      if (rc.entryB) {
+        const bRow = document.createElement("div");
+        bRow.className = "ritual-entry-row";
+        bRow.innerText = `${rc.authorB === myUid ? "✨ Aap" : "💖 Love"}: ${rc.entryB}`;
+        rBox.appendChild(bRow);
+      } else {
+        const row = document.createElement("div");
+        row.className = "game-inline-reply";
+        const inp = document.createElement("input");
+        inp.type = "text";
+        inp.className = "game-inline-input";
+        inp.placeholder = "Partner is card ko complete karein...";
+        inp.onclick = e => e.stopPropagation();
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "game-mini-btn active";
+        btn.innerText = "Complete";
+        btn.onclick = async e => {
+          e.stopPropagation();
+          const val = inp.value.trim();
+          if (!val) return;
+          playEmotionSound("love");
+          await updateEncryptedMessage(
+            m.id,
+            {
+              ...dec,
+              ritualCard: { ...rc, entryB: val, authorB: myUid }
+            },
+            {
+              notifyPartner: true,
+              alertKind: "letter",
+              gameNoticeText: `${isNight ? "🌙 Goodnight" : "☀️ Morning"} Ritual poora hua!\n💖 ${val}`
+            }
+          );
+        };
+        row.append(inp, btn);
+        rBox.appendChild(row);
+      }
+      div.appendChild(rBox);
+    } else if (dec.periodCard) {
+      allowDoubleTapReact = true;
+      const pc = dec.periodCard;
+      const pCard = document.createElement("div");
+      pCard.className = "period-card-msg";
+      pCard.innerHTML = `<div class="game-card-head">${escapeHtml(pc.emoji || "🌸")} ${escapeHtml(pc.title || "Period Comfort Care")}</div><div class="game-card-sub">${escapeHtml(pc.note || "Aaj sirf pyar aur aaram ❤️")}</div>`;
+      div.appendChild(pCard);
     } else if (dec.gameData && gameRenderer) {
       div.appendChild(gameRenderer(m));
     } else if (dec.letterData) {

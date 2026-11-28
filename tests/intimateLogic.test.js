@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   CODEWORD_GLOSSARY,
+  getEffectiveCodewords,
   INTIMATE_GAMES_META,
   DEFAULT_DICE_CONFIG,
   rollNaughtyDice,
@@ -26,14 +27,18 @@ import {
   removeCustomItemFromPool
 } from "../shared/intimateLogic.js";
 
-test("INTIMATE_GAMES_META exposes 36 distinct intimacy & spicy games and 3 codewords", () => {
+test("INTIMATE_GAMES_META exposes 36 distinct intimacy & spicy games and 4 codewords", () => {
   assert.equal(INTIMATE_GAMES_META.length, 36);
   const ids = new Set(INTIMATE_GAMES_META.map(g => g.id));
   assert.equal(ids.size, 36);
   assert.deepEqual(
     CODEWORD_GLOSSARY.map(c => c.key),
-    ["honey", "chocolate", "mam"]
+    ["honey", "chocolate", "mountain", "mam"]
   );
+  const merged = getEffectiveCodewords({ mountain: { label: "⛰️ Peak", hint: "Custom Backside" } });
+  assert.equal(merged[2].label, "⛰️ Peak");
+  assert.equal(merged[2].hint, "Custom Backside");
+  assert.equal(merged[0].label, "🍯 Honey");
 });
 
 test("rollNaughtyDice picks from custom config arrays and builds summary", () => {

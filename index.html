@@ -12,6 +12,18 @@
 </head>
 <body>
 
+    <div id="panic-blur-curtain" style="display:none;" aria-hidden="true">
+        <div class="panic-curtain-card">
+            <div class="panic-curtain-ico">📝</div>
+            <div class="panic-curtain-title">My Notes</div>
+            <div class="panic-curtain-sub">Notes sync ho rahe hain... Screen protected hai 🛡️</div>
+            <div class="game-btn-row">
+                <button type="button" id="panic-resume-btn" class="modal-btn">Wapas Chalein</button>
+                <button type="button" id="panic-escape-btn" class="modal-btn primary">Notes Par Jaayein</button>
+            </div>
+        </div>
+    </div>
+
     <div id="notes-screen">
         <div class="notes-header">
             <h2>My Notes</h2>
@@ -118,6 +130,7 @@
         <div class="hdr-dropdown more-hub-sheet" id="more-dropdown">
             <div class="more-hub-sec-title">💖 Couple & Fun</div>
             <div class="more-hub-grid">
+                <button id="open-period-btn" type="button" class="more-hub-tile"><span class="mh-ico">🌸</span><span class="mh-lbl">Period Care</span></button>
                 <button id="open-wallet-btn" type="button" class="more-hub-tile"><span class="mh-ico">🎟️</span><span class="mh-lbl">Love Wallet</span></button>
                 <button id="open-together-btn" type="button" class="more-hub-tile"><span class="mh-ico">🌙</span><span class="mh-lbl">Together</span></button>
                 <button id="open-touch-btn" type="button" class="more-hub-tile"><span class="mh-ico">👆</span><span class="mh-lbl">Touch Sync</span></button>
@@ -248,8 +261,27 @@
     <div class="modal-backdrop" id="care-modal">
         <div class="modal-card care-sheet-card">
             <div class="care-sheet-head">
-                <h4>Care Pings, Cards & Khat 💌</h4>
-                <button class="ep-close-btn" id="close-care-modal-btn" type="button" aria-label="Close">✕</button>
+                <h4>Care Pings, Rituals & Khat 💌</h4>
+                <div class="care-head-actions">
+                    <button type="button" id="care-open-period-btn" class="game-mini-btn">🌸 Period Care</button>
+                    <button class="ep-close-btn" id="close-care-modal-btn" type="button" aria-label="Close">✕</button>
+                </div>
+            </div>
+
+            <div class="care-section-box">
+                <div class="care-head-inline">
+                    <span class="care-section-title">☀️ Morning & 🌙 Goodnight Ritual Card</span>
+                    <button type="button" id="refresh-ritual-btn" class="game-mini-btn">🔄 Prompt</button>
+                </div>
+                <div class="game-btn-row" id="ritual-mode-row">
+                    <button type="button" class="game-mini-btn active" data-ritual-mode="morning">☀️ Morning Ritual</button>
+                    <button type="button" class="game-mini-btn" data-ritual-mode="night">🌙 Goodnight Ritual</button>
+                </div>
+                <div id="ritual-prompt-preview" class="ritual-prompt-preview">Aaj subah uthte hi mere liye pehla khayal kya aaya? ☀️</div>
+                <div class="game-inline-reply">
+                    <input type="text" id="ritual-entry-input" class="game-inline-input" placeholder="Apna pyara jawab likhein (partner isi card par reply karega)..." maxlength="160" aria-label="Morning or Goodnight ritual answer">
+                    <button type="button" id="send-ritual-btn" class="game-mini-btn active">💖 Bhejein</button>
+                </div>
             </div>
 
             <div class="care-section-box">
@@ -742,7 +774,11 @@
             </select>
 
             <div class="care-section-box">
-                <div class="care-section-title">Instant Hide, Shake & Wallpaper</div>
+                <div class="care-section-title">🛡️ Panic Privacy Shield, Shake & Wallpaper</div>
+                <label class="privacy-toggle-row">
+                    <span>🌫️ Tab / App Focus Jaane par Screen Blur Shield</span>
+                    <input type="checkbox" id="panic-blur-toggle" checked>
+                </label>
                 <label class="privacy-toggle-row">
                     <span>🚪 App Switch / Minimize par Turant Hide</span>
                     <input type="checkbox" id="instant-hide-toggle" checked>
@@ -751,6 +787,9 @@
                     <span>📳 Phone Shake karne par Turant Hide</span>
                     <input type="checkbox" id="shake-hide-toggle">
                 </label>
+                <label class="care-section-title" for="panic-pin-input">🔐 Quick 4-Digit Chat Lock PIN (Optional)</label>
+                <input type="password" inputmode="numeric" maxlength="6" id="panic-pin-input" class="care-input" placeholder="Khali chhodein ya 4-digit PIN set karein..." aria-label="Quick 4-digit chat lock PIN">
+                <div class="game-card-sub">Tip: Chat header par Double-Tap ya Escape dabane se turant Notes par escape hota hai!</div>
                 <div class="game-btn-row">
                     <button type="button" class="modal-btn" id="wall-bright-btn">✨ Wallpaper Dim/Bright</button>
                     <button type="button" class="modal-btn" id="custom-dp-btn">🖼️ DP Badlein</button>
@@ -778,6 +817,59 @@
             </div>
 
             <button type="button" class="modal-btn primary" id="save-privacy-btn">✅ Settings Save Karein</button>
+        </div>
+    </div>
+
+    <!-- PERIOD CARE PLANNER MODAL -->
+    <div class="modal-backdrop" id="period-modal">
+        <div class="modal-card care-sheet-card">
+            <div class="care-sheet-head">
+                <h4>Period Care Planner 🌸💖</h4>
+                <button class="ep-close-btn" id="close-period-btn" type="button" aria-label="Close">✕</button>
+            </div>
+            <div id="period-partner-banner" class="period-partner-card" style="display:none;"></div>
+            <div id="period-phase-card" class="period-phase-card"></div>
+
+            <div class="care-section-box">
+                <div class="care-section-title">📅 Apna Cycle Tracker Update Karein</div>
+                <div class="period-form-grid">
+                    <div>
+                        <label class="period-field-lbl" for="period-start-input">Last Period Start</label>
+                        <input type="date" id="period-start-input" class="care-input">
+                    </div>
+                    <div>
+                        <label class="period-field-lbl" for="period-cycle-input">Cycle Days</label>
+                        <input type="number" id="period-cycle-input" class="care-input" min="20" max="45" value="28">
+                    </div>
+                    <div>
+                        <label class="period-field-lbl" for="period-len-input">Period Days</label>
+                        <input type="number" id="period-len-input" class="care-input" min="2" max="10" value="5">
+                    </div>
+                </div>
+                <div class="care-section-title">🩹 Aaj Kaisa Feel Ho Raha Hai?</div>
+                <div id="period-symptoms-grid" class="period-symptom-grid"></div>
+                <input type="text" id="period-note-input" class="care-input" placeholder="Partner ke liye chhota note (e.g. Garam chai & cuddle chahiye)..." maxlength="90" aria-label="Period comfort note">
+                <button type="button" id="period-save-btn" class="modal-btn primary">💾 Save & Partner Sync Karein</button>
+            </div>
+
+            <div class="care-section-box">
+                <div class="care-section-title">🍫 1-Tap Care Package Chat Mein Bhejein</div>
+                <div id="period-packages-grid" class="period-packages-grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- QUICK PANIC PIN LOCK MODAL -->
+    <div class="modal-backdrop" id="panic-pin-modal">
+        <div class="modal-card">
+            <h4>Quick Privacy Lock 🔐</h4>
+            <p class="game-card-sub">Chat kholne ke liye apna Quick Lock PIN daalein</p>
+            <input type="password" inputmode="numeric" maxlength="6" id="panic-pin-unlock-input" class="care-input" placeholder="••••" aria-label="Enter Quick Lock PIN">
+            <p id="panic-pin-err" class="error" style="min-height:0;"></p>
+            <div class="game-btn-row">
+                <button type="button" id="panic-pin-cancel-btn" class="modal-btn cancel">Notes Wapas</button>
+                <button type="button" id="panic-pin-unlock-btn" class="modal-btn primary">🔓 Unlock</button>
+            </div>
         </div>
     </div>
 
@@ -1121,12 +1213,18 @@
         <div class="call-top-bar">
             <span id="call-status-text">Calling...</span>
             <span id="call-timer">00:00</span>
-            <span id="call-net-badge">📶 Good</span>
+            <div class="call-top-right">
+                <span id="call-net-badge">📶 Good</span>
+                <button type="button" id="call-minimize-btn" class="call-mini-hide-btn" aria-label="Hide call to notes" title="Quick Hide to Notes">🙈</button>
+            </div>
         </div>
 
         <div class="call-stage" id="call-stage">
-            <div class="call-avatar-ring" id="audio-call-avatar">
-                <img src="dp.png" class="call-avatar-img" alt="DP" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Ccircle cx=%2232%22 cy=%2232%22 r=%2232%22 fill=%22%23d81b60%22/%3E%3C/svg%3E'">
+            <div class="call-avatar-stack" id="audio-call-avatar">
+                <div class="call-avatar-ring">
+                    <img src="dp.png" class="call-avatar-img" alt="DP" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Ccircle cx=%2232%22 cy=%2232%22 r=%2232%22 fill=%22%23d81b60%22/%3E%3C/svg%3E'">
+                </div>
+                <p id="call-avatar-note" class="call-avatar-note" style="display:none;">📞 Encrypted Audio</p>
             </div>
             <video id="remote-video" autoplay playsinline></video>
             <video id="local-video" autoplay playsinline muted></video>

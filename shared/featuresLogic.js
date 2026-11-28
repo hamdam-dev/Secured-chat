@@ -71,11 +71,147 @@ export function formatCountdownMs(ms = 0) {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+export const PERIOD_SYMPTOMS = [
+  { key: "cramps", label: "😣 Cramps" },
+  { key: "tired", label: "😴 Low Energy" },
+  { key: "mood", label: "🥺 Extra Pyar Chahiye" },
+  { key: "cravings", label: "🍫 Chocolate Craving" },
+  { key: "backache", label: "💆 Back / Garam Bag" },
+  { key: "headache", label: "🤕 Sar Dard" }
+];
+
+export const PERIOD_CARE_PACKAGES = [
+  { key: "chocolate", emoji: "🍫", title: "Sweet Chocolate + Garam Chai", note: "Aaj kuch kaam nahi karna, sirf aaram karo meri jaan ❤️" },
+  { key: "massage", emoji: "💆", title: "15-Min Back & Tummy Massage Pass", note: "Garam heating pad + pyare hathon ka massage 🫶🏻" },
+  { key: "cuddle", emoji: "🧸", title: "Zero-Gussa Unlimited Cuddle", note: "Har nakhra sar aankhon par — aaj sirf sukoon 🤗" },
+  { key: "icecream", emoji: "🍨", title: "Midnight Craving Treat", note: "Jo dil kare bolo, foran hazir hai 💖" }
+];
+
+export const MORNING_PROMPTS = [
+  "Aaj subah uthte hi mere liye pehla khayal kya aaya? ☀️",
+  "Aaj ke din ka sabse pyara chhota target kya hai? 🌸",
+  "Aaj tumhe mujhse kaunsi ek dua ya wish chahiye? 🤲💖",
+  "Subah ki ek pyari line jo mera poora din bana de ✨",
+  "Aaj agar hum subah saath chai peete to kya baatein karte? ☕",
+  "Tumhare chehre par subah ki pehli muskan kis baat se aati hai? 😊"
+];
+
+export const NIGHT_PROMPTS = [
+  "Aaj pooray din mein sabse achha pal kaunsa laga? 🌙",
+  "Sone se pehle aaj ka ek pyara thank-you ya sorry bolna ho to? 💖",
+  "Aaj raat khwab mein hum dono kahan ghoomne chalein? ✨",
+  "Din bhar ki thakan mein tumhe mujhse kaisa hug chahiye? 🤗",
+  "Raat ki aakhri pyari wish jo kal subah poori ho 🌸",
+  "Aaj meri kaunsi baat ya message dil ko sabse zyada chhoo gaya? 💌"
+];
+
+export function calculatePeriodPhase(cfg = {}, nowMs = Date.now()) {
+  const lastStartIso = String(cfg?.lastStartIso || "").trim();
+  const rawCycle = Number(cfg?.cycleDays || 28);
+  const rawPeriod = Number(cfg?.periodDays || 5);
+  const cycleDays = Math.max(20, Math.min(45, Number.isFinite(rawCycle) ? Math.round(rawCycle) : 28));
+  const periodDays = Math.max(2, Math.min(10, Number.isFinite(rawPeriod) ? Math.round(rawPeriod) : 5));
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(lastStartIso)) {
+    return {
+      configured: false,
+      phase: "unset",
+      title: "Cycle Date Set Karein 🌸",
+      badge: "📅 Setup Pending",
+      tip: "Last period start date set karein taake partner ko live care tips dikhein.",
+      dayOfCycle: 0,
+      daysUntilNext: 0,
+      cycleDays,
+      periodDays
+    };
+  }
+
+  const startMs = Date.parse(`${lastStartIso}T00:00:00Z`);
+  if (!Number.isFinite(startMs)) {
+    return {
+      configured: false,
+      phase: "unset",
+      title: "Cycle Date Set Karein 🌸",
+      badge: "📅 Setup Pending",
+      tip: "Valid date select karein (YYYY-MM-DD).",
+      dayOfCycle: 0,
+      daysUntilNext: 0,
+      cycleDays,
+      periodDays
+    };
+  }
+
+  const d = new Date(nowMs);
+  const todayUtc = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  const rawDiff = Math.floor((todayUtc - startMs) / 86400000);
+  const offset = rawDiff >= 0 ? (rawDiff % cycleDays) : 0;
+  const dayOfCycle = offset + 1;
+  const daysUntilNext = rawDiff >= 0 ? (cycleDays - offset) : Math.abs(rawDiff);
+
+  let phase = "luteal";
+  let title = "🌙 Cozy Calm Days";
+  let badge = "☕ Slow Down";
+  let tip = "Thakan jaldi ho sakti hai — cozy talks aur pyari care best rahegi.";
+
+  const ovStart = Math.max(periodDays + 1, cycleDays - 16);
+  const ovEnd = Math.max(ovStart, cycleDays - 12);
+
+  if (dayOfCycle <= periodDays) {
+    phase = "period";
+    title = "🌸 Period Days — Extra Care";
+    badge = "🩸 Comfort Mode";
+    tip = "Garam paani, poora aaram, chocolate aur bina tension ke sirf pyar dein 💖";
+  } else if (dayOfCycle >= cycleDays - 4) {
+    phase = "pms";
+    title = "🥺 PMS Window — Soft Patience";
+    badge = "🫶🏻 Gentle Days";
+    tip = "Mood sensitive ho sakta hai — extra hugs, patience aur meetha treat ready rakhein.";
+  } else if (dayOfCycle >= ovStart && dayOfCycle <= ovEnd) {
+    phase = "ovulation";
+    title = "✨ Peak Energy & Glow";
+    badge = "💫 High Connect";
+    tip = "Energy aur romantic mood peak par — special talk ya cozy plan best rahega.";
+  } else if (dayOfCycle < ovStart) {
+    phase = "follicular";
+    title = "🌷 Fresh Follicular Days";
+    badge = "🌱 Light & Playful";
+    tip = "Mood fresh aur playful hai — couple games aur sweet plans enjoy karein.";
+  }
+
+  return {
+    configured: true,
+    phase,
+    title,
+    badge,
+    tip,
+    dayOfCycle,
+    daysUntilNext,
+    cycleDays,
+    periodDays
+  };
+}
+
+export function buildRitualCardPayload({ mode = "morning", prompt = "", text = "", authorUid = "", nowMs = Date.now() } = {}) {
+  const cleanMode = mode === "night" ? "night" : "morning";
+  const fallbackPool = cleanMode === "night" ? NIGHT_PROMPTS : MORNING_PROMPTS;
+  const cleanPrompt = String(prompt || fallbackPool[0]).trim();
+  const cleanText = String(text || "").trim();
+  return {
+    mode: cleanMode,
+    prompt: cleanPrompt,
+    entryA: cleanText,
+    authorA: String(authorUid || ""),
+    entryB: "",
+    authorB: "",
+    updatedAtMs: Number(nowMs || Date.now())
+  };
+}
+
 export function canEditMessage(msg, myUid, nowMs = Date.now(), maxWindowMs = 15 * 60 * 1000) {
   if (!msg || !myUid || msg.sender !== myUid || msg.isPending) return false;
   const dec = msg.decrypted;
   if (!dec || typeof dec.text !== "string") return false;
-  if (dec.imageData || dec.audioData || dec.giftData || dec.gameData || dec.capsuleData || dec.songCard || dec.walletRedeem || dec.walletGift || dec.carePing || dec.letterData || dec.questionCard) {
+  if (dec.imageData || dec.audioData || dec.giftData || dec.gameData || dec.capsuleData || dec.songCard || dec.walletRedeem || dec.walletGift || dec.carePing || dec.letterData || dec.questionCard || dec.ritualCard || dec.periodCard) {
     return false;
   }
   const createdMs = (msg.createdAtSec || 0) * 1000;

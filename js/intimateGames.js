@@ -1,6 +1,7 @@
 import { playEmotionSound } from "./crypto.js";
 import {
   CODEWORD_GLOSSARY,
+  getEffectiveCodewords,
   INTIMATE_GAMES_META,
   DEFAULT_DICE_CONFIG,
   DEFAULT_ROULETTE_WEDGES,
@@ -56,6 +57,7 @@ const UNIVERSAL_CUSTOM_KEY = "sc_custom_games_v2";
 const LOVE_WALLET_KEY = "sc_love_wallet_v1";
 const KISS_COUNTER_KEY = "sc_intimate_kisses_v1";
 const INTIMATE_PROGRESS_KEY = "sc_intimate_progress_v1";
+const CUSTOM_CODEWORDS_KEY = "sc_codewords_v1";
 
 function readJson(key, fallback) {
   try {
@@ -88,6 +90,8 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
   const walletCustomInput = document.getElementById("wallet-custom-input");
 
   let customCfg = readJson(INTIMATE_CUSTOM_KEY, {});
+  let customCodewords = readJson(CUSTOM_CODEWORDS_KEY, {});
+  let showCodewordEditor = false;
   let activeCat = "all";
   let activeGameId = "dice";
   let showCustomize = false;
@@ -1280,7 +1284,7 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
     // 10. SENSORY QUIZ
     if (activeGameId === "sensory") {
       const defItems = ["🧊 Ice Cube", "🪶 Feather", "💋 Warm Kiss", "🕯️ Massage Oil"];
-      const defZones = ["🍯 Honey", "🍫 Chocolate", "🎀 Mam", "✨ Neck"];
+      const defZones = ["🍯 Honey", "🍫 Chocolate", "⛰️ Mountain", "🎀 Mam", "✨ Neck"];
       const sCfg = cfg("sensoryCfg", { items: defItems, zones: defZones });
       const sItems = getEffectivePool(sCfg.items, defItems);
       const sZones = getEffectivePool(sCfg.zones, defZones);
@@ -1842,7 +1846,7 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
 
     // 21. BODY MAP HOT TAP
     if (activeGameId === "bodymap") {
-      const defZones = ["💋 Lips & Neck", "🎀 Mam", "🍯 Honey", "🍫 Chocolate", "🫶🏻 Waist"];
+      const defZones = ["💋 Lips & Neck", "🎀 Mam", "⛰️ Mountain", "🍯 Honey", "🍫 Chocolate", "🫶🏻 Waist"];
       const zones = getEffectivePool(cfg("bodyMapZones", defZones), defZones);
       if (showCustomize) {
         renderChipCustomizer(stageEl, {
@@ -2600,11 +2604,94 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
     if (!rootEl) return;
     rootEl.innerHTML = "";
 
-    // Glossary bar explaining Honey / Chocolate / Mam codewords cleanly
+    // Customizable 4-Codeword Glossary Bar (Honey / Chocolate / Mountain / Mam)
+    const effWords = getEffectiveCodewords(customCodewords);
+    const glossaryWrap = document.createElement("div");
+    glossaryWrap.className = "intimate-glossary-wrap";
+
     const glossary = document.createElement("div");
     glossary.className = "intimate-glossary-bar";
-    glossary.innerHTML = CODEWORD_GLOSSARY.map(c => `<span class="glossary-chip">${c.label}: ${c.hint}</span>`).join("");
-    rootEl.appendChild(glossary);
+    effWords.forEach(c => {
+      const sp = document.createElement("span");
+      sp.className = "glossary-chip";
+      sp.innerText = `${c.label}: ${c.hint}`;
+      glossary.appendChild(sp);
+    });
+
+    const cwBtn = document.createElement("button");
+    cwBtn.type = "button";
+    cwBtn.id = "intimate-edit-codewords-btn";
+    cwBtn.className = "game-mini-btn" + (showCodewordEditor ? " active" : "");
+    cwBtn.innerText = showCodewordEditor ? "✓ Codewords" : "✏️ Codewords";
+    cwBtn.onclick = () => {
+      showCodewordEditor = !showCodewordEditor;
+      renderIntimateHub();
+    };
+
+    glossaryWrap.append(glossary, cwBtn);
+    rootEl.appendChild(glossaryWrap);
+
+    if (showCodewordEditor) {
+      const editor = document.createElement("div");
+      editor.className = "intimate-codeword-editor";
+      const edTitle = document.createElement("div");
+      edTitle.className = "care-section-title";
+      edTitle.innerText = "🔐 Apne 4 Private Codewords Customize Karein";
+      editor.appendChild(edTitle);
+
+      const inputPairs = effWords.map(cw => {
+        const row = document.createElement("div");
+        row.className = "codeword-edit-row";
+        const lblInp = document.createElement("input");
+        lblInp.type = "text";
+        lblInp.className = "care-input";
+        lblInp.value = cw.label;
+        lblInp.setAttribute("aria-label", `${cw.key} codeword label`);
+        const hintInp = document.createElement("input");
+        hintInp.type = "text";
+        hintInp.className = "care-input";
+        hintInp.value = cw.hint;
+        hintInp.setAttribute("aria-label", `${cw.key} codeword hint`);
+        row.append(lblInp, hintInp);
+        editor.appendChild(row);
+        return { key: cw.key, lblInp, hintInp };
+      });
+
+      const btnRow = document.createElement("div");
+      btnRow.className = "game-btn-row";
+      const saveCwBtn = document.createElement("button");
+      saveCwBtn.type = "button";
+      saveCwBtn.id = "save-codewords-btn";
+      saveCwBtn.className = "game-mini-btn active";
+      saveCwBtn.innerText = "💾 Save Codewords";
+      saveCwBtn.onclick = () => {
+        const nextMap = {};
+        inputPairs.forEach(p => {
+          nextMap[p.key] = {
+            label: p.lblInp.value.trim(),
+            hint: p.hintInp.value.trim()
+          };
+        });
+        customCodewords = nextMap;
+        writeJson(CUSTOM_CODEWORDS_KEY, customCodewords);
+        showCodewordEditor = false;
+        playEmotionSound("gift");
+        renderIntimateHub();
+      };
+      const rstCwBtn = document.createElement("button");
+      rstCwBtn.type = "button";
+      rstCwBtn.className = "game-mini-btn";
+      rstCwBtn.innerText = "🔄 Reset";
+      rstCwBtn.onclick = () => {
+        customCodewords = {};
+        writeJson(CUSTOM_CODEWORDS_KEY, customCodewords);
+        showCodewordEditor = false;
+        renderIntimateHub();
+      };
+      btnRow.append(saveCwBtn, rstCwBtn);
+      editor.appendChild(btnRow);
+      rootEl.appendChild(editor);
+    }
 
     // Search bar (lives outside picker grid so typing keeps focus!)
     const searchInput = document.createElement("input");

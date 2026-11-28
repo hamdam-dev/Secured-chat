@@ -1,4 +1,5 @@
 import { playEmotionSound } from "./crypto.js";
+import { MORNING_PROMPTS, NIGHT_PROMPTS, buildRitualCardPayload } from "../shared/featuresLogic.js";
 
 const CARE_PING_POOL = [
   { emoji: "🍲", label: "Khana Khaya?", sub: "Apna khayal rakhna 💖" },
@@ -56,15 +57,30 @@ function pickFreshSlice(pool, count, prevKeys = new Set()) {
   return [...freshFirst, ...rest].slice(0, count);
 }
 
-export function createCareManager({ chat }) {
+export function createCareManager({ chat, getAuth, onOpenPeriod } = {}) {
   const modal = document.getElementById("care-modal");
   const pingGrid = document.getElementById("care-ping-grid");
   const qGrid = document.getElementById("dil-baat-grid");
   const customPingInput = document.getElementById("custom-ping-input");
   const customDilInput = document.getElementById("custom-dil-input");
+  const ritualPromptEl = document.getElementById("ritual-prompt-preview");
+  const ritualEntryInput = document.getElementById("ritual-entry-input");
+  const ritualModeRow = document.getElementById("ritual-mode-row");
 
   let currentPings = [];
   let currentQuestions = [];
+  let ritualMode = new Date().getHours() >= 18 || new Date().getHours() < 5 ? "night" : "morning";
+  let ritualPromptIdx = 0;
+
+  function renderRitualPreview() {
+    const pool = ritualMode === "night" ? NIGHT_PROMPTS : MORNING_PROMPTS;
+    if (ritualPromptEl) {
+      ritualPromptEl.innerText = pool[ritualPromptIdx % pool.length];
+    }
+    ritualModeRow?.querySelectorAll("[data-ritual-mode]").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.ritualMode === ritualMode);
+    });
+  }
 
   function renderPings() {
     if (!pingGrid) return;
@@ -109,6 +125,42 @@ export function createCareManager({ chat }) {
 
   renderPings();
   renderDilQuestions();
+  renderRitualPreview();
+
+  ritualModeRow?.querySelectorAll("[data-ritual-mode]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      ritualMode = btn.dataset.ritualMode === "night" ? "night" : "morning";
+      ritualPromptIdx = 0;
+      renderRitualPreview();
+    });
+  });
+
+  document.getElementById("refresh-ritual-btn")?.addEventListener("click", () => {
+    playEmotionSound("chime");
+    ritualPromptIdx++;
+    renderRitualPreview();
+  });
+
+  document.getElementById("send-ritual-btn")?.addEventListener("click", async () => {
+    const text = (ritualEntryInput?.value || "").trim();
+    if (!text) {
+      ritualEntryInput?.focus();
+      return;
+    }
+    const pool = ritualMode === "night" ? NIGHT_PROMPTS : MORNING_PROMPTS;
+    const prompt = pool[ritualPromptIdx % pool.length];
+    const uid = getAuth?.()?.currentUser?.uid || "";
+    const ritualCard = buildRitualCardPayload({ mode: ritualMode, prompt, text, authorUid: uid });
+    ritualEntryInput.value = "";
+    modal.style.display = "none";
+    playEmotionSound("gift");
+    await chat.sendEncryptedMessage({ ritualCard }, "letter");
+  });
+
+  document.getElementById("care-open-period-btn")?.addEventListener("click", () => {
+    modal.style.display = "none";
+    onOpenPeriod?.();
+  });
 
   document.getElementById("refresh-pings-btn")?.addEventListener("click", () => {
     playEmotionSound("chime");
@@ -169,6 +221,7 @@ export function createCareManager({ chat }) {
   document.getElementById("care-studio-btn")?.addEventListener("click", () => {
     renderPings();
     renderDilQuestions();
+    renderRitualPreview();
     modal.style.display = "flex";
   });
 

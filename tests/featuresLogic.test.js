@@ -14,7 +14,13 @@ import {
   computeTouchDistance,
   areTouchesMeeting,
   recordIntruderAttempt,
-  normalizeBackupBundle
+  normalizeBackupBundle,
+  PERIOD_SYMPTOMS,
+  PERIOD_CARE_PACKAGES,
+  MORNING_PROMPTS,
+  NIGHT_PROMPTS,
+  calculatePeriodPhase,
+  buildRitualCardPayload
 } from "../shared/featuresLogic.js";
 
 test("catalogs expose 4 secret vibes, 5 desires, 3 disguise skins, 4 themes, 4 ambience modes, 5 poses", () => {
@@ -24,6 +30,10 @@ test("catalogs expose 4 secret vibes, 5 desires, 3 disguise skins, 4 themes, 4 a
   assert.equal(LUXURY_THEMES.length, 4);
   assert.equal(AMBIENCE_MODES.length, 4);
   assert.equal(POSE_CHALLENGES.length, 5);
+  assert.equal(PERIOD_SYMPTOMS.length, 6);
+  assert.equal(PERIOD_CARE_PACKAGES.length, 4);
+  assert.ok(MORNING_PROMPTS.length >= 5);
+  assert.ok(NIGHT_PROMPTS.length >= 5);
 });
 
 test("capsule time helpers compute unlock state and countdown formatting", () => {
@@ -49,6 +59,10 @@ test("canEditMessage only permits editing own non-media text within 15 minutes",
   assert.equal(canEditMessage(expired, "u1", now), false);
   const photoMsg = { sender: "u1", createdAtSec: myText.createdAtSec, decrypted: { text: "pic", imageData: "data:..." } };
   assert.equal(canEditMessage(photoMsg, "u1", now), false);
+  const ritualMsg = { sender: "u1", createdAtSec: myText.createdAtSec, decrypted: { text: "", ritualCard: { mode: "morning" } } };
+  assert.equal(canEditMessage(ritualMsg, "u1", now), false);
+  const periodMsg = { sender: "u1", createdAtSec: myText.createdAtSec, decrypted: { text: "", periodCard: { title: "Care" } } };
+  assert.equal(canEditMessage(periodMsg, "u1", now), false);
 });
 
 test("touch sync proximity detects active close touches and ignores stale ones", () => {
@@ -76,4 +90,46 @@ test("recordIntruderAttempt prepends bounded log and normalizeBackupBundle valid
   assert.equal(norm.version, 2);
   assert.equal(norm.wallet.length, 1);
   assert.equal(norm.starred.length, 1);
+});
+
+test("calculatePeriodPhase computes unset, period, ovulation, and pms phases accurately", () => {
+  const unset = calculatePeriodPhase({});
+  assert.equal(unset.configured, false);
+  assert.equal(unset.phase, "unset");
+
+  // Day 2 of cycle (period phase)
+  const d2Now = Date.parse("2026-11-02T12:00:00Z");
+  const p = calculatePeriodPhase({ lastStartIso: "2026-11-01", cycleDays: 28, periodDays: 5 }, d2Now);
+  assert.equal(p.configured, true);
+  assert.equal(p.phase, "period");
+  assert.equal(p.dayOfCycle, 2);
+  assert.equal(p.daysUntilNext, 27);
+
+  // Day 14 of cycle (ovulation window)
+  const d14Now = Date.parse("2026-11-14T12:00:00Z");
+  const ov = calculatePeriodPhase({ lastStartIso: "2026-11-01", cycleDays: 28, periodDays: 5 }, d14Now);
+  assert.equal(ov.phase, "ovulation");
+  assert.equal(ov.dayOfCycle, 14);
+
+  // Day 26 of cycle (PMS window)
+  const d26Now = Date.parse("2026-11-26T12:00:00Z");
+  const pms = calculatePeriodPhase({ lastStartIso: "2026-11-01", cycleDays: 28, periodDays: 5 }, d26Now);
+  assert.equal(pms.phase, "pms");
+  assert.equal(pms.dayOfCycle, 26);
+});
+
+test("buildRitualCardPayload formats morning and night ritual cards", () => {
+  const card = buildRitualCardPayload({
+    mode: "night",
+    prompt: "Aaj ki best baat?",
+    text: "Tumhari call!",
+    authorUid: "u1",
+    nowMs: 12345
+  });
+  assert.equal(card.mode, "night");
+  assert.equal(card.prompt, "Aaj ki best baat?");
+  assert.equal(card.entryA, "Tumhari call!");
+  assert.equal(card.authorA, "u1");
+  assert.equal(card.entryB, "");
+  assert.equal(card.updatedAtMs, 12345);
 });

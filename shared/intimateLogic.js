@@ -1,10 +1,23 @@
 // Pure logic & customizable pools for the 20 Intimacy Couple Games + Love Wallet
 
 export const CODEWORD_GLOSSARY = [
-  { key: "honey", label: "🍯 Honey", hint: "Gentle & sweet male focus" },
-  { key: "chocolate", label: "🍫 Chocolate", hint: "Sweet female focus" },
-  { key: "mam", label: "🎀 Mam", hint: "Soft upper embrace & kisses" }
+  { key: "honey", label: "🍯 Honey", hint: "Male focus" },
+  { key: "chocolate", label: "🍫 Chocolate", hint: "Female front focus" },
+  { key: "mountain", label: "⛰️ Mountain", hint: "Backside focus" },
+  { key: "mam", label: "🎀 Mam", hint: "Upper embrace & kisses" }
 ];
+
+export function getEffectiveCodewords(customMap = {}) {
+  const src = customMap && typeof customMap === "object" ? customMap : {};
+  return CODEWORD_GLOSSARY.map(item => {
+    const ov = src[item.key];
+    return {
+      key: item.key,
+      label: String(ov?.label || "").trim() || item.label,
+      hint: String(ov?.hint || "").trim() || item.hint
+    };
+  });
+}
 
 export const INTIMATE_GAMES_META = [
   { id: "dice", icon: "🎲", name: "Naughty Dice", cat: "dice", badge: "Custom" },
@@ -47,7 +60,7 @@ export const INTIMATE_GAMES_META = [
 
 export const DEFAULT_DICE_CONFIG = {
   actions: ["Slow Kiss 😘", "Soft Tease 💋", "Warm Massage 💆", "Whisper & Bite 😉", "Honey / Chocolate Lick 🍯", "Close Hold 🤗"],
-  targets: ["Lips 💋", "Neck & Collarbone ✨", "Honey 🍯", "Chocolate 🍫", "Mam 🎀", "Waist & Back 🫶🏻"],
+  targets: ["Lips 💋", "Neck & Collarbone ✨", "Honey 🍯", "Chocolate 🍫", "Mountain ⛰️", "Mam 🎀", "Waist & Back 🫶🏻"],
   durations: ["15 sec", "30 sec", "45 sec", "60 sec", "90 sec", "Until Tap"]
 };
 
@@ -56,23 +69,23 @@ export const DEFAULT_ROULETTE_WEDGES = {
     "💋 30s Slow Neck Kisses",
     "🎀 Mam par soft cuddle & forehead kiss",
     "🍫 Chocolate par gentle warm touch (15s)",
+    "⛰️ Mountain par warm oil massage & soft kiss (20s)",
     "🍯 Honey ko pyar se tease karo (15s)",
-    "🎙️ Kaano mein 'Sirf Tumhare' whisper karo",
     "🤗 1-min bina kapde distance tight hug"
   ],
   naughty: [
     "🍯 Honey par 45s slow teasing & kiss",
     "🍫 Chocolate par 45s soft kiss & taste",
+    "⛰️ Mountain curve par 40s warm grip, kiss & bite 😉",
     "🎀 Mam par 30s soft kisses + tracing",
-    "💋 Bina haath lagaye sirf lips se tease (30s)",
     "🧊 Thandi saans + garam kiss combo",
     "👑 10-Min Partner Commands Everything"
   ],
   wild: [
     "🍯 Honey 60s full focus — no stopping!",
     "🍫 Chocolate 60s deep focus + whisper",
+    "⛰️ Mountain + Chocolate back-to-front 60s intense wave!",
     "🎀 Mam + Neck nonstop kisses 45s",
-    "🔥 Partner apni favourite position choose karega",
     "😈 Eyes closed 60s — blindfolded surprise touch",
     "🌙 Midnight Double Round: Honey & Chocolate dono!"
   ]
@@ -80,27 +93,27 @@ export const DEFAULT_ROULETTE_WEDGES = {
 
 export const DEFAULT_HEAT_LEVELS = [
   { level: 1, title: "Lv 1 · Sweet Spark ✨", task: "Aankhon mein dekh ke 20s slow breathing aur forehead + cheek kisses." },
-  { level: 2, title: "Lv 2 · Neck & Mam 🌸", task: "Neck se Mam tak slow finger tracing aur 30s soft kisses." },
-  { level: 3, title: "Lv 3 · Honey & Chocolate Tease 🔥", task: "Honey aur Chocolate ke aas-paas 45s gentle teasing (direct rush mana!)." },
-  { level: 4, title: "Lv 4 · Deep Craving 💋", task: "60s unstoppable Honey / Chocolate focus — partner guide karega slow ya fast." },
+  { level: 2, title: "Lv 2 · Neck & Mam 🌸", task: "Neck se Mam aur Mountain curves tak slow finger tracing & 30s soft kisses." },
+  { level: 3, title: "Lv 3 · Honey, Chocolate & Mountain 🔥", task: "Honey, Chocolate aur Mountain ke aas-paas 45s gentle teasing (direct rush mana!)." },
+  { level: 4, title: "Lv 4 · Deep Craving 💋", task: "60s unstoppable Honey / Chocolate / Mountain focus — partner guide karega slow ya fast." },
   { level: 5, title: "Lv 5 · Full Wild Finale 🌙", task: "No timer, no holding back — aaj raat ki sabse intense wish poori karo!" }
 ];
 
 export const DEFAULT_SPICY_DECK = {
   soft: [
-    { type: "Soft Truth", text: "Mam, Chocolate aur Honey mein sabse pehle kahan kiss pasand hai? 🙈" },
+    { type: "Soft Truth", text: "Mam, Chocolate, Mountain aur Honey mein sabse pehle kahan kiss pasand hai? 🙈" },
     { type: "Soft Dare", text: "Partner ke gale par 20s slow lips trail banao aur cute voice note bhejo 💋" },
-    { type: "Soft Dare", text: "Mam par soft hug ke saath apni dhadkan mehsoos karwao 🤗" },
+    { type: "Soft Dare", text: "Mam aur Mountain par soft hug ke saath apni dhadkan mehsoos karwao 🤗" },
     { type: "Soft Truth", text: "Meri kaunsi khushboo ya touch tumhe turant romantic bana deti hai? 🌸" }
   ],
   flirty: [
-    { type: "Naughty Truth", text: "Honey ya Chocolate mein kis jagah slow tease tumhe sabse tez pighlata hai? 🔥" },
-    { type: "Naughty Dare", text: "30s Mam ko pyaar se pamper karo bina ek lafz bole 🎀" },
+    { type: "Naughty Truth", text: "Honey, Chocolate ya Mountain mein kis jagah slow tease tumhe sabse tez pighlata hai? 🔥" },
+    { type: "Naughty Dare", text: "30s Mam ya Mountain ko pyaar se pamper karo bina ek lafz bole 🎀⛰️" },
     { type: "Naughty Dare", text: "Voice note mein batao abhi Chocolate/Honey ke liye kya dil kar raha hai 🎙️😘" },
     { type: "Naughty Truth", text: "Lights dim pasand hain ya full candlelight jab hum kareeb hon? 🕯️" }
   ],
   wild: [
-    { type: "Wild Dare", text: "60s Chocolate & Mam alternation — partner sirf 'aur' bol sakta hai 🍫🎀" },
+    { type: "Wild Dare", text: "60s Chocolate, Mountain & Mam alternation — partner sirf 'aur' bol sakta hai 🍫⛰️🎀" },
     { type: "Wild Dare", text: "60s Honey tease with slow speed, phir last 15s full intensity 🍯🔥" },
     { type: "Wild Truth", text: "Humari sabse wild secret khwahish batao jo aaj try karna chahte ho 😈" },
     { type: "Wild Dare", text: "Abhi 1 Tease Selfie ya Voice Whisper bhejo jo sirf View-Once ho 📸🔥" }
@@ -110,6 +123,7 @@ export const DEFAULT_SPICY_DECK = {
 export const DEFAULT_FANTASY_POOL = [
   "🍯 Slow 2-min Honey focus",
   "🍫 Sweet Chocolate taste & tease",
+  "⛰️ Warm Mountain oil massage & slow back grip",
   "🎀 Mam par soft oil massage + kisses",
   "🕯️ Candlelight blindfold surprise",
   "🌧️ Baarish ke baad cozy shower together",
@@ -155,25 +169,25 @@ export const DEFAULT_SCRATCH_REWARDS = [
 ];
 
 export const DEFAULT_DART_ZONES = [
-  "🎯 Bullseye! Partner picks Honey/Chocolate/Mam wild reward!",
+  "🎯 Bullseye! Partner picks Honey/Chocolate/Mountain/Mam wild reward!",
   "🎀 Ring 2: 45s Mam & Collarbone kisses",
+  "⛰️ Ring 2: 40s Mountain warm oil massage & tease",
   "🍯 Ring 3: Honey 30s special tease",
   "🍫 Ring 3: Chocolate 30s sweet focus",
-  "💋 Ring 4: 15s Deep Kiss + Whisper",
   "🤗 Outer Ring: Warm tight hug + 1 Naughty Truth"
 ];
 
 export const DEFAULT_NIGHT_PLAN = {
   starters: ["🕯️ Candles & Music", "💆 10-Min Warm Oil Massage", "💋 Slow Lip & Neck Kisses", "🎙️ Secret Desires Whisper"],
   teases: ["🎀 Mam Soft Kisses & Hold", "🧊 Ice / Feather Tease", "🙈 Blindfold Guessing", "📸 Cute Tease Reveal"],
-  mains: ["🍯 + 🍫 Full Passion Sync", "🐢 Ultra Slow Connection", "🔥 Wild Roleplay Mode", "👑 Winner Leads Tonight"],
+  mains: ["🍯 + 🍫 Full Passion Sync", "⛰️ Mountain + Front Rhythm Sync", "🔥 Wild Roleplay Mode", "👑 Winner Leads Tonight"],
   aftercares: ["🤗 10-Min Chest Cuddle", "💧 Water + Forehead Kiss", "💬 Sweet Pillow Talk", "😴 Sleep In Arms"]
 };
 
 export const DEFAULT_POSITIONS_POOL = [
   "🫶🏻 Cozy Spoon Cuddle + Slow Mam Hold (3 min)",
   "💞 Face-to-Face Eye Lock + Neck Kisses",
-  "🔥 Partner Leads Top Pace — Zero Hands Mode",
+  "⛰️ Mountain Hug + Slow Warm Back Focus",
   "🪑 Lap Sit Tight Hug + Whispering Fantasies",
   "🌙 Side-by-Side Slow Honey & Chocolate Focus",
   "👑 Pillow Elevation + Deep Breath Sync"
@@ -181,7 +195,7 @@ export const DEFAULT_POSITIONS_POOL = [
 
 export const DEFAULT_TASTING_POOL = {
   treats: ["🍯 Real Honey Drop", "🍫 Melted Chocolate", "🍓 Strawberry Cream", "🧊 Cold Ice Trace", "💋 Warm Breath & Lips"],
-  zones: ["Neck & Jawline ✨", "Mam Curve 🎀", "Honey Point 🍯", "Chocolate Point 🍫", "Inner Wrist & Waist 🫶🏻"]
+  zones: ["Neck & Jawline ✨", "Mam Curve 🎀", "Mountain Curve ⛰️", "Honey Point 🍯", "Chocolate Point 🍫"]
 };
 
 export const DEFAULT_DOUBLE_TROUBLE = [
@@ -346,19 +360,19 @@ export const DEFAULT_SAZA_WHEEL = [
   "💋 Saza: 15 Non-Stop Neck & Cheek Kisses!",
   "🍯 Saza: 45s Honey Focus — No Hands!",
   "🍫 Saza: 45s Chocolate Special Pampering!",
+  "⛰️ Saza: 40s Mountain Massage & Warm Kiss!",
   "🎀 Saza: 30s Soft Mam Kisses + Warm Hug!",
   "🎙️ Saza: 20s Seductive Whisper Voice Note Abhi!",
   "📸 Saza: Ek Tease-Blur / View-Once Surprise Photo!",
-  "👑 Inaam: 1 Ghante ka Full Boss Pass Unlocked!",
-  "💆 Saza: 5-Min Warm Oil Shoulder & Back Massage!"
+  "👑 Inaam: 1 Ghante ka Full Boss Pass Unlocked!"
 ];
 
 export const DEFAULT_AUCTION_PRIZES = [
   "🍯 2-Min VIP Honey Pass (Zero Refusal)",
   "🍫 2-Min Sweet Chocolate Attention",
+  "⛰️ 3-Min Mountain Warm Oil & Slow Kisses",
   "🎀 3-Min Mam Cuddle & Slow Kisses",
   "👑 Winner Commands Tonight's Entire Routine",
-  "🎙️ Custom Midnight Dirty-Sweet Voice Story",
   "🔥 1 Wild Fantasy Unconditionally Unlocked"
 ];
 
@@ -370,18 +384,18 @@ export const DEFAULT_RISK_DARES = {
   ],
   double: [
     "🔥 45s Honey / Chocolate Tease + Slow Breathing",
-    "🧊 Ice Trace from Neck to Mam Curve (30s)",
-    "🎙️ Abhi 20s unfiltered craving voice note bhejo!"
+    "⛰️ 40s Slow Mountain Massage + Tease Bite 😉",
+    "🧊 Ice Trace from Neck to Mam Curve (30s)"
   ],
   triple: [
-    "🔞 60s Full Wild Focus on Honey & Chocolate — Partner Controls Speed!",
+    "🔞 60s Full Wild Focus on Honey, Chocolate & Mountain — Partner Controls Speed!",
     "😈 Blindfold 60s: Partner does ANY 2 chosen teasing acts!",
     "👑 Instant 1-Hour No-Say-No Master Pass for Winner!"
   ]
 };
 
 export const DEFAULT_KISS_ZONES = {
-  zones: ["Lips 💋", "Neck & Collarbone ✨", "Mam 🎀", "Honey 🍯", "Chocolate 🍫", "Ear & Jawline 👂", "Waist & Back 🫶🏻"],
+  zones: ["Lips 💋", "Neck & Collarbone ✨", "Mam 🎀", "Mountain ⛰️", "Honey 🍯", "Chocolate 🍫", "Waist & Back 🫶🏻"],
   styles: ["Ultra Slow & Soft 🌸", "Warm Breath + Tease Bite 😉", "Butterfly Rapid Kisses 🦋", "Deep & Passionate (30s) 🔥", "Eye-Locked Lingering Kiss 😘"]
 };
 
@@ -389,7 +403,7 @@ export const DEFAULT_BLIND_CARDS = [
   "🎁 Inaam: 60s Partner Choice Pampering!",
   "💋 Saza: 10 Nonstop Kisses on Neck & Mam!",
   "🍯🔥 Special: 45s Honey & Chocolate Dual Tease!",
-  "😈 Wild Card: Send 1 Tease Voice Whisper or Photo!"
+  "⛰️ Wild Card: 45s Mountain Oil Massage + Whisper!"
 ];
 
 export const DEFAULT_CONFESS_PROMPTS = [
@@ -401,31 +415,31 @@ export const DEFAULT_CONFESS_PROMPTS = [
 
 export const DEFAULT_CONFESS_TAXES = [
   "🎟️ Tax Paid: 30s Honey / Chocolate Attention Token",
-  "💋 Tax Paid: 15 Slow Kisses + Whisper Voice Note",
+  "⛰️ Tax Paid: 45s Mountain Massage & Warm Hold",
   "🎀 Tax Paid: 2-Min Mam Cuddle & Forehead Kisses"
 ];
 
 export const DEFAULT_ICE_FIRE_ROUNDS = [
   { mode: "🧊 ICE", title: "Round 1 · Cool Spark (20s)", desc: "Thandi saans ya ice cube trace Neck se Mam tak — slow & gentle!" },
-  { mode: "🔥 FIRE", title: "Round 2 · Warm Wave (30s)", desc: "Garam saans aur deep slow kisses Honey / Chocolate ke aas-paas!" },
+  { mode: "🔥 FIRE", title: "Round 2 · Warm Wave (30s)", desc: "Garam saans aur deep slow kisses Honey / Chocolate / Mountain ke aas-paas!" },
   { mode: "🧊🔥 SWITCH", title: "Round 3 · Contrast Rush (40s)", desc: "Har 10s mein cool whisper aur warm passionate kiss switch karo!" }
 ];
 
 export const DEFAULT_CRAVING_CHOICES = [
   "🍯 Slow Honey Attention",
   "🍫 Sweet Chocolate Focus",
+  "⛰️ Warm Mountain Focus",
   "🎀 Cozy Mam Cuddle & Kisses",
   "🔥 Wild Unfiltered Night",
-  "💋 Deep Romantic Makeout",
   "🎁 Partner's Total Surprise"
 ];
 
 export const DEFAULT_FREEZE_ZONES = [
   "💋 Lips & Jawline",
   "🎀 Mam Soft Focus",
+  "⛰️ Mountain Curve Focus",
   "🍯 Honey Tease Zone",
-  "🍫 Chocolate Tease Zone",
-  "🫶🏻 Waist & Lower Back"
+  "🍫 Chocolate Tease Zone"
 ];
 
 export function rollKissZone(cfg = DEFAULT_KISS_ZONES, rng = Math.random) {

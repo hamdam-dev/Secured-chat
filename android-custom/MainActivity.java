@@ -122,17 +122,67 @@ public class MainActivity extends BridgeActivity {
         } catch (Throwable ignored) {}
     }
 
+    private boolean isExternalHeadsetConnected() {
+        try {
+            if (audioManager == null) return false;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                for (AudioDeviceInfo dev : audioManager.getAvailableCommunicationDevices()) {
+                    int t = dev.getType();
+                    if (t == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+                            || t == AudioDeviceInfo.TYPE_BLE_HEADSET
+                            || t == AudioDeviceInfo.TYPE_WIRED_HEADSET
+                            || t == AudioDeviceInfo.TYPE_WIRED_HEADPHONES
+                            || t == AudioDeviceInfo.TYPE_USB_HEADSET) {
+                        return true;
+                    }
+                }
+            } else {
+                AudioDeviceInfo[] outputs = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
+                for (AudioDeviceInfo dev : outputs) {
+                    int t = dev.getType();
+                    if (t == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+                            || t == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP
+                            || t == AudioDeviceInfo.TYPE_WIRED_HEADSET
+                            || t == AudioDeviceInfo.TYPE_WIRED_HEADPHONES) {
+                        return true;
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
+        return false;
+    }
+
     private void applySpeaker(boolean useSpeaker) {
         try {
             if (audioManager == null) return;
             audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                int targetType = useSpeaker ? AudioDeviceInfo.TYPE_BUILTIN_SPEAKER : AudioDeviceInfo.TYPE_BUILTIN_EARPIECE;
+                AudioDeviceInfo chosen = null;
                 for (AudioDeviceInfo dev : audioManager.getAvailableCommunicationDevices()) {
-                    if (dev.getType() == targetType) {
-                        audioManager.setCommunicationDevice(dev);
+                    int t = dev.getType();
+                    if (useSpeaker && t == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
+                        chosen = dev;
                         break;
                     }
+                    if (!useSpeaker && (t == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+                            || t == AudioDeviceInfo.TYPE_BLE_HEADSET
+                            || t == AudioDeviceInfo.TYPE_WIRED_HEADSET
+                            || t == AudioDeviceInfo.TYPE_WIRED_HEADPHONES
+                            || t == AudioDeviceInfo.TYPE_USB_HEADSET)) {
+                        chosen = dev;
+                        break;
+                    }
+                }
+                if (chosen == null && !useSpeaker) {
+                    for (AudioDeviceInfo dev : audioManager.getAvailableCommunicationDevices()) {
+                        if (dev.getType() == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE) {
+                            chosen = dev;
+                            break;
+                        }
+                    }
+                }
+                if (chosen != null) {
+                    audioManager.setCommunicationDevice(chosen);
                 }
             }
             audioManager.setSpeakerphoneOn(useSpeaker);
@@ -144,7 +194,7 @@ public class MainActivity extends BridgeActivity {
         public void startProximity(final boolean useSpeaker) {
             runOnUiThread(() -> {
                 applySpeaker(useSpeaker);
-                applyProximity(!useSpeaker);
+                applyProximity(!useSpeaker && !isExternalHeadsetConnected());
             });
         }
 
@@ -152,7 +202,7 @@ public class MainActivity extends BridgeActivity {
         public void setSpeaker(final boolean useSpeaker) {
             runOnUiThread(() -> {
                 applySpeaker(useSpeaker);
-                applyProximity(!useSpeaker);
+                applyProximity(!useSpeaker && !isExternalHeadsetConnected());
             });
         }
 

@@ -16,13 +16,20 @@ import { createGamesManager } from "./games.js";
 import { createDoodleManager } from "./doodle.js";
 import { createVaultAndTogetherManager } from "./vaultAndTogether.js";
 import { createFeaturesStudio } from "./featuresStudio.js";
-import { NIGHT_DESIRES, LUXURY_THEMES } from "../shared/featuresLogic.js";
+import {
+  NIGHT_DESIRES,
+  LUXURY_THEMES,
+  PERIOD_SYMPTOMS,
+  PERIOD_CARE_PACKAGES,
+  calculatePeriodPhase
+} from "../shared/featuresLogic.js";
 
 const THEME_KEY = "sc_dark_mode_v1";
 const LUXURY_THEME_KEY = "sc_luxury_theme_v1";
 const MY_MOOD_KEY = "sc_my_mood_v1";
 const MY_ACT_KEY = "sc_my_act_v1";
 const MY_DESIRE_KEY = "sc_my_desire_v1";
+const PERIOD_CFG_KEY = "sc_period_care_v1";
 const CHAT_TITLE_KEY = "sc_chat_title_v1";
 const CUSTOM_DP_KEY = "sc_custom_dp_v1";
 const WALL_DIM_KEY = "sc_wall_dim_v1";
@@ -98,14 +105,31 @@ let lastTogetherPulseSeen = Number(localStorage.getItem(TOGETHER_PULSE_SEEN_KEY)
 let lastClearSeen = Number(localStorage.getItem(CLEAR_SEEN_KEY) || 0);
 const signalState = { lastOfferTs: 0, lastAnswerTs: 0, lastHangupTs: 0 };
 
+let partnerPeriodCfg = null;
+
+function proceedToChatOrLogin() {
+  if (auth.currentUser) {
+    openChatScreen();
+  } else {
+    notes.notesScreen.style.display = "none";
+    notes.loginScreen.style.display = "flex";
+  }
+}
+
 const notes = createNotesManager({
   onUnlock: () => {
-    if (auth.currentUser) {
-      openChatScreen();
-    } else {
-      notes.notesScreen.style.display = "none";
-      notes.loginScreen.style.display = "flex";
+    const quickPin = notes.getPanicPin();
+    const pinModal = document.getElementById("panic-pin-modal");
+    const pinInp = document.getElementById("panic-pin-unlock-input");
+    const pinErr = document.getElementById("panic-pin-err");
+    if (quickPin && pinModal) {
+      if (pinErr) pinErr.innerText = "";
+      if (pinInp) pinInp.value = "";
+      pinModal.style.display = "flex";
+      setTimeout(() => pinInp?.focus(), 60);
+      return;
     }
+    proceedToChatOrLogin();
   }
 });
 
@@ -149,7 +173,8 @@ const call = createCallManager({
   notes,
   notifications,
   sendEncryptedMessage: chat.sendEncryptedMessage,
-  spawnFloatingHearts
+  spawnFloatingHearts,
+  onRequestHideToNotes: () => hideChatToNotes()
 });
 
 const moodStatusLine = document.getElementById("mood-status-line");
@@ -210,7 +235,11 @@ function selectMoodByKey(key) {
   }
 }
 
-createCareManager({ chat });
+createCareManager({
+  chat,
+  getAuth: () => auth,
+  onOpenPeriod: () => openPeriodModal()
+});
 const games = createGamesManager({ getAuth: () => auth, chat });
 chat.setGameRenderer(games.renderGameBubble);
 chat.setGameUpdateHandler(games.handleLiveMessageUpdate);
@@ -239,6 +268,8 @@ function openChatScreen() {
   notes.notesScreen.style.display = "none";
   notes.loginScreen.style.display = "none";
   notes.chatScreen.style.display = "flex";
+  const curtain = document.getElementById("panic-blur-curtain");
+  if (curtain) curtain.style.display = "none";
   window.AndroidCallBridge?.setSecureScreen?.(true);
   notifications.clearAlerts();
   chat.markMessagesAsRead();
@@ -253,7 +284,9 @@ function hideChatToNotes() {
   document.getElementById("more-dropdown").style.display = "none";
   document.getElementById("emoji-picker").style.display = "none";
   document.getElementById("reaction-popup").style.display = "none";
-  ["delete-msg-modal", "clear-confirm-modal", "push-debug-modal", "mood-modal", "gift-modal", "care-modal", "img-viewer-modal", "reaction-all-modal", "games-modal", "saza-bank-modal", "doodle-modal", "starred-modal", "privacy-settings-modal", "wallet-modal", "vault-modal", "together-modal", "touch-sync-modal", "vibe-lang-modal", "capsule-modal", "song-modal", "mystery-modal", "polaroid-modal", "gallery-modal", "edit-msg-modal"].forEach(id => {
+  const curtain = document.getElementById("panic-blur-curtain");
+  if (curtain) curtain.style.display = "none";
+  ["delete-msg-modal", "clear-confirm-modal", "push-debug-modal", "mood-modal", "gift-modal", "care-modal", "img-viewer-modal", "reaction-all-modal", "games-modal", "saza-bank-modal", "doodle-modal", "starred-modal", "privacy-settings-modal", "period-modal", "panic-pin-modal", "wallet-modal", "vault-modal", "together-modal", "touch-sync-modal", "vibe-lang-modal", "capsule-modal", "song-modal", "mystery-modal", "polaroid-modal", "gallery-modal", "edit-msg-modal"].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = "none";
   });
@@ -266,18 +299,21 @@ function hideChatToNotes() {
   notes.loginScreen.style.display = "none";
   notes.notesScreen.style.display = "flex";
   window.AndroidCallBridge?.setSecureScreen?.(false);
-  call.hideIncomingToDotIfPending();
+  call.hideToDisguiseIfCallOpen?.();
 }
 window.__hideChatToNotes = hideChatToNotes;
 
 window.handleAndroidBack = function () {
+  if (call.handleHardwareBack?.()) {
+    return true;
+  }
   const imgModal = document.getElementById("img-viewer-modal");
   if (imgModal.style.display === "flex") {
     imgModal.style.display = "none";
     document.getElementById("viewer-img").src = "";
     return true;
   }
-  for (const id of ["edit-msg-modal", "gallery-modal", "polaroid-modal", "mystery-modal", "song-modal", "capsule-modal", "vibe-lang-modal", "touch-sync-modal", "wallet-modal", "saza-bank-modal", "vault-modal", "together-modal", "reaction-all-modal", "games-modal", "doodle-modal", "starred-modal", "privacy-settings-modal", "delete-msg-modal", "clear-confirm-modal", "push-debug-modal", "mood-modal", "gift-modal", "care-modal"]) {
+  for (const id of ["panic-pin-modal", "period-modal", "edit-msg-modal", "gallery-modal", "polaroid-modal", "mystery-modal", "song-modal", "capsule-modal", "vibe-lang-modal", "touch-sync-modal", "wallet-modal", "saza-bank-modal", "vault-modal", "together-modal", "reaction-all-modal", "games-modal", "doodle-modal", "starred-modal", "privacy-settings-modal", "delete-msg-modal", "clear-confirm-modal", "push-debug-modal", "mood-modal", "gift-modal", "care-modal"]) {
     const el = document.getElementById(id);
     if (el && el.style.display === "flex") {
       el.style.display = "none";
@@ -533,6 +569,242 @@ document.querySelectorAll("#activity-status-row [data-act]").forEach(btn => {
   });
 });
 
+// =====================================
+// PERIOD CARE PLANNER & QUICK PANIC SHIELD
+// =====================================
+function readPeriodConfig() {
+  try {
+    const raw = localStorage.getItem(PERIOD_CFG_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return {
+      lastStartIso: String(parsed?.lastStartIso || ""),
+      cycleDays: Number(parsed?.cycleDays || 28),
+      periodDays: Number(parsed?.periodDays || 5),
+      symptoms: Array.isArray(parsed?.symptoms) ? parsed.symptoms : [],
+      comfortNote: String(parsed?.comfortNote || "")
+    };
+  } catch {
+    return { lastStartIso: "", cycleDays: 28, periodDays: 5, symptoms: [], comfortNote: "" };
+  }
+}
+
+function writePeriodConfig(cfg) {
+  try {
+    localStorage.setItem(PERIOD_CFG_KEY, JSON.stringify(cfg));
+  } catch {}
+}
+
+let periodSelectedSymptoms = new Set(readPeriodConfig().symptoms);
+
+function renderPeriodPhaseCards() {
+  const cfg = readPeriodConfig();
+  const phase = calculatePeriodPhase(cfg);
+  const selfEl = document.getElementById("period-phase-card");
+  if (selfEl) {
+    selfEl.innerHTML = "";
+    const top = document.createElement("div");
+    top.className = "period-phase-top";
+    const t = document.createElement("span");
+    t.className = "period-phase-title";
+    t.innerText = phase.title;
+    const b = document.createElement("span");
+    b.className = "period-phase-badge";
+    b.innerText = phase.badge;
+    top.append(t, b);
+    selfEl.appendChild(top);
+    if (phase.configured) {
+      const meta = document.createElement("div");
+      meta.className = "period-phase-meta";
+      meta.innerText = `Day ${phase.dayOfCycle}/${phase.cycleDays} · Next period ~${phase.daysUntilNext} days`;
+      selfEl.appendChild(meta);
+    }
+    const tip = document.createElement("div");
+    tip.className = "period-phase-tip";
+    tip.innerText = phase.tip;
+    selfEl.appendChild(tip);
+  }
+
+  const pEl = document.getElementById("period-partner-banner");
+  const careBtn = document.getElementById("care-studio-btn");
+  if (partnerPeriodCfg && partnerPeriodCfg.lastStartIso) {
+    const pPhase = calculatePeriodPhase(partnerPeriodCfg);
+    if (careBtn) {
+      careBtn.title = pPhase.configured ? `Love Care: ${pPhase.title}` : "Care & Khat";
+    }
+    if (pEl) {
+      pEl.style.display = "flex";
+      pEl.innerHTML = "";
+      const top = document.createElement("div");
+      top.className = "period-phase-top";
+      const t = document.createElement("span");
+      t.className = "period-phase-title";
+      t.innerText = `💖 Love Update: ${pPhase.title}`;
+      const b = document.createElement("span");
+      b.className = "period-phase-badge";
+      b.innerText = pPhase.badge;
+      top.append(t, b);
+      pEl.appendChild(top);
+
+      if (pPhase.configured) {
+        const meta = document.createElement("div");
+        meta.className = "period-phase-meta";
+        meta.innerText = `Cycle Day ${pPhase.dayOfCycle} · Next ~${pPhase.daysUntilNext} days`;
+        pEl.appendChild(meta);
+      }
+      const symText = Array.isArray(partnerPeriodCfg.symptoms) && partnerPeriodCfg.symptoms.length
+        ? `Symptoms: ${partnerPeriodCfg.symptoms.join(", ")}`
+        : "";
+      const noteText = partnerPeriodCfg.comfortNote ? `💌 "${partnerPeriodCfg.comfortNote}"` : "";
+      if (symText || noteText) {
+        const d = document.createElement("div");
+        d.className = "period-phase-tip";
+        d.innerText = [symText, noteText].filter(Boolean).join(" · ");
+        pEl.appendChild(d);
+      }
+    }
+  } else if (pEl) {
+    pEl.style.display = "none";
+  }
+}
+
+function renderPeriodModalControls() {
+  const cfg = readPeriodConfig();
+  periodSelectedSymptoms = new Set(cfg.symptoms || []);
+  const startInp = document.getElementById("period-start-input");
+  const cycleInp = document.getElementById("period-cycle-input");
+  const lenInp = document.getElementById("period-len-input");
+  const noteInp = document.getElementById("period-note-input");
+  if (startInp) startInp.value = cfg.lastStartIso || "";
+  if (cycleInp) cycleInp.value = String(cfg.cycleDays || 28);
+  if (lenInp) lenInp.value = String(cfg.periodDays || 5);
+  if (noteInp) noteInp.value = cfg.comfortNote || "";
+
+  const symGrid = document.getElementById("period-symptoms-grid");
+  if (symGrid) {
+    symGrid.innerHTML = "";
+    PERIOD_SYMPTOMS.forEach(s => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "game-mini-btn" + (periodSelectedSymptoms.has(s.label) ? " active" : "");
+      b.innerText = s.label;
+      b.onclick = () => {
+        if (periodSelectedSymptoms.has(s.label)) periodSelectedSymptoms.delete(s.label);
+        else periodSelectedSymptoms.add(s.label);
+        b.classList.toggle("active", periodSelectedSymptoms.has(s.label));
+      };
+      symGrid.appendChild(b);
+    });
+  }
+
+  const pkgGrid = document.getElementById("period-packages-grid");
+  if (pkgGrid) {
+    pkgGrid.innerHTML = "";
+    PERIOD_CARE_PACKAGES.forEach(pkg => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "mood-item";
+      b.innerText = `${pkg.emoji} ${pkg.title}`;
+      b.onclick = async () => {
+        document.getElementById("period-modal").style.display = "none";
+        playEmotionSound("love");
+        await chat.sendEncryptedMessage(
+          { periodCard: { emoji: pkg.emoji, title: pkg.title, note: pkg.note } },
+          "letter"
+        );
+      };
+      pkgGrid.appendChild(b);
+    });
+  }
+  renderPeriodPhaseCards();
+}
+
+function openPeriodModal() {
+  renderPeriodModalControls();
+  const pm = document.getElementById("period-modal");
+  if (pm) pm.style.display = "flex";
+}
+
+document.getElementById("open-period-btn")?.addEventListener("click", () => {
+  moreDropdown.style.display = "none";
+  openPeriodModal();
+});
+document.getElementById("close-period-btn")?.addEventListener("click", () => {
+  document.getElementById("period-modal").style.display = "none";
+});
+document.getElementById("period-save-btn")?.addEventListener("click", async () => {
+  const lastStartIso = (document.getElementById("period-start-input")?.value || "").trim();
+  const cycleDays = Math.max(20, Math.min(45, Number(document.getElementById("period-cycle-input")?.value || 28)));
+  const periodDays = Math.max(2, Math.min(10, Number(document.getElementById("period-len-input")?.value || 5)));
+  const comfortNote = (document.getElementById("period-note-input")?.value || "").trim();
+  const nextCfg = {
+    lastStartIso,
+    cycleDays,
+    periodDays,
+    symptoms: [...periodSelectedSymptoms],
+    comfortNote,
+    updatedAt: Date.now()
+  };
+  writePeriodConfig(nextCfg);
+  renderPeriodPhaseCards();
+  playEmotionSound("gift");
+  if (auth.currentUser && db) {
+    await setDoc(doc(db, "status", auth.currentUser.uid), { periodCare: nextCfg }, { merge: true }).catch(() => {});
+  }
+});
+
+// Quick Lock PIN Unlock Prompt wiring
+const panicPinUnlockInput = document.getElementById("panic-pin-unlock-input");
+const verifyQuickPanicPin = () => {
+  const expected = notes.getPanicPin();
+  const entered = (panicPinUnlockInput?.value || "").trim();
+  const errEl = document.getElementById("panic-pin-err");
+  if (!expected || entered === expected) {
+    document.getElementById("panic-pin-modal").style.display = "none";
+    if (panicPinUnlockInput) panicPinUnlockInput.value = "";
+    proceedToChatOrLogin();
+  } else {
+    notes.logIntruderAttempt("Panic PIN", entered.slice(0, 8) || "Empty PIN");
+    if (errEl) errEl.innerText = "Galat PIN — dubara koshish karein!";
+  }
+};
+document.getElementById("panic-pin-unlock-btn")?.addEventListener("click", verifyQuickPanicPin);
+panicPinUnlockInput?.addEventListener("keydown", e => {
+  if (e.key === "Enter") verifyQuickPanicPin();
+});
+document.getElementById("panic-pin-cancel-btn")?.addEventListener("click", () => {
+  document.getElementById("panic-pin-modal").style.display = "none";
+});
+
+// Panic Shield Curtain, Double-Tap Header & Escape Key Instant Escape
+const panicCurtain = document.getElementById("panic-blur-curtain");
+document.getElementById("panic-resume-btn")?.addEventListener("click", () => {
+  if (panicCurtain) panicCurtain.style.display = "none";
+});
+document.getElementById("panic-escape-btn")?.addEventListener("click", () => {
+  if (panicCurtain) panicCurtain.style.display = "none";
+  hideChatToNotes();
+});
+window.addEventListener("blur", () => {
+  if (notes.isChatVisible() && notes.isPanicBlurEnabled() && !call.hasActiveCall() && !notes.getIsPickingMedia()) {
+    if (panicCurtain) panicCurtain.style.display = "flex";
+  }
+});
+window.addEventListener("focus", () => {
+  if (panicCurtain && document.visibilityState === "visible") {
+    panicCurtain.style.display = "none";
+  }
+});
+document.getElementById("normal-hdr-left")?.addEventListener("dblclick", e => {
+  if (e.target?.closest?.("#dp-tap-btn")) return;
+  if (notes.isChatVisible()) hideChatToNotes();
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && notes.isChatVisible()) {
+    e.preventDefault();
+    hideChatToNotes();
+  }
+});
+
 const privacyModal = document.getElementById("privacy-settings-modal");
 document.getElementById("open-privacy-btn")?.addEventListener("click", () => {
   moreDropdown.style.display = "none";
@@ -541,9 +813,13 @@ document.getElementById("open-privacy-btn")?.addEventListener("click", () => {
   document.getElementById("custom-decoy-input").value = notes.getDecoyCode();
   const skinSel = document.getElementById("disguise-skin-select");
   if (skinSel) skinSel.value = notes.getDisguiseSkin();
+  const panicBlurTog = document.getElementById("panic-blur-toggle");
+  if (panicBlurTog) panicBlurTog.checked = notes.isPanicBlurEnabled();
   const instTog = document.getElementById("instant-hide-toggle");
   if (instTog) instTog.checked = notes.isInstantHideEnabled();
   document.getElementById("shake-hide-toggle").checked = notes.isShakeHideEnabled();
+  const pinInp = document.getElementById("panic-pin-input");
+  if (pinInp) pinInp.value = notes.getPanicPin();
   featuresStudio.renderIntruderLog();
   privacyModal.style.display = "flex";
 });
@@ -585,14 +861,18 @@ document.getElementById("save-privacy-btn")?.addEventListener("click", () => {
   const secretVal = document.getElementById("custom-secret-input").value.trim();
   const decoyVal = document.getElementById("custom-decoy-input").value.trim();
   const skinVal = document.getElementById("disguise-skin-select")?.value || "notepad";
+  const panicBlurVal = document.getElementById("panic-blur-toggle")?.checked ?? true;
   const instVal = document.getElementById("instant-hide-toggle")?.checked ?? true;
   const shakeVal = document.getElementById("shake-hide-toggle").checked;
+  const pinVal = document.getElementById("panic-pin-input")?.value.trim() || "";
   try { localStorage.setItem(CHAT_TITLE_KEY, titleVal); } catch {}
   if (secretVal) notes.setSecretCode(secretVal);
   notes.setDecoyCode(decoyVal);
   notes.setDisguiseSkin(skinVal);
+  notes.setPanicBlurEnabled(panicBlurVal);
   notes.setInstantHideEnabled(instVal);
   notes.setShakeHideEnabled(shakeVal);
+  notes.setPanicPin(pinVal);
   applyCustomAppearance();
   privacyModal.style.display = "none";
 });
@@ -767,6 +1047,10 @@ if (app) {
           partnerMoodText = data.mood || "";
           partnerActivityText = data.activity || "";
           partnerDesireText = data.desire || "";
+          if (data.periodCare && typeof data.periodCare === "object") {
+            partnerPeriodCfg = data.periodCare;
+            renderPeriodPhaseCards();
+          }
           renderMoodStatusLine();
 
           if (data.clearedAtMs && data.clearedAtMs > lastClearSeen) {

@@ -2,7 +2,10 @@ import { playEmotionSound } from "./crypto.js";
 import {
   DEFAULT_STUN_SERVERS,
   filterNewIceCandidates,
-  evaluateNetworkQuality
+  evaluateNetworkQuality,
+  isOfferActiveAndFresh,
+  shouldProcessIceRestartOffer,
+  resolveCallLogOnEnd
 } from "../shared/rtcLogic.js";
 import { rollNaughtyDice } from "../shared/intimateLogic.js";
 
@@ -13,26 +16,34 @@ export function createCallManager({
   notes,
   notifications,
   sendEncryptedMessage,
-  spawnFloatingHearts
+  spawnFloatingHearts,
+  onRequestHideToNotes
 }) {
   const { doc, setDoc } = fsOps;
 
   let pc = null;
   let localStream = null;
   let aiCanvasStream = null;
+  let screenStream = null;
   let funChannel = null;
+  let videoTransceiver = null;
   let currentCallId = null;
+  let isCaller = false;
   let isVideoCall = false;
   let isLowNet = false;
   let isAudioFallback = false;
+  let isPartnerAudioOnly = false;
   let isMuted = false;
   let isCamOff = false;
   let isSpeaker = false;
+  let isMinimized = false;
   let facingMode = "user";
   let activeFilter = "none";
   let callTimerInt = null;
   let callStatsInt = null;
   let ringTimeoutInt = null;
+  let ringbackInt = null;
+  let stealthVibrateInt = null;
   let callSeconds = 0;
   let callConnected = false;
   let incomingOffer = null;
@@ -43,9 +54,17 @@ export function createCallManager({
   let ringtoneInt = null;
   let aiRaf = null;
   let faceDetector = null;
+  let faceDetectorFailed = false;
   let lastDetectedFaces = [];
   let consecutiveWeakCount = 0;
   let lastCallDareTs = 0;
+  let lastRestartOfferAt = 0;
+  let lastProcessedRestartTs = 0;
+  let lastConnState = "";
+  let lastConnChangeAt = 0;
+
+  const handledCallIds = new Set();
+  const loggedCallIds = new Set();
 
   const CALL_DARES = [
     "💋 Bina kuch bole 10 sec camera/mic par slow kiss sound bhejo!",
@@ -54,6 +73,22 @@ export function createCallManager({
     "😘 Cute smile ke saath aankh maaro (Wink Challenge)!",
     "🎙️ Slow romantic voice mein 'I miss you Janan' bolo!"
   ];
+
+  const callOverlay = document.getElementById("call-overlay");
+  const incomingOverlay = document.getElementById("incoming-call-overlay");
+  const remoteVideo = document.getElementById("remote-video");
+  const localVideo = document.getElementById("local-video");
+  const aiCanvas = document.getElementById("ai-video-canvas");
+  const remoteAudio = document.getElementById("remote-audio");
+  const audioAvatar = document.getElementById("audio-call-avatar");
+  const avatarNoteEl = document.getElementById("call-avatar-note");
+  const netBadgeEl = document.getElementById("call-net-badge");
+  const audioFallbackBtn = document.getElementById("call-audio-only-btn");
+  const shareBtn = document.getElementById("call-share-btn");
+
+  if (shareBtn && !navigator.mediaDevices?.getDisplayMedia) {
+    shareBtn.style.display = "none";
+  }
 
   function showCallDareBanner(text) {
     const card = document.getElementById("call-dare-card");
@@ -64,53 +99,102 @@ export function createCallManager({
     playEmotionSound("gift");
   }
 
+  function refreshRemoteStageDisplay() {
+    const hasRemoteTrack = Boolean(remoteVideo.srcObject && remoteVideo.srcObject.getVideoTracks?.().length);
+    const shouldShowVideo = isVideoCall && !isAudioFallback && !isPartnerAudioOnly && hasRemoteTrack;
+    remoteVideo.style.display = shouldShowVideo ? "block" : "none";
+    audioAvatar.style.display = shouldShowVideo ? "none" : "flex";
+    if (avatarNoteEl) {
+      if (isAudioFallback) {
+        avatarNoteEl.innerText = "🎧 Audio-Only Mode Active";
+        avatarNoteEl.style.display = "block";
+      } else if (isPartnerAudioOnly) {
+        avatarNoteEl.innerText = "🎧 Partner Audio-Only par hai";
+        avatarNoteEl.style.display = "block";
+      } else if (!isVideoCall) {
+        avatarNoteEl.innerText = "📞 Encrypted Audio";
+        avatarNoteEl.style.display = "block";
+      } else {
+        avatarNoteEl.style.display = "none";
+      }
+    }
+  }
+
+  function sendPartnerModeState(audioOnly) {
+    const modeTag = audioOnly ? "MODE:AUDIO_ONLY" : "MODE:VIDEO";
+    if (funChannel?.readyState === "open") {
+      try { funChannel.send(modeTag); } catch {}
+    }
+    if (currentCallId) {
+      sendSignalField("callMode", { callId: currentCallId, audioOnly: Boolean(audioOnly) });
+    }
+  }
+
   function bindFunChannel(ch) {
     if (!ch) return;
     ch.onmessage = e => {
       const val = String(e.data || "");
       if (val.startsWith("DARE:")) {
         showCallDareBanner(val.slice(5));
+      } else if (val === "MODE:AUDIO_ONLY") {
+        isPartnerAudioOnly = true;
+        refreshRemoteStageDisplay();
+        if (callConnected) {
+          document.getElementById("call-status-text").innerText = "Partner Audio Mode 🎧";
+        }
+      } else if (val === "MODE:VIDEO") {
+        isPartnerAudioOnly = false;
+        refreshRemoteStageDisplay();
+        if (callConnected) {
+          document.getElementById("call-status-text").innerText = isAudioFallback ? "Audio Saver Connected 🎧" : "Connected 💖";
+        }
       } else {
         spawnFloatingHearts(val);
       }
     };
   }
 
-  const callOverlay = document.getElementById("call-overlay");
-  const incomingOverlay = document.getElementById("incoming-call-overlay");
-  const remoteVideo = document.getElementById("remote-video");
-  const localVideo = document.getElementById("local-video");
-  const aiCanvas = document.getElementById("ai-video-canvas");
-  const remoteAudio = document.getElementById("remote-audio");
-  const audioAvatar = document.getElementById("audio-call-avatar");
-  const netBadgeEl = document.getElementById("call-net-badge");
-  const audioFallbackBtn = document.getElementById("call-audio-only-btn");
-
   async function fetchIceServers() {
     const user = getAuth()?.currentUser;
     if (!user) return { iceServers: DEFAULT_STUN_SERVERS, iceCandidatePoolSize: 4 };
     const rtcUrl = notifications.buildEndpointUrl("/api/rtc-config");
     if (!(notifications.isNativeApp?.() && rtcUrl.startsWith("/"))) {
+      const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), 4500) : null;
       try {
         const idToken = await user.getIdToken();
         const res = await fetch(rtcUrl, {
-          headers: { Authorization: "Bearer " + idToken }
+          headers: { Authorization: "Bearer " + idToken },
+          signal: ctrl?.signal
         });
         if (res.ok) {
           const cfg = await res.json();
-          if (Array.isArray(cfg?.iceServers)) {
+          if (Array.isArray(cfg?.iceServers) && cfg.iceServers.length > 0) {
             return { iceServers: cfg.iceServers, iceCandidatePoolSize: 4 };
           }
         }
-      } catch {}
+      } catch {} finally {
+        if (timer) clearTimeout(timer);
+      }
     }
     return { iceServers: DEFAULT_STUN_SERVERS, iceCandidatePoolSize: 4 };
   }
 
+  function updateMirrorState() {
+    const mirror = facingMode === "user" && !screenStream;
+    localVideo.classList.toggle("mirror-cam", mirror);
+    aiCanvas.classList.toggle("mirror-cam", mirror);
+  }
+
   function updateCallUiForMode(video) {
     const showVideoCtrls = video && !isAudioFallback;
+    const canShare = Boolean(navigator.mediaDevices?.getDisplayMedia);
     document.querySelectorAll(".video-only-ctrl").forEach(el => {
-      el.style.display = showVideoCtrls ? "flex" : "none";
+      if (el.id === "call-share-btn" && !canShare) {
+        el.style.display = "none";
+      } else {
+        el.style.display = showVideoCtrls ? "flex" : "none";
+      }
     });
     document.getElementById("call-filter-bar").style.display = showVideoCtrls ? "flex" : "none";
     document.getElementById("call-react-bar").style.display = video ? "flex" : "none";
@@ -118,8 +202,9 @@ export function createCallManager({
       audioFallbackBtn.style.display = video ? "flex" : "none";
       audioFallbackBtn.classList.toggle("active", isAudioFallback);
     }
-    audioAvatar.style.display = showVideoCtrls && remoteVideo.style.display === "block" ? "none" : "block";
     document.getElementById("call-speaker-btn").classList.toggle("active", isSpeaker);
+    refreshRemoteStageDisplay();
+    updateMirrorState();
   }
 
   function sendSignalField(fieldName, payload) {
@@ -128,8 +213,17 @@ export function createCallManager({
     if (!user || !db) return;
     setDoc(
       doc(db, "status", user.uid),
-      { [fieldName]: { ...payload, ts: Date.now(), from: user.uid } },
+      { [fieldName]: payload === null ? null : { ...payload, ts: Date.now(), from: user.uid } },
       { merge: true }
+    ).catch(() => {});
+  }
+
+  function logCallOnce(payload) {
+    if (!payload || !payload.callId || loggedCallIds.has(payload.callId)) return;
+    loggedCallIds.add(payload.callId);
+    sendEncryptedMessage(
+      { isCallLog: true, missed: Boolean(payload.missed), text: payload.text },
+      "call"
     ).catch(() => {});
   }
 
@@ -140,11 +234,12 @@ export function createCallManager({
       if (sentIceList.length && currentCallId) {
         sendSignalField("callIce", { callId: currentCallId, candidates: sentIceList });
       }
-    }, 300);
+    }, 280);
   }
 
   function startRingtone() {
     stopRingtone();
+    stopStealthVibrate();
     playEmotionSound("love");
     window.AndroidCallBridge?.vibratePattern?.("call");
     ringtoneInt = setInterval(() => {
@@ -156,11 +251,47 @@ export function createCallManager({
   function stopRingtone() {
     clearInterval(ringtoneInt);
     ringtoneInt = null;
+    stopStealthVibrate();
     window.AndroidCallBridge?.vibratePattern?.("stop");
   }
 
+  function startStealthVibrate() {
+    stopStealthVibrate();
+    window.AndroidCallBridge?.vibratePattern?.("call");
+    navigator.vibrate?.([240, 160, 240]);
+    stealthVibrateInt = setInterval(() => {
+      if (!incomingOffer) {
+        stopStealthVibrate();
+        return;
+      }
+      navigator.vibrate?.([220, 140, 220]);
+    }, 3200);
+  }
+
+  function stopStealthVibrate() {
+    clearInterval(stealthVibrateInt);
+    stealthVibrateInt = null;
+  }
+
+  function startRingback() {
+    stopRingback();
+    playEmotionSound("ringback");
+    ringbackInt = setInterval(() => {
+      if (callConnected || !currentCallId) {
+        stopRingback();
+        return;
+      }
+      playEmotionSound("ringback");
+    }, 3200);
+  }
+
+  function stopRingback() {
+    clearInterval(ringbackInt);
+    ringbackInt = null;
+  }
+
   async function loadFaceDetector() {
-    if (faceDetector) return faceDetector;
+    if (faceDetector || faceDetectorFailed) return faceDetector;
     try {
       const vision = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3");
       const fileset = await vision.FilesetResolver.forVisionTasks(
@@ -185,7 +316,9 @@ export function createCallManager({
           runningMode: "VIDEO"
         });
       }
-    } catch {}
+    } catch {
+      faceDetectorFailed = true;
+    }
     return faceDetector;
   }
 
@@ -220,35 +353,41 @@ export function createCallManager({
               lastDetectedFaces = faceDetector.detectForVideo(localVideo, performance.now()).detections || [];
             } catch {}
           }
-          lastDetectedFaces.forEach(det => {
-            const bb = det.boundingBox;
-            const sx = w / (localVideo.videoWidth || w);
-            const sy = h / (localVideo.videoHeight || h);
-            const fx = bb.originX * sx;
-            const fy = bb.originY * sy;
-            const fw = bb.width * sx;
-            const fh = bb.height * sy;
-            const kps = det.keypoints || [];
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            if (activeFilter === "hearts" && kps.length >= 2) {
-              ctx.font = `${Math.round(fw * 0.24)}px sans-serif`;
-              ctx.fillText("😍", kps[0].x * w, kps[0].y * h);
-              ctx.fillText("😍", kps[1].x * w, kps[1].y * h);
-            } else if (activeFilter === "crown") {
-              ctx.font = `${Math.round(fw * 0.45)}px sans-serif`;
-              ctx.fillText("👑", fx + fw * 0.5, fy - fh * 0.14);
-            } else if (activeFilter === "bunny") {
-              ctx.font = `${Math.round(fw * 0.45)}px sans-serif`;
-              ctx.fillText("🐰", fx + fw * 0.5, fy - fh * 0.18);
-            } else if (activeFilter === "aura") {
-              ctx.strokeStyle = "rgba(255,64,129,0.75)";
-              ctx.lineWidth = 4;
-              ctx.beginPath();
-              ctx.arc(fx + fw / 2, fy + fh / 2, Math.max(fw, fh) * 0.65, 0, Math.PI * 2);
-              ctx.stroke();
-            }
-          });
+          if (lastDetectedFaces.length > 0) {
+            lastDetectedFaces.forEach(det => {
+              const bb = det.boundingBox;
+              const sx = w / (localVideo.videoWidth || w);
+              const sy = h / (localVideo.videoHeight || h);
+              const fx = bb.originX * sx;
+              const fy = bb.originY * sy;
+              const fw = bb.width * sx;
+              const fh = bb.height * sy;
+              const kps = det.keypoints || [];
+              ctx.textAlign = "center";
+              ctx.textBaseline = "middle";
+              if (activeFilter === "hearts" && kps.length >= 2) {
+                ctx.font = `${Math.round(fw * 0.24)}px sans-serif`;
+                ctx.fillText("😍", kps[0].x * w, kps[0].y * h);
+                ctx.fillText("😍", kps[1].x * w, kps[1].y * h);
+              } else if (activeFilter === "crown") {
+                ctx.font = `${Math.round(fw * 0.45)}px sans-serif`;
+                ctx.fillText("👑", fx + fw * 0.5, Math.max(24, fy - fh * 0.14));
+              } else if (activeFilter === "bunny") {
+                ctx.font = `${Math.round(fw * 0.45)}px sans-serif`;
+                ctx.fillText("🐰", fx + fw * 0.5, Math.max(24, fy - fh * 0.18));
+              } else if (activeFilter === "aura") {
+                ctx.strokeStyle = "rgba(255,64,129,0.75)";
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.arc(fx + fw / 2, fy + fh / 2, Math.max(fw, fh) * 0.65, 0, Math.PI * 2);
+                ctx.stroke();
+              }
+            });
+          } else if (activeFilter === "aura") {
+            ctx.strokeStyle = "rgba(255,64,129,0.55)";
+            ctx.lineWidth = 5;
+            ctx.strokeRect(8, 8, w - 16, h - 16);
+          }
         }
       }
       aiRaf = requestAnimationFrame(render);
@@ -256,9 +395,14 @@ export function createCallManager({
     aiRaf = requestAnimationFrame(render);
   }
 
+  function getVideoSender() {
+    if (videoTransceiver?.sender) return videoTransceiver.sender;
+    return pc?.getSenders().find(s => s.track?.kind === "video") || null;
+  }
+
   async function syncOutgoingVideoTrack() {
     if (!pc || !localStream || !isVideoCall) return;
-    const sender = pc.getSenders().find(s => s.track?.kind === "video");
+    const sender = getVideoSender();
     if (!sender) return;
 
     if (isAudioFallback) {
@@ -276,15 +420,19 @@ export function createCallManager({
       }
       aiCanvas.style.display = "none";
       localVideo.style.display = "block";
+      updateMirrorState();
       return;
     }
 
-    // Filter selected: lazy-load MediaPipe only for face filters
     if (activeFilter !== "glow") loadFaceDetector();
     localVideo.style.display = "none";
     aiCanvas.style.display = "block";
+    updateMirrorState();
     startAiVideoLoop();
-    if (!aiCanvasStream) aiCanvasStream = aiCanvas.captureStream(20);
+    const existingCanvasTrack = aiCanvasStream?.getVideoTracks?.()[0];
+    if (!aiCanvasStream || !existingCanvasTrack || existingCanvasTrack.readyState === "ended") {
+      aiCanvasStream = aiCanvas.captureStream(20);
+    }
     const canvasTrack = aiCanvasStream.getVideoTracks()[0];
     if (canvasTrack) {
       canvasTrack.enabled = !isCamOff;
@@ -298,22 +446,18 @@ export function createCallManager({
     cancelAnimationFrame(aiRaf);
     localStream?.getVideoTracks().forEach(t => { t.enabled = false; });
     aiCanvasStream?.getVideoTracks().forEach(t => { t.enabled = false; });
-    remoteVideo.style.display = "none";
     localVideo.style.display = "none";
     aiCanvas.style.display = "none";
-    audioAvatar.style.display = "block";
     document.getElementById("call-status-text").innerText = reason;
+    sendPartnerModeState(true);
     updateCallUiForMode(true);
 
-    if (pc) {
-      for (const sender of pc.getSenders()) {
-        if (sender.track?.kind === "video") {
-          const p = sender.getParameters();
-          p.encodings = p.encodings || [{}];
-          p.encodings[0].active = false;
-          await sender.setParameters(p).catch(() => {});
-        }
-      }
+    const sender = getVideoSender();
+    if (sender) {
+      const p = sender.getParameters();
+      p.encodings = p.encodings || [{}];
+      p.encodings[0].active = false;
+      await sender.setParameters(p).catch(() => {});
     }
   }
 
@@ -321,21 +465,65 @@ export function createCallManager({
     if (!isVideoCall || !isAudioFallback) return;
     isAudioFallback = false;
     consecutiveWeakCount = 0;
-    localStream?.getVideoTracks().forEach(t => { t.enabled = !isCamOff; });
-    if (pc) {
-      for (const sender of pc.getSenders()) {
-        if (sender.track?.kind === "video") {
-          const p = sender.getParameters();
-          p.encodings = p.encodings || [{}];
-          p.encodings[0].active = true;
-          await sender.setParameters(p).catch(() => {});
+
+    let vTrack = localStream?.getVideoTracks?.()[0];
+    if (!vTrack || vTrack.readyState === "ended") {
+      try {
+        const vs = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode,
+            width: { ideal: isLowNet ? 320 : 480 },
+            frameRate: { ideal: isLowNet ? 15 : 24, max: 24 }
+          }
+        });
+        vTrack = vs.getVideoTracks()[0];
+        if (vTrack && localStream) {
+          localStream.addTrack(vTrack);
+          localVideo.srcObject = localStream;
+          localVideo.play().catch(() => {});
         }
+      } catch {
+        isAudioFallback = true;
+        document.getElementById("call-status-text").innerText = "⚠️ Camera access nahi mila";
+        updateCallUiForMode(true);
+        return;
       }
     }
-    if (remoteVideo.srcObject) remoteVideo.style.display = "block";
+
+    localStream?.getVideoTracks().forEach(t => { t.enabled = !isCamOff; });
+    const sender = getVideoSender();
+    if (sender) {
+      if (vTrack) await sender.replaceTrack(vTrack).catch(() => {});
+      const p = sender.getParameters();
+      p.encodings = p.encodings || [{}];
+      p.encodings[0].active = true;
+      await sender.setParameters(p).catch(() => {});
+    }
+    sendPartnerModeState(false);
     await syncOutgoingVideoTrack();
     document.getElementById("call-status-text").innerText = "Connected 💖";
     updateCallUiForMode(true);
+  }
+
+  async function triggerIceRestartRenegotiation() {
+    if (!pc || !currentCallId || !isCaller) return;
+    const now = Date.now();
+    if (now - lastRestartOfferAt < 6500) return;
+    if (pc.signalingState !== "stable") return;
+    lastRestartOfferAt = now;
+    try {
+      pc.restartIce?.();
+      const offer = await pc.createOffer({ iceRestart: true });
+      await pc.setLocalDescription(offer);
+      sentIceList = [];
+      processedRemoteIceCount = 0;
+      sendSignalField("callOffer", {
+        callId: currentCallId,
+        video: isVideoCall,
+        iceRestart: true,
+        sdp: { type: offer.type, sdp: offer.sdp }
+      });
+    } catch {}
   }
 
   function createPeerConnection(rtcConfig) {
@@ -344,26 +532,36 @@ export function createCallManager({
       if (e.candidate) queueIceCandidate(e.candidate);
     };
     pc.ontrack = e => {
-      const stream = e.streams[0];
-      if (!stream) return;
+      const stream = e.streams[0] || new MediaStream([e.track]);
       remoteAudio.srcObject = stream;
       remoteAudio.play().catch(() => {});
-      if (stream.getVideoTracks().length > 0 && !isAudioFallback) {
+      if (stream.getVideoTracks().length > 0 || e.track?.kind === "video") {
         remoteVideo.srcObject = stream;
-        remoteVideo.style.display = "block";
-        audioAvatar.style.display = "none";
+        refreshRemoteStageDisplay();
       }
     };
+
     const handleConnChange = state => {
+      if (!state) return;
+      const now = Date.now();
+      if (state === lastConnState && now - lastConnChangeAt < 900) return;
+      lastConnState = state;
+      lastConnChangeAt = now;
+
       if (state === "connected" || state === "completed") {
         clearTimeout(ringTimeoutInt);
+        stopRingback();
+        consecutiveWeakCount = 0;
         if (!callConnected) {
           callConnected = true;
-          consecutiveWeakCount = 0;
-          document.getElementById("call-status-text").innerText = isAudioFallback ? "Audio Saver Connected 🎧" : "Connected 💖";
-          netBadgeEl.innerText = isAudioFallback ? "📶 Audio Saver" : "📶 Good";
           startCallTimer();
         }
+        document.getElementById("call-status-text").innerText = isAudioFallback
+          ? "Audio Saver Connected 🎧"
+          : isPartnerAudioOnly
+            ? "Partner Audio Mode 🎧"
+            : "Connected 💖";
+        netBadgeEl.innerText = isAudioFallback ? "📶 Audio Saver" : "📶 Good";
       } else if (state === "failed" || state === "disconnected") {
         const evalRes = evaluateNetworkQuality({
           connectionState: state,
@@ -373,14 +571,20 @@ export function createCallManager({
         });
         consecutiveWeakCount = evalRes.nextWeakCount;
         netBadgeEl.innerText = evalRes.badge;
-        if (evalRes.shouldRestartIce && pc?.restartIce) {
-          try { pc.restartIce(); } catch {}
+        document.getElementById("call-status-text").innerText = "Reconnecting... ⏳";
+        if (evalRes.shouldRestartIce) {
+          if (isCaller) {
+            triggerIceRestartRenegotiation();
+          } else {
+            pc?.restartIce?.();
+          }
         }
         if (evalRes.shouldDowngradeToAudio) {
           downgradeToAudioOnly("Weak internet: Switched to Audio 🎧");
         }
       }
     };
+
     pc.onconnectionstatechange = () => handleConnChange(pc?.connectionState);
     pc.oniceconnectionstatechange = () => {
       const iceState = pc?.iceConnectionState;
@@ -429,6 +633,7 @@ export function createCallManager({
 
   async function setupLocalMedia(video) {
     isVideoCall = video;
+    videoTransceiver = null;
     try {
       localStream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
@@ -442,7 +647,6 @@ export function createCallManager({
       });
     } catch (err) {
       if (video) {
-        // Fallback to audio-only if camera permission/hardware fails
         isAudioFallback = true;
         localStream = await navigator.mediaDevices.getUserMedia({
           audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
@@ -453,6 +657,8 @@ export function createCallManager({
       }
     }
 
+    localStream.getAudioTracks().forEach(t => pc.addTrack(t, localStream));
+
     if (video && localStream.getVideoTracks().length > 0 && !isAudioFallback) {
       localVideo.srcObject = localStream;
       localVideo.play().catch(() => {});
@@ -460,26 +666,42 @@ export function createCallManager({
       aiCanvas.style.display = "none";
       const track = localStream.getVideoTracks()[0];
       pc.addTrack(track, localStream);
+      videoTransceiver = pc.getTransceivers().find(tr => tr.sender?.track === track) || null;
+    } else if (video) {
+      // Reserve video transceiver so user can restore camera later even if camera failed initially
+      try {
+        videoTransceiver = pc.addTransceiver("video", { direction: "sendrecv" });
+      } catch {}
+      localVideo.style.display = "none";
+      aiCanvas.style.display = "none";
     } else {
       localVideo.style.display = "none";
       aiCanvas.style.display = "none";
     }
-    localStream.getAudioTracks().forEach(t => pc.addTrack(t, localStream));
   }
 
   async function startCall(video) {
     document.getElementById("call-dropdown").style.display = "none";
     currentCallId = Date.now().toString();
+    handledCallIds.add(currentCallId);
+    isCaller = true;
     callConnected = false;
     isMuted = false;
     isCamOff = false;
     isLowNet = false;
     isAudioFallback = false;
+    isPartnerAudioOnly = false;
+    isSpeaker = Boolean(video);
+    isMinimized = false;
     consecutiveWeakCount = 0;
+    lastRestartOfferAt = 0;
+    lastProcessedRestartTs = 0;
+    lastConnState = "";
     activeFilter = "none";
     sentIceList = [];
     pendingRemoteIce = [];
     processedRemoteIceCount = 0;
+    remoteVideo.srcObject = null;
     remoteVideo.style.display = "none";
     updateCallUiForMode(video);
     callOverlay.style.display = "flex";
@@ -500,12 +722,14 @@ export function createCallManager({
         sdp: { type: offer.type, sdp: offer.sdp }
       });
       notifications.sendPushAlert("call");
+      startRingback();
       window.AndroidCallBridge?.startProximity?.(isSpeaker);
       clearTimeout(ringTimeoutInt);
       ringTimeoutInt = setTimeout(() => {
         if (!callConnected && currentCallId) endCall(true);
       }, 60000);
     } catch (err) {
+      stopRingback();
       const statusEl = document.getElementById("call-status-text");
       if (statusEl) {
         statusEl.innerText = err?.name === "NotAllowedError"
@@ -518,23 +742,32 @@ export function createCallManager({
 
   async function acceptIncomingCall() {
     stopRingtone();
-    window.AndroidCallBridge?.vibratePattern?.("stop");
     notifications.clearAlerts?.();
     incomingOverlay.style.display = "none";
     notes.secretCallDot.style.display = "none";
     if (!incomingOffer) return;
 
-    const video = Boolean(incomingOffer.video);
-    currentCallId = incomingOffer.callId;
+    const offerToAccept = incomingOffer;
+    incomingOffer = null;
+    const video = Boolean(offerToAccept.video);
+    currentCallId = offerToAccept.callId;
+    handledCallIds.add(currentCallId);
+    isCaller = false;
     callConnected = false;
     isMuted = false;
     isCamOff = false;
     isLowNet = false;
     isAudioFallback = false;
+    isPartnerAudioOnly = false;
+    isSpeaker = video;
+    isMinimized = false;
     consecutiveWeakCount = 0;
+    lastRestartOfferAt = 0;
+    lastProcessedRestartTs = 0;
+    lastConnState = "";
     activeFilter = "none";
     sentIceList = [];
-    isSpeaker = video;
+    remoteVideo.srcObject = null;
     remoteVideo.style.display = "none";
     updateCallUiForMode(video);
     callOverlay.style.display = "flex";
@@ -549,7 +782,7 @@ export function createCallManager({
         bindFunChannel(funChannel);
       };
       await setupLocalMedia(video);
-      await pc.setRemoteDescription(new RTCSessionDescription(incomingOffer.sdp));
+      await pc.setRemoteDescription(new RTCSessionDescription(offerToAccept.sdp));
       while (pendingRemoteIce.length) {
         await pc.addIceCandidate(new RTCIceCandidate(pendingRemoteIce.shift())).catch(() => {});
       }
@@ -570,38 +803,50 @@ export function createCallManager({
 
   async function endCall(notifyPartner = true) {
     stopRingtone();
+    stopRingback();
     cancelAnimationFrame(aiRaf);
     clearInterval(callTimerInt);
     clearInterval(callStatsInt);
     clearTimeout(ringTimeoutInt);
     clearTimeout(iceFlushTimer);
     window.AndroidCallBridge?.stopProximity?.();
-    window.AndroidCallBridge?.vibratePattern?.("stop");
     notifications.clearAlerts?.();
     document.getElementById("ear-blackout").style.display = "none";
     notes.secretCallDot.style.display = "none";
+    notes.secretCallDot.innerText = "• Syncing";
 
     const durationStr = document.getElementById("call-timer").innerText;
     const wasVideo = isVideoCall;
     const wasConnected = callConnected;
+    const endingCallId = currentCallId || incomingOffer?.callId || null;
 
-    if (notifyPartner && currentCallId) {
-      sendSignalField("callHangup", { callId: currentCallId, missed: !wasConnected });
-      if (!wasConnected) {
-        sendEncryptedMessage({
-          isCallLog: true,
-          missed: true,
-          text: `📵 Missed ${wasVideo ? "Video" : "Audio"} Call`
-        }, "call").catch(() => {});
-      } else {
-        sendEncryptedMessage({
-          isCallLog: true,
-          missed: false,
-          text: `${wasVideo ? "📹" : "📞"} Call Ended (${durationStr})`
-        }, "call").catch(() => {});
-      }
+    if (endingCallId) handledCallIds.add(endingCallId);
+
+    const logEntry = resolveCallLogOnEnd({
+      notifyPartner,
+      currentCallId: endingCallId,
+      wasConnected,
+      wasVideo,
+      durationStr,
+      loggedCallIds
+    });
+
+    if (notifyPartner && endingCallId) {
+      sendSignalField("callHangup", {
+        callId: endingCallId,
+        missed: !wasConnected,
+        loggedBySender: Boolean(logEntry)
+      });
+      if (isCaller) sendSignalField("callOffer", null);
+      if (logEntry) logCallOnce(logEntry);
+    } else if (isCaller) {
+      sendSignalField("callOffer", null);
     }
 
+    if (screenStream) {
+      screenStream.getTracks().forEach(t => t.stop());
+      screenStream = null;
+    }
     if (localStream) localStream.getTracks().forEach(t => t.stop());
     if (aiCanvasStream) aiCanvasStream.getTracks().forEach(t => t.stop());
     if (pc) {
@@ -612,27 +857,36 @@ export function createCallManager({
     localStream = null;
     aiCanvasStream = null;
     funChannel = null;
+    videoTransceiver = null;
     currentCallId = null;
+    isCaller = false;
     incomingOffer = null;
     callConnected = false;
     isMuted = false;
     isCamOff = false;
     isLowNet = false;
     isAudioFallback = false;
+    isPartnerAudioOnly = false;
     isSpeaker = false;
+    isMinimized = false;
     consecutiveWeakCount = 0;
+    lastConnState = "";
     sentIceList = [];
     pendingRemoteIce = [];
     processedRemoteIceCount = 0;
 
-    ["call-mute-btn", "call-cam-btn", "call-low-net-btn", "call-speaker-btn", "call-audio-only-btn"].forEach(id => {
+    ["call-mute-btn", "call-cam-btn", "call-low-net-btn", "call-speaker-btn", "call-audio-only-btn", "call-share-btn"].forEach(id => {
       document.getElementById(id)?.classList.remove("active");
     });
+    document.querySelectorAll("[data-filter]").forEach(b => b.classList.toggle("active", b.dataset.filter === "none"));
+    const dareCard = document.getElementById("call-dare-card");
+    if (dareCard) dareCard.style.display = "none";
     remoteVideo.srcObject = null;
     remoteVideo.style.display = "none";
     localVideo.srcObject = null;
     localVideo.style.display = "none";
     aiCanvas.style.display = "none";
+    if (avatarNoteEl) avatarNoteEl.style.display = "none";
     callOverlay.style.display = "none";
     incomingOverlay.style.display = "none";
   }
@@ -643,16 +897,36 @@ export function createCallManager({
   document.getElementById("accept-call-btn").addEventListener("click", acceptIncomingCall);
   document.getElementById("reject-call-btn").addEventListener("click", () => {
     stopRingtone();
-    window.AndroidCallBridge?.vibratePattern?.("stop");
     notifications.clearAlerts?.();
     incomingOverlay.style.display = "none";
     notes.secretCallDot.style.display = "none";
-    if (incomingOffer) sendSignalField("callHangup", { callId: incomingOffer.callId, missed: true });
+    if (incomingOffer) {
+      const rejected = incomingOffer;
+      handledCallIds.add(rejected.callId);
+      sendSignalField("callHangup", { callId: rejected.callId, missed: true, rejected: true, loggedBySender: true });
+      logCallOnce({
+        isCallLog: true,
+        missed: true,
+        callId: rejected.callId,
+        text: `📵 Missed ${rejected.video ? "Video" : "Audio"} Call`
+      });
+    }
     incomingOffer = null;
     pendingRemoteIce = [];
     processedRemoteIceCount = 0;
   });
   document.getElementById("hangup-call-btn").addEventListener("click", () => endCall(true));
+
+  document.getElementById("call-minimize-btn")?.addEventListener("click", () => {
+    if (typeof onRequestHideToNotes === "function") {
+      onRequestHideToNotes();
+    } else if (currentCallId) {
+      isMinimized = true;
+      callOverlay.style.display = "none";
+      notes.secretCallDot.innerText = "• Syncing";
+      notes.secretCallDot.style.display = "inline-flex";
+    }
+  });
 
   document.getElementById("call-mute-btn").addEventListener("click", function () {
     isMuted = !isMuted;
@@ -668,13 +942,15 @@ export function createCallManager({
   });
 
   document.getElementById("call-flip-btn").addEventListener("click", async () => {
-    if (!isVideoCall || !pc) return;
+    if (!isVideoCall || isAudioFallback || !pc) return;
     facingMode = facingMode === "user" ? "environment" : "user";
     try {
       const ns = await navigator.mediaDevices.getUserMedia({
         video: { facingMode, width: { ideal: isLowNet ? 320 : 480 } }
       });
       const newTrack = ns.getVideoTracks()[0];
+      if (!newTrack) return;
+      newTrack.enabled = !isCamOff;
       localStream?.getVideoTracks().forEach(t => {
         t.stop();
         localStream.removeTrack(t);
@@ -683,14 +959,27 @@ export function createCallManager({
       localVideo.srcObject = null;
       localVideo.srcObject = localStream;
       localVideo.play().catch(() => {});
+      updateMirrorState();
       await syncOutgoingVideoTrack();
     } catch {}
   });
 
-  document.getElementById("call-speaker-btn").addEventListener("click", function () {
+  document.getElementById("call-speaker-btn").addEventListener("click", async function () {
     isSpeaker = !isSpeaker;
     this.classList.toggle("active", isSpeaker);
     window.AndroidCallBridge?.setSpeaker?.(isSpeaker);
+    if (!window.AndroidCallBridge && typeof remoteAudio.setSinkId === "function" && navigator.mediaDevices?.enumerateDevices) {
+      try {
+        const devs = await navigator.mediaDevices.enumerateDevices();
+        const outputs = devs.filter(d => d.kind === "audiooutput");
+        if (outputs.length > 1) {
+          const target = isSpeaker
+            ? outputs.find(d => /speaker/i.test(d.label)) || outputs[0]
+            : outputs.find(d => /earpiece|head|default/i.test(d.label)) || outputs[0];
+          if (target?.deviceId) await remoteAudio.setSinkId(target.deviceId).catch(() => {});
+        }
+      } catch {}
+    }
   });
 
   document.getElementById("call-ear-btn").addEventListener("click", () => {
@@ -714,15 +1003,12 @@ export function createCallManager({
     isLowNet = !isLowNet;
     this.classList.toggle("active", isLowNet);
     netBadgeEl.innerText = isLowNet ? "📶 Saver" : "📶 Good";
-    if (pc) {
-      for (const sender of pc.getSenders()) {
-        if (sender.track?.kind === "video") {
-          const p = sender.getParameters();
-          p.encodings = p.encodings || [{}];
-          p.encodings[0].maxBitrate = isLowNet ? 160000 : 750000;
-          await sender.setParameters(p).catch(() => {});
-        }
-      }
+    const sender = getVideoSender();
+    if (sender) {
+      const p = sender.getParameters();
+      p.encodings = p.encodings || [{}];
+      p.encodings[0].maxBitrate = isLowNet ? 160000 : 750000;
+      await sender.setParameters(p).catch(() => {});
     }
   });
 
@@ -733,15 +1019,33 @@ export function createCallManager({
     });
   }
 
-  document.getElementById("call-share-btn").addEventListener("click", async () => {
+  shareBtn?.addEventListener("click", async () => {
     if (!navigator.mediaDevices?.getDisplayMedia || !pc) return;
+    if (screenStream) {
+      screenStream.getTracks().forEach(t => t.stop());
+      screenStream = null;
+      shareBtn.classList.remove("active");
+      updateMirrorState();
+      await syncOutgoingVideoTrack();
+      return;
+    }
     try {
       const ds = await navigator.mediaDevices.getDisplayMedia({ video: true });
       const st = ds.getVideoTracks()[0];
-      const sender = pc.getSenders().find(s => s.track?.kind === "video");
+      const sender = getVideoSender();
       if (sender && st) {
+        screenStream = ds;
+        shareBtn.classList.add("active");
+        updateMirrorState();
         await sender.replaceTrack(st);
-        st.onended = () => syncOutgoingVideoTrack();
+        st.onended = () => {
+          screenStream = null;
+          shareBtn.classList.remove("active");
+          updateMirrorState();
+          syncOutgoingVideoTrack();
+        };
+      } else {
+        ds.getTracks().forEach(t => t.stop());
       }
     } catch {}
   });
@@ -793,7 +1097,12 @@ export function createCallManager({
   });
 
   notes.secretCallDot.addEventListener("click", () => {
-    if (incomingOffer) {
+    if (currentCallId) {
+      isMinimized = false;
+      notes.secretCallDot.style.display = "none";
+      notes.secretCallDot.innerText = "• Syncing";
+      callOverlay.style.display = "flex";
+    } else if (incomingOffer) {
       notes.secretCallDot.style.display = "none";
       incomingOverlay.style.display = "flex";
       startRingtone();
@@ -804,21 +1113,88 @@ export function createCallManager({
     hasActiveCall: () => Boolean(currentCallId),
     getIncomingOffer: () => incomingOffer,
     showIncomingOverlayIfPending() {
-      if (incomingOffer) {
+      if (currentCallId && isMinimized) {
+        isMinimized = false;
+        notes.secretCallDot.style.display = "none";
+        notes.secretCallDot.innerText = "• Syncing";
+        callOverlay.style.display = "flex";
+      } else if (incomingOffer) {
         notes.secretCallDot.style.display = "none";
         incomingOverlay.style.display = "flex";
         startRingtone();
       }
     },
-    hideIncomingToDotIfPending() {
+    hideToDisguiseIfCallOpen() {
+      if (document.getElementById("ear-blackout").style.display === "flex") {
+        document.getElementById("ear-blackout").style.display = "none";
+      }
+      if (currentCallId) {
+        isMinimized = true;
+        callOverlay.style.display = "none";
+        notes.secretCallDot.innerText = "• Syncing";
+        notes.secretCallDot.style.display = "inline-flex";
+      }
       if (incomingOffer) {
+        stopRingtone();
         incomingOverlay.style.display = "none";
         notes.secretCallDot.style.display = "inline-flex";
       }
     },
+    hideIncomingToDotIfPending() {
+      this.hideToDisguiseIfCallOpen();
+    },
+    handleHardwareBack() {
+      const ear = document.getElementById("ear-blackout");
+      if (ear && ear.style.display === "flex") {
+        ear.style.display = "none";
+        if (isVideoCall) window.AndroidCallBridge?.setProximityEnabled?.(false);
+        return true;
+      }
+      if (incomingOverlay.style.display === "flex" && incomingOffer) {
+        stopRingtone();
+        incomingOverlay.style.display = "none";
+        notes.secretCallDot.style.display = "inline-flex";
+        return true;
+      }
+      if (callOverlay.style.display === "flex" && currentCallId) {
+        if (typeof onRequestHideToNotes === "function") {
+          onRequestHideToNotes();
+        } else {
+          this.hideToDisguiseIfCallOpen();
+        }
+        return true;
+      }
+      return false;
+    },
     async handleSignalingData(data, state) {
       const offer = data.callOffer;
-      if (offer && offer.ts > state.lastOfferTs && Date.now() - offer.ts < 60000) {
+      const hang = data.callHangup;
+
+      if (shouldProcessIceRestartOffer({ offer, currentCallId, lastProcessedRestartTs })) {
+        lastProcessedRestartTs = Number(offer.ts || 0);
+        if (pc) {
+          try {
+            await pc.setRemoteDescription(new RTCSessionDescription(offer.sdp));
+            processedRemoteIceCount = 0;
+            sentIceList = [];
+            const ans = await pc.createAnswer();
+            await pc.setLocalDescription(ans);
+            sendSignalField("callAnswer", {
+              callId: currentCallId,
+              iceRestart: true,
+              sdp: { type: ans.type, sdp: ans.sdp }
+            });
+          } catch {}
+        }
+      } else if (
+        isOfferActiveAndFresh({
+          offer,
+          hangup: hang,
+          lastOfferTs: state.lastOfferTs,
+          handledCallIds,
+          nowMs: Date.now()
+        })
+      ) {
         state.lastOfferTs = offer.ts;
         if (!currentCallId) {
           incomingOffer = offer;
@@ -832,8 +1208,7 @@ export function createCallManager({
             startRingtone();
           } else {
             notes.secretCallDot.style.display = "inline-flex";
-            window.AndroidCallBridge?.vibratePattern?.("call");
-            navigator.vibrate?.([240, 160, 240]);
+            startStealthVibrate();
             notifications.showBrowserAlert("call");
           }
         }
@@ -862,10 +1237,27 @@ export function createCallManager({
         processedRemoteIceCount = nextCount;
       }
 
-      const hang = data.callHangup;
+      const mode = data.callMode;
+      if (mode && currentCallId && mode.callId === currentCallId && Date.now() - Number(mode.ts || 0) < 30000) {
+        const nextRemoteAudioOnly = Boolean(mode.audioOnly);
+        if (nextRemoteAudioOnly !== isPartnerAudioOnly) {
+          isPartnerAudioOnly = nextRemoteAudioOnly;
+          refreshRemoteStageDisplay();
+          if (callConnected) {
+            document.getElementById("call-status-text").innerText = isPartnerAudioOnly
+              ? "Partner Audio Mode 🎧"
+              : isAudioFallback
+                ? "Audio Saver Connected 🎧"
+                : "Connected 💖";
+          }
+        }
+      }
+
       if (hang && hang.ts > state.lastHangupTs && (hang.callId === currentCallId || hang.callId === incomingOffer?.callId)) {
         state.lastHangupTs = hang.ts;
-        endCall(false);
+        if (hang.callId) handledCallIds.add(hang.callId);
+        if (hang.loggedBySender && hang.callId) loggedCallIds.add(hang.callId);
+        await endCall(false);
       }
 
       const dare = data.callDare;

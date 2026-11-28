@@ -28,7 +28,8 @@ export function playEmotionSound(type = "chime") {
       happy: [523.25, 659.25, 783.99],
       sad: [392.0, 329.63],
       angry: [220, 196],
-      gift: [523.25, 659.25, 783.99, 1046.5]
+      gift: [523.25, 659.25, 783.99, 1046.5],
+      ringback: [440, 480]
     }[type] || [523.25, 659.25];
 
     tones.forEach((freq, idx) => {

@@ -38,6 +38,8 @@ export function getBubblePreviewText(dec) {
   if (dec.carePing) return `${dec.carePing.emoji || "💞"} ${dec.carePing.label || "Care Ping"}`;
   if (dec.letterData) return `💌 ${dec.letterData.title || "Surprise Letter"}`;
   if (dec.questionCard) return `🃏 ${dec.questionCard.question || "Dil Ki Baat"}`;
+  if (dec.ritualCard) return `${dec.ritualCard.mode === "night" ? "🌙 Goodnight Ritual" : "☀️ Morning Ritual"}: ${dec.ritualCard.prompt || "Daily Ritual"}`;
+  if (dec.periodCard) return `🌸 Period Care: ${dec.periodCard.title || "Comfort Care"}`;
   if (dec.gameData) return `🎮 ${dec.gameData.title || dec.gameData.kind || "Couple Game"}`;
   if (dec.vibeCard) return `✨ ${dec.vibeCard.headline || "Daily Vibe Summary"}`;
   if (dec.giftData) return `🎁 Gift: ${dec.giftData.label}`;
@@ -89,6 +91,8 @@ export function buildMessageSignature(m) {
     ping: dec.carePing?.label || "",
     letter: dec.letterData?.title || "",
     qcard: dec.questionCard?.answer || dec.questionCard?.question || "",
+    rit: dec.ritualCard ? JSON.stringify(dec.ritualCard) : "",
+    per: dec.periodCard ? JSON.stringify(dec.periodCard) : "",
     game: dec.gameData ? JSON.stringify(dec.gameData) : "",
     wal: dec.walletRedeem?.title || "",
     vibe: dec.vibeCard?.headline || "",
@@ -100,7 +104,7 @@ export function buildMessageSignature(m) {
 export function getIncomingAlertKind(dec) {
   if (!dec || typeof dec !== "object") return "message";
   if (dec.carePing) return "ping";
-  if (dec.letterData || dec.questionCard || dec.gameData || dec.walletGift || dec.capsuleData || dec.songCard) return "letter";
+  if (dec.letterData || dec.questionCard || dec.ritualCard || dec.periodCard || dec.gameData || dec.walletGift || dec.capsuleData || dec.songCard) return "letter";
   return "message";
 }
 
@@ -150,6 +154,7 @@ export function getPayloadUpdatedAtMs(dec) {
   return Number(
     dec.gameData?.updatedAtMs ||
     dec.questionCard?.updatedAtMs ||
+    dec.ritualCard?.updatedAtMs ||
     dec.updatedAtMs ||
     0
   );
