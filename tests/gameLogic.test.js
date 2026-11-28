@@ -36,7 +36,11 @@ import {
   createSnakeState,
   stepSnakeState,
   shouldNotifyCreatorOnMessageChange,
-  resolveTwoPlayerTurn
+  resolveTwoPlayerTurn,
+  resolveLiveLudoTurnAccess,
+  SCORE_DUEL_GAMES,
+  createScoreDuel,
+  submitScoreDuelTurn
 } from "../shared/gameLogic.js";
 
 test("Tic-Tac-Toe detects win, winning line, and blocks occupied cells", () => {
@@ -262,7 +266,69 @@ test("resolveTwoPlayerTurn alternates turns cleanly between creator and partner"
   const legacyB = resolveTwoPlayerTurn({ playerA: "u1", lastMover: "u1", myUid: "u2" });
   assert.equal(legacyB.canMove, true);
   assert.equal(legacyB.currentTurnSide, "B");
+
+  // Strict lock if slot B is already bound to u2 and u3 tries to act
+  const intruder = resolveTwoPlayerTurn({ playerA: "u1", playerB: "u2", turnSide: "B", myUid: "u3" });
+  assert.equal(intruder.canMove, false);
 });
+
+test("resolveLiveLudoTurnAccess enforces strict turn ownership after rolling & moving", () => {
+  const gd = { kind: "ludo", playerA: "uA", playerB: "" };
+  let st = createLudoState("chat");
+
+  // Initially A's turn to roll
+  const aInit = resolveLiveLudoTurnAccess(st, gd, "uA");
+  const bInit = resolveLiveLudoTurnAccess(st, gd, "uB");
+  assert.equal(aInit.canRoll, true);
+  assert.equal(aInit.canMoveToken, false);
+  assert.equal(bInit.canRoll, false);
+  assert.equal(bInit.waitingForPartner, true);
+
+  // Player A rolls 4 with all tokens locked -> turn passes immediately to B
+  st = applyLudoDiceRoll(st, 4);
+  assert.equal(st.turn, "B");
+  const aAfter = resolveLiveLudoTurnAccess(st, gd, "uA");
+  const bAfter = resolveLiveLudoTurnAccess(st, gd, "uB");
+  assert.equal(aAfter.canRoll, false);
+  assert.equal(aAfter.waitingForPartner, true);
+  assert.equal(bAfter.canRoll, true);
+
+  // Missing uid cannot move in a live game
+  const anon = resolveLiveLudoTurnAccess(st, gd, "");
+  assert.equal(anon.canRoll, false);
+  assert.equal(anon.canMoveToken, false);
+});
+
+test("Score Duel creates and resolves both higher-is-better and lower-is-better live matches", () => {
+  assert.ok(Object.keys(SCORE_DUEL_GAMES).length >= 8);
+
+  // Higher is better (Heart Catcher)
+  const catcherDuel = createScoreDuel({ gameKey: "catcher", playerA: "uA", scoreA: 120, detailA: "120 pts" });
+  assert.equal(catcherDuel.turnSide, "B");
+  assert.equal(catcherDuel.winner, "");
+
+  // Creator A cannot submit B's turn
+  assert.equal(submitScoreDuelTurn(catcherDuel, { uid: "uA", score: 200 }), null);
+
+  // Partner B wins with higher score
+  const catcherDone = submitScoreDuelTurn(catcherDuel, { uid: "uB", score: 150, detail: "150 pts" });
+  assert.equal(catcherDone.winner, "B");
+  assert.equal(catcherDone.playerB, "uB");
+  assert.equal(catcherDone.turnSide, "");
+  // Further submissions blocked
+  assert.equal(submitScoreDuelTurn(catcherDone, { uid: "uB", score: 300 }), null);
+
+  // Lower is better (Love Reflex ms)
+  const reflexDuel = createScoreDuel({ gameKey: "reflex", playerA: "uA", scoreA: 240, detailA: "240 ms" });
+  const reflexDone = submitScoreDuelTurn(reflexDuel, { uid: "uB", score: 310, detail: "310 ms" });
+  assert.equal(reflexDone.winner, "A");
+
+  // Draw case
+  const memDuel = createScoreDuel({ gameKey: "memory", playerA: "uA", scoreA: 12, detailA: "12 moves" });
+  const memDraw = submitScoreDuelTurn(memDuel, { uid: "uB", score: 12, detail: "12 moves" });
+  assert.equal(memDraw.winner, "draw");
+});
+
 
 
 

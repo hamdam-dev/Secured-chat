@@ -1,3 +1,10 @@
+import {
+  isWordSolved,
+  countWrongGuesses,
+  resolveTwoPlayerTurn,
+  resolveLiveLudoTurnAccess
+} from "./gameLogic.js";
+
 export function sortMessages(messages) {
   return [...messages].sort((a, b) => {
     const secDiff = (a.createdAtSec || 0) - (b.createdAtSec || 0);
@@ -183,10 +190,146 @@ export function isLiveGameFinished(gd) {
   if (gd.kind === "dots") return Boolean(gd.dotsState?.winner);
   if (gd.kind === "rps") return Boolean(gd.moveB);
   if (gd.kind === "lock") return Boolean(gd.solved || (gd.attempts || []).length >= 7);
+  if (gd.kind === "word") return Boolean(isWordSolved(gd.word, gd.guessed || []) || countWrongGuesses(gd.word, gd.guessed || []) >= 6);
   if (gd.kind === "coupon") return Number.isInteger(gd.pickedIdx) && gd.pickedIdx >= 0;
   if (gd.kind === "wyr") return Boolean(gd.choiceA && gd.choiceB);
   if (gd.kind === "quiz") return Boolean(gd.completed);
-  if (gd.kind === "tdw") return Boolean(gd.replyText);
+  if (gd.kind === "tdw" || gd.kind === "intimate_dare") return Boolean(gd.replyText);
+  if (gd.kind === "score_duel") return Boolean(gd.winner);
+  if (gd.kind === "intimate_strip") return Number(gd.roundIdx || 0) >= 5;
+  if (gd.kind === "intimate_auction") return Boolean(gd.closed);
+  if (gd.kind === "intimate_craving") return Boolean(gd.choiceB);
+  if (gd.kind === "intimate_fantasy") return (gd.items || []).length > 0 && Object.keys(gd.votesB || {}).length >= (gd.items || []).length;
+  if (gd.kind === "intimate_lockbox" || gd.kind === "intimate_blur") return Boolean(gd.unlocked);
+  if (gd.kind === "intimate_blind4") return typeof gd.pickedIdx === "number" && gd.pickedIdx >= 0;
+  if (gd.kind === "intimate_confess") return Boolean(gd.paidTax || gd.answer);
+  if (gd.kind === "intimate_wishes" || gd.kind === "intimate_boss") return Boolean(gd.accepted);
+  if (gd.kind === "intimate_plan") return Boolean(gd.approved);
+  if (gd.kind === "intimate_scratch") return Boolean(gd.scratched);
+  if (gd.kind === "intimate_mystery") return (gd.boxes || []).length > 0 && (gd.boxes || []).every(b => b.opened);
   return true;
 }
+
+export function describeLiveGameTurn(gd, myUid = "") {
+  if (!gd || typeof gd !== "object") return null;
+  const finished = isLiveGameFinished(gd);
+  if (gd.kind === "ludo") {
+    const access = resolveLiveLudoTurnAccess(gd.ludoState || {}, gd, myUid);
+    const isMyTurn = !finished && (access.canRoll || access.canMoveToken);
+    const homeA = (gd.ludoState?.tokensA || []).filter(p => p === 56).length;
+    const homeB = (gd.ludoState?.tokensB || []).filter(p => p === 56).length;
+    return {
+      icon: "🎲",
+      title: "Ludo Live",
+      subtab: "ludo",
+      isMyTurn,
+      finished,
+      statusLine: finished
+        ? "Match khatam! Tap karke board dekhein"
+        : (isMyTurn
+          ? `Aapki Baari (${access.mySide})! Ghar: ❤️${homeA} · 😘${homeB}`
+          : `Partner ki Baari ⏳ · Ghar: ❤️${homeA} · 😘${homeB}`)
+    };
+  }
+  if (gd.kind === "c4" || gd.kind === "ttt") {
+    const t = resolveTwoPlayerTurn({
+      playerA: gd.playerA || "",
+      playerB: gd.playerB || "",
+      turnSide: gd.turnSide || "",
+      lastMover: gd.lastMover || "",
+      myUid,
+      finished
+    });
+    const icon = gd.kind === "c4" ? "🍓" : "❤️";
+    const subtab = gd.kind === "c4" ? "easy:c4" : "easy:ttt";
+    return {
+      icon,
+      title: gd.kind === "c4" ? "Connect 4 Live" : "Tic-Tac Live",
+      subtab,
+      isMyTurn: t.canMove,
+      finished,
+      statusLine: finished
+        ? (gd.draw ? "Draw! Tap to view" : `${gd.winnerSymbol} Jeet gaya!`)
+        : (t.canMove ? `Aapki Baari (${t.mySym})!` : "Partner ki Baari ⏳")
+    };
+  }
+  if (gd.kind === "dots") {
+    const st = gd.dotsState || {};
+    const t = resolveTwoPlayerTurn({
+      playerA: gd.playerA || "",
+      playerB: gd.playerB || "",
+      turnSide: st.turn || gd.turnSide || "A",
+      lastMover: gd.lastMover || "",
+      myUid,
+      finished
+    });
+    return {
+      icon: "📦",
+      title: "Dots & Boxes",
+      subtab: "hard:dots",
+      isMyTurn: t.canMove,
+      finished,
+      statusLine: finished
+        ? `Final: ❤️${st.scoreA || 0} - 😘${st.scoreB || 0}`
+        : (t.canMove ? `Aapki Baari! ❤️${st.scoreA || 0}·😘${st.scoreB || 0}` : `Partner ki Baari ⏳ (❤️${st.scoreA || 0}·😘${st.scoreB || 0})`)
+    };
+  }
+  if (gd.kind === "score_duel") {
+    const isMyTurn = !finished && Boolean(myUid && gd.playerA !== myUid && (!gd.playerB || gd.playerB === myUid));
+    return {
+      icon: "⚔️",
+      title: gd.title || "Live Duel",
+      subtab: gd.challengeSubtab || "arcade:catcher",
+      isMyTurn,
+      finished,
+      statusLine: finished
+        ? `Result: ${gd.detailA} vs ${gd.detailB}`
+        : (isMyTurn ? `Beat karo: ${gd.detailA}!` : `Partner ki baari ⏳ (${gd.detailA})`)
+    };
+  }
+  const creatorUid = gd.creator || gd.playerA || "";
+  const isMyTurn = !finished && Boolean(myUid && creatorUid !== myUid);
+  return {
+    icon: "🎮",
+    title: gd.title || "Couple Game",
+    subtab: gd.challengeSubtab || "",
+    isMyTurn,
+    finished,
+    statusLine: finished
+      ? (gd.lastActionText || "Completed!")
+      : (isMyTurn ? "Aapki Baari — Tap karein!" : "Partner ki Baari ⏳")
+  };
+}
+
+export function extractActiveLiveGameIds(messages = [], maxCount = 8) {
+  const sorted = sortMessages(messages || []);
+  const ids = [];
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const m = sorted[i];
+    const gd = m?.decrypted?.gameData;
+    if (!m?.id || !gd || isLiveGameFinished(gd)) continue;
+    ids.push(m.id);
+    if (ids.length >= maxCount) break;
+  }
+  return ids;
+}
+
+export function pickActiveResumeGame(messages = [], myUid = "", preferredMsgId = "") {
+  const sorted = sortMessages(messages || []);
+  const active = [];
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const m = sorted[i];
+    const gd = m?.decrypted?.gameData;
+    if (!m?.id || !gd || isLiveGameFinished(gd)) continue;
+    active.push(m);
+  }
+  if (!active.length) return null;
+  if (preferredMsgId) {
+    const pref = active.find(m => m.id === preferredMsgId);
+    if (pref) return pref;
+  }
+  const myTurnGame = active.find(m => describeLiveGameTurn(m.decrypted.gameData, myUid)?.isMyTurn);
+  return myTurnGame || active[0];
+}
+
 

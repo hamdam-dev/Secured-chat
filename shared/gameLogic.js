@@ -814,12 +814,14 @@ export function shouldNotifyCreatorOnMessageChange({
 // =========================================
 export function resolveTwoPlayerTurn({
   playerA = "",
+  playerB = "",
   turnSide = "",
   lastMover = "",
   myUid = "",
   finished = false
 } = {}) {
-  const isPlayerA = Boolean(myUid && playerA === myUid);
+  const hasUid = Boolean(myUid);
+  const isPlayerA = Boolean(hasUid && playerA && playerA === myUid);
   const mySide = isPlayerA ? "A" : "B";
   const mySym = isPlayerA ? "❤️" : "😘";
   let currentTurnSide = turnSide === "A" || turnSide === "B" ? turnSide : "";
@@ -827,7 +829,10 @@ export function resolveTwoPlayerTurn({
     if (!lastMover) currentTurnSide = "A";
     else currentTurnSide = lastMover === playerA ? "B" : "A";
   }
-  const canMove = !finished && Boolean(myUid) && currentTurnSide === mySide;
+  const slotTakenByOther = Boolean(
+    hasUid && !isPlayerA && playerB && playerB !== myUid
+  );
+  const canMove = !finished && hasUid && !slotTakenByOther && currentTurnSide === mySide;
   const nextTurnSide = currentTurnSide === "A" ? "B" : "A";
   return {
     mySide,
@@ -837,6 +842,157 @@ export function resolveTwoPlayerTurn({
     canMove
   };
 }
+
+// =========================================
+// LIVE LUDO STRICT TURN ACCESS
+// =========================================
+export function resolveLiveLudoTurnAccess(ludoState, gameData = null, myUid = "") {
+  if (!ludoState || typeof ludoState !== "object") {
+    return {
+      isLive: false,
+      mySide: "",
+      currentTurn: "A",
+      canRoll: false,
+      canMoveToken: false,
+      waitingForPartner: false,
+      winner: ""
+    };
+  }
+  const currentTurn = ludoState.turn === "B" ? "B" : "A";
+  const winner = ludoState.winner || "";
+  const isLive = Boolean(gameData && gameData.kind === "ludo");
+
+  if (!isLive) {
+    const mode = ludoState.mode || "bot";
+    const mySide = mode === "bot" ? "A" : currentTurn;
+    const isMyTurn = !winner && (mode !== "bot" || currentTurn === "A");
+    return {
+      isLive: false,
+      mySide,
+      currentTurn,
+      canRoll: isMyTurn && !ludoState.canMove,
+      canMoveToken: isMyTurn && Boolean(ludoState.canMove),
+      waitingForPartner: !winner && mode === "bot" && currentTurn === "B",
+      winner
+    };
+  }
+
+  const playerA = gameData.playerA || "";
+  const playerB = gameData.playerB || "";
+  if (!myUid || !playerA) {
+    return {
+      isLive: true,
+      mySide: "",
+      currentTurn,
+      canRoll: false,
+      canMoveToken: false,
+      waitingForPartner: !winner,
+      winner
+    };
+  }
+  const isPlayerA = myUid === playerA;
+  if (!isPlayerA && playerB && playerB !== myUid) {
+    return {
+      isLive: true,
+      mySide: "",
+      currentTurn,
+      canRoll: false,
+      canMoveToken: false,
+      waitingForPartner: !winner,
+      winner
+    };
+  }
+  const mySide = isPlayerA ? "A" : "B";
+  const isMyTurn = !winner && currentTurn === mySide;
+  return {
+    isLive: true,
+    mySide,
+    currentTurn,
+    canRoll: isMyTurn && !ludoState.canMove,
+    canMoveToken: isMyTurn && Boolean(ludoState.canMove),
+    waitingForPartner: !winner && currentTurn !== mySide,
+    winner
+  };
+}
+
+// =========================================
+// 2-PLAYER LIVE SCORE DUEL HELPERS (ARCADE & PUZZLES)
+// =========================================
+export const SCORE_DUEL_GAMES = {
+  pop: { title: "Heart Pop Rush (15s)", unit: "pts", lowerIsBetter: false, subtab: "easy:pop" },
+  g2048: { title: "Couple 2048 Heart Merge", unit: "pts", lowerIsBetter: false, subtab: "hard:2048" },
+  puzzle: { title: "Sliding Love Puzzle", unit: "moves", lowerIsBetter: true, subtab: "hard:puzzle" },
+  catcher: { title: "Heart Catcher", unit: "pts", lowerIsBetter: false, subtab: "arcade:catcher" },
+  snake: { title: "Love Snake", unit: "pts", lowerIsBetter: false, subtab: "arcade:snake" },
+  breaker: { title: "Dil Brick Breaker", unit: "pts", lowerIsBetter: false, subtab: "arcade:breaker" },
+  memory: { title: "Heart Memory Match", unit: "moves", lowerIsBetter: true, subtab: "arcade:memory" },
+  reflex: { title: "Love Reflex Duel", unit: "ms", lowerIsBetter: true, subtab: "arcade:reflex" }
+};
+
+export function createScoreDuel({
+  gameKey = "pop",
+  title = "",
+  subtab = "",
+  lowerIsBetter,
+  unit,
+  playerA = "",
+  scoreA = 0,
+  detailA = ""
+} = {}) {
+  const meta = SCORE_DUEL_GAMES[gameKey] || SCORE_DUEL_GAMES.pop;
+  const numScore = Number(scoreA) || 0;
+  return {
+    kind: "score_duel",
+    gameKey,
+    title: title || meta.title,
+    challengeSubtab: subtab || meta.subtab,
+    lowerIsBetter: typeof lowerIsBetter === "boolean" ? lowerIsBetter : meta.lowerIsBetter,
+    unit: unit || meta.unit,
+    playerA,
+    playerB: "",
+    scoreA: numScore,
+    detailA: detailA || `${numScore} ${unit || meta.unit}`,
+    scoreB: null,
+    detailB: "",
+    turnSide: "B",
+    winner: ""
+  };
+}
+
+export function submitScoreDuelTurn(gd, { uid = "", score = 0, detail = "" } = {}) {
+  if (!gd || gd.kind !== "score_duel" || gd.winner) return null;
+  if (!uid || (gd.playerA && uid === gd.playerA)) return null;
+  if (gd.playerB && gd.playerB !== uid) return null;
+
+  const scoreA = Number(gd.scoreA);
+  const scoreB = Number(score);
+  const lowerWins = Boolean(gd.lowerIsBetter);
+  let winner = "draw";
+  if (scoreA !== scoreB) {
+    if (lowerWins) {
+      winner = scoreA < scoreB ? "A" : "B";
+    } else {
+      winner = scoreA > scoreB ? "A" : "B";
+    }
+  }
+  const unit = gd.unit || "pts";
+  const detailB = detail || `${scoreB} ${unit}`;
+  const winText = winner === "draw"
+    ? `🤝 Barabar! (${gd.detailA} vs ${detailB})`
+    : `🏆 ${winner === "A" ? "❤️ Player A" : "😘 Partner B"} Jeet gaya! (${gd.detailA} vs ${detailB})`;
+
+  return {
+    ...gd,
+    playerB: uid,
+    scoreB,
+    detailB,
+    turnSide: "",
+    winner,
+    lastUpdatedBy: uid,
+    lastActionText: `${gd.title}: ${winText}`
+  };
+}
+
 
 
 

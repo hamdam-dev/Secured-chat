@@ -13,7 +13,10 @@ import {
   getPayloadUpdatedAtMs,
   shouldApplyGameSync,
   upsertGameSyncEntry,
-  isLiveGameFinished
+  isLiveGameFinished,
+  describeLiveGameTurn,
+  extractActiveLiveGameIds,
+  pickActiveResumeGame
 } from "../shared/chatLogic.js";
 import { getQuickReactions } from "../shared/emojiCatalog.js";
 
@@ -145,5 +148,34 @@ test("dual-channel game sync helpers compare timestamps, deduplicate entries, an
   assert.equal(isLiveGameFinished({ kind: "c4", winnerSymbol: "", draw: false }), false);
   assert.equal(isLiveGameFinished({ kind: "c4", draw: true }), true);
   assert.equal(isLiveGameFinished({ kind: "dots", dotsState: { winner: "" } }), false);
+  assert.equal(isLiveGameFinished({ kind: "score_duel", winner: "" }), false);
+  assert.equal(isLiveGameFinished({ kind: "score_duel", winner: "B" }), true);
+  assert.equal(isLiveGameFinished({ kind: "word", word: "JANAN", guessed: ["J"] }), false);
+  assert.equal(isLiveGameFinished({ kind: "word", word: "JANAN", guessed: ["J", "A", "N"] }), true);
+  assert.equal(isLiveGameFinished({ kind: "intimate_strip", roundIdx: 2 }), false);
+  assert.equal(isLiveGameFinished({ kind: "intimate_strip", roundIdx: 5 }), true);
 });
+
+test("extractActiveLiveGameIds and pickActiveResumeGame preserve active matches across chat noise", () => {
+  const msgs = [
+    { id: "m_done", createdAtSec: 10, decrypted: { gameData: { kind: "ttt", winnerSymbol: "❤️" } } },
+    { id: "m_ludo", createdAtSec: 20, decrypted: { gameData: { kind: "ludo", playerA: "u1", ludoState: { turn: "B", winner: "" } } } },
+    { id: "m_txt1", createdAtSec: 30, decrypted: { text: "Jaan kya kar rahi ho?" } },
+    { id: "m_c4", createdAtSec: 40, decrypted: { gameData: { kind: "c4", playerA: "u2", turnSide: "B", winnerSymbol: "" } } }
+  ];
+
+  assert.deepEqual(extractActiveLiveGameIds(msgs), ["m_c4", "m_ludo"]);
+
+  // For u1: m_c4 is A->waiting? Wait: u2 created m_c4, turnSide B -> u1's turn!
+  const forU1 = pickActiveResumeGame(msgs, "u1");
+  assert.equal(forU1.id, "m_c4");
+  assert.equal(describeLiveGameTurn(forU1.decrypted.gameData, "u1").isMyTurn, true);
+
+  // Preferred active ID overrides when still unfinished
+  const pref = pickActiveResumeGame(msgs, "u1", "m_ludo");
+  assert.equal(pref.id, "m_ludo");
+  assert.equal(describeLiveGameTurn(pref.decrypted.gameData, "u1").isMyTurn, false);
+  assert.equal(describeLiveGameTurn(pref.decrypted.gameData, "u2").isMyTurn, true);
+});
+
 

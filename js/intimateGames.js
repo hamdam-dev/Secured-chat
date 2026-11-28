@@ -49,11 +49,13 @@ import {
   addCustomItemToPool,
   removeCustomItemFromPool
 } from "../shared/intimateLogic.js";
+import { resolveTwoPlayerTurn } from "../shared/gameLogic.js";
 
 const INTIMATE_CUSTOM_KEY = "sc_intimate_custom_v1";
 const UNIVERSAL_CUSTOM_KEY = "sc_custom_games_v2";
 const LOVE_WALLET_KEY = "sc_love_wallet_v1";
 const KISS_COUNTER_KEY = "sc_intimate_kisses_v1";
+const INTIMATE_PROGRESS_KEY = "sc_intimate_progress_v1";
 
 function readJson(key, fallback) {
   try {
@@ -177,6 +179,37 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
   let confessRevealedTax = false;
   let sazaSpinResult = "";
   let cravingPicked = "";
+
+  function loadIntimateProgress() {
+    const p = readJson(INTIMATE_PROGRESS_KEY, null);
+    if (!p || typeof p !== "object") return;
+    if (typeof p.activeCat === "string") activeCat = p.activeCat;
+    if (typeof p.activeGameId === "string" && INTIMATE_GAMES_META.some(g => g.id === p.activeGameId)) {
+      activeGameId = p.activeGameId;
+    }
+    if (p.wheelTier === "soft" || p.wheelTier === "naughty" || p.wheelTier === "wild") wheelTier = p.wheelTier;
+    if (typeof p.heatLv === "number" && p.heatLv >= 1 && p.heatLv <= 5) heatLv = p.heatLv;
+    if (typeof p.stripRound === "number") stripRound = p.stripRound;
+    if (typeof p.stripScoreA === "number") stripScoreA = p.stripScoreA;
+    if (typeof p.stripScoreB === "number") stripScoreB = p.stripScoreB;
+    if (typeof p.stripLastText === "string") stripLastText = p.stripLastText;
+    if (typeof p.showPickerGrid === "boolean") showPickerGrid = p.showPickerGrid;
+  }
+
+  function saveIntimateProgress() {
+    writeJson(INTIMATE_PROGRESS_KEY, {
+      activeCat,
+      activeGameId,
+      wheelTier,
+      heatLv,
+      stripRound,
+      stripScoreA,
+      stripScoreB,
+      stripLastText,
+      showPickerGrid
+    });
+  }
+  loadIntimateProgress();
 
   function myUid() {
     return getAuth()?.currentUser?.uid || "";
@@ -744,7 +777,7 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
         b.type = "button";
         b.className = "game-mini-btn" + (wheelTier === k ? " active" : "");
         b.innerText = lbl;
-        b.onclick = () => { wheelTier = k; renderStage(stageEl); };
+        b.onclick = () => { wheelTier = k; saveIntimateProgress(); renderStage(stageEl); };
         tierRow.appendChild(b);
       });
       const res = document.createElement("div");
@@ -830,6 +863,7 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
           stripLastText = `Aap: ${cA} vs Bot: ${cB} (${winner === "draw" ? "Draw 🤝" : winner === "A" ? "Aap Jeete 🏆" : "Bot Jeeta 😈"})\n${stake}`;
           playEmotionSound(winner === "A" ? "gift" : "chime");
         }
+        saveIntimateProgress();
         renderStage(stageEl);
       };
       const liveB = document.createElement("button");
@@ -841,6 +875,10 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
           kind: "intimate_strip",
           title: "🃏 5-Card Stakes Duel",
           stakes,
+          playerA: myUid(),
+          playerB: "",
+          turnSide: "A",
+          lastMover: "",
           roundIdx: 0,
           scoreA: 0,
           scoreB: 0,
@@ -887,7 +925,7 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
         b.type = "button";
         b.className = "heat-step-btn" + (i <= cur.level ? " lit" : "");
         b.innerText = `Lv ${i}`;
-        b.onclick = () => { heatLv = i; playEmotionSound("love"); renderStage(stageEl); };
+        b.onclick = () => { heatLv = i; saveIntimateProgress(); playEmotionSound("love"); renderStage(stageEl); };
         track.appendChild(b);
       }
       const box = document.createElement("div");
@@ -901,6 +939,7 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
       upB.innerText = cur.level < 5 ? "🔥 Heat Badhao" : "🔄 Reset Lv 1";
       upB.onclick = () => {
         heatLv = cur.level < 5 ? cur.level + 1 : 1;
+        saveIntimateProgress();
         playEmotionSound("love");
         renderStage(stageEl);
       };
@@ -2598,6 +2637,7 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
       b.onclick = () => {
         activeCat = cat;
         showPickerGrid = true;
+        saveIntimateProgress();
         renderIntimateHub();
         b.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
       };
@@ -2610,6 +2650,7 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
     toggleListBtn.innerText = showPickerGrid ? "🔼 Focus Stage" : "🔽 All Games";
     toggleListBtn.onclick = () => {
       showPickerGrid = !showPickerGrid;
+      saveIntimateProgress();
       renderIntimateHub();
     };
     navHeader.append(catRow, toggleListBtn);
@@ -2648,6 +2689,7 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
             stopLoops();
             activeGameId = g.id;
             showCustomize = false;
+            saveIntimateProgress();
             renderStage(stage);
             populatePickerGrid();
           };
@@ -2668,7 +2710,9 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
   // =====================================
   // RENDER INTERACTIVE INTIMATE CHAT CARDS
   // =====================================
-  function renderIntimateChatBubble(m, dec, gd) {
+  function renderIntimateChatBubble(m, decArg, gdArg) {
+    const dec = decArg || m?.decrypted || {};
+    const gd = gdArg || dec.gameData || {};
     const uid = myUid();
     const box = document.createElement("div");
     box.className = "game-card-msg";
@@ -2699,6 +2743,11 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
         wBtn.innerText = "🎟️ Wallet Mein Save Karein";
         wBtn.onclick = e => { e.stopPropagation(); saveToWallet(gd.prompt, gd.title); wBtn.innerText = "✅ Saved!"; };
         box.appendChild(wBtn);
+      } else if (gd.creator && gd.creator === uid) {
+        const sub = document.createElement("div");
+        sub.className = "game-card-sub";
+        sub.innerText = "Love ke jawab ka intezar... ⏳";
+        box.appendChild(sub);
       } else {
         const qRow = document.createElement("div"); qRow.className = "game-btn-row";
         ["🔥 Accepted!", "😘 Done!", "🍯 Coming Soon"].forEach(chip => {
@@ -2806,15 +2855,23 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
     if (gd.kind === "intimate_strip") {
       const roundIdx = gd.roundIdx || 0;
       const done = roundIdx >= 5;
+      const turn = resolveTwoPlayerTurn({
+        playerA: gd.playerA || gd.creator || "",
+        playerB: gd.playerB || "",
+        turnSide: gd.turnSide || "",
+        lastMover: gd.lastMover || "",
+        myUid: uid,
+        finished: done
+      });
       const sub = document.createElement("div");
       sub.className = "game-card-sub";
       sub.innerText = done
         ? `🏆 Match Khatam! A: ${gd.scoreA} vs B: ${gd.scoreB}`
         : `Round ${roundIdx + 1}/5 • A: ${gd.scoreA} vs B: ${gd.scoreB}\n${(gd.stakes || [])[roundIdx] || ""}`;
       box.appendChild(sub);
-      if (!done && gd.lastMover !== uid) {
+      if (!done && turn.canMove) {
         const b = document.createElement("button");
-        b.type = "button"; b.className = "game-mini-btn active"; b.innerText = "🃏 Draw Next Round";
+        b.type = "button"; b.className = "game-mini-btn active"; b.innerText = `🃏 Draw Next Round (${turn.mySym})`;
         b.onclick = async e => {
           e.stopPropagation();
           const cA = Math.floor(Math.random() * 13) + 2;
@@ -2827,11 +2884,30 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
           playEmotionSound("gift");
           await chat.updateEncryptedMessage(
             m.id,
-            { ...dec, gameData: { ...gd, roundIdx: nextR, scoreA: nextA, scoreB: nextB, lastMover: uid, lastUpdatedBy: uid, lastActionText: notice } },
+            {
+              ...dec,
+              gameData: {
+                ...gd,
+                playerA: gd.playerA || gd.creator || "",
+                playerB: gd.playerB || (uid && (gd.playerA || gd.creator) && uid !== (gd.playerA || gd.creator) ? uid : ""),
+                turnSide: turn.nextTurnSide,
+                roundIdx: nextR,
+                scoreA: nextA,
+                scoreB: nextB,
+                lastMover: uid,
+                lastUpdatedBy: uid,
+                lastActionText: notice
+              }
+            },
             { notifyPartner: true, alertKind: "letter", gameNoticeText: nextR >= 5 ? notice : "" }
           );
         };
         box.appendChild(b);
+      } else if (!done) {
+        const waitEl = document.createElement("div");
+        waitEl.className = "game-card-sub";
+        waitEl.innerText = "⏳ Partner ki baari ka intezar...";
+        box.appendChild(waitEl);
       }
       return box;
     }
@@ -2983,6 +3059,11 @@ export function createIntimateGamesManager({ getAuth, chat, openGamesModal }) {
         wBtn.type = "button"; wBtn.className = "game-mini-btn"; wBtn.innerText = "🎟️ Wallet Mein Save";
         wBtn.onclick = e => { e.stopPropagation(); saveToWallet(gd.prize, "Spicy Auction"); wBtn.innerText = "✅ Saved!"; };
         box.appendChild(wBtn);
+      } else if ((gd.highestBidder || gd.creator) === uid) {
+        const waitEl = document.createElement("div");
+        waitEl.className = "game-card-sub";
+        waitEl.innerText = "⏳ Partner ke counter-bid ya Lock ka intezar...";
+        box.appendChild(waitEl);
       } else {
         const row = document.createElement("div"); row.className = "game-btn-row";
         ["💋 +5 Kisses", "🍯 45s Honey", "🍫 45s Choc"].forEach(bidStr => {

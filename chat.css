@@ -117,7 +117,7 @@ header#main-header h3 { font-size: 14.5px !important; line-height: 1.1; white-sp
 }
 .hdr-pill-btn:active { transform: scale(0.9); }
 
-#pinned-msg-bar, #game-update-bar, #chat-search-bar {
+#pinned-msg-bar, #game-update-bar, #active-game-bar, #chat-search-bar {
     margin: 0 12px 4px 12px; padding: 6px 10px; border-radius: 16px;
     background: rgba(255, 255, 255, 0.94); border: 1px solid #ffd1dc;
     box-shadow: 0 4px 14px rgba(216, 27, 96, 0.1); display: none; align-items: center; gap: 8px; z-index: 18; flex-shrink: 0;
@@ -126,6 +126,15 @@ header#main-header h3 { font-size: 14.5px !important; line-height: 1.1; white-sp
     background: linear-gradient(135deg, #fff0f7, #ffe3ef);
     border-color: #f48fb1;
 }
+#active-game-bar {
+    background: linear-gradient(135deg, #fff8ec, #ffeaf3);
+    border-color: #ec407a;
+}
+#active-game-bar.my-turn {
+    background: linear-gradient(135deg, #ecfdf5, #ffeef6);
+    border-color: #16a34a;
+}
+#active-game-preview, #game-update-preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pinned-jump-btn {
     flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; border: none; background: transparent;
     text-align: left; cursor: pointer; color: #880e4f; font-size: 12.5px; font-weight: 700; padding: 2px 0;
@@ -496,8 +505,10 @@ body.dark-mode .hdr-dropdown button:hover { background: #3b1c32 !important; }
 body.dark-mode .bg-text { color: #ff80ab; opacity: 0.22 !important; }
 body.dark-mode .care-input { background: #33192b; color: #f8e8f0; border-color: #5c2848 !important; }
 body.dark-mode .care-section-box { border-top-color: #5c2848; }
-body.dark-mode #pinned-msg-bar, body.dark-mode #game-update-bar, body.dark-mode #chat-search-bar { background: rgba(38, 20, 33, 0.96); border-color: #5c2848; }
+body.dark-mode #pinned-msg-bar, body.dark-mode #game-update-bar, body.dark-mode #active-game-bar, body.dark-mode #chat-search-bar { background: rgba(38, 20, 33, 0.96); border-color: #5c2848; }
 body.dark-mode #game-update-bar { background: linear-gradient(135deg, #3b1831, #4a1c3a); border-color: #d81b60; }
+body.dark-mode #active-game-bar { background: linear-gradient(135deg, #2d1828, #441634); border-color: #ec407a; }
+body.dark-mode #active-game-bar.my-turn { background: linear-gradient(135deg, #133124, #3b1831); border-color: #22c55e; }
 body.dark-mode .pinned-jump-btn, body.dark-mode #chat-search-input { color: #f8e8f0; }
 body.dark-mode .ep-search-input { background: #33192b; color: #fff; border-color: #5c2848; }
 body.dark-mode .ep-tabs { border-bottom-color: #5c2848; }
@@ -541,9 +552,17 @@ body.dark-mode .starred-item { background: #33192b; border-color: #5c2848; color
 .games-hub-card {
     max-width: 460px; display: flex; flex-direction: column; overflow: hidden !important; max-height: 88vh;
 }
-.games-hub-card .care-sheet-head { flex-shrink: 0; gap: 6px; }
-.games-hub-card .care-sheet-head h4 { font-size: 16px; white-space: nowrap; }
-.games-hub-card .care-head-actions .game-mini-btn { padding: 5px 8px; font-size: 11px; }
+.games-hub-card .care-sheet-head { flex-shrink: 0; gap: 6px; min-width: 0; }
+.games-hub-card .care-sheet-head h4 {
+    font-size: 15.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1;
+}
+.games-hub-card .care-head-actions { gap: 4px; flex-shrink: 0; }
+.games-hub-card .care-head-actions .game-mini-btn { padding: 5px 7px; font-size: 11px; white-space: nowrap; }
+@media (max-width: 420px) {
+    .games-hub-card { padding: 14px 12px; }
+    .games-hub-card .care-sheet-head h4 { font-size: 14px; }
+    .games-hub-card .care-head-actions .game-mini-btn { padding: 4px 6px; font-size: 10.5px; }
+}
 .games-hub-card .game-tabs-row { flex-shrink: 0; }
 .game-tabs-row {
     display: flex; gap: 5px; padding-bottom: 4px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
@@ -572,6 +591,20 @@ body.dark-mode .starred-item { background: #33192b; border-color: #5c2848; color
 /* Ludo 15x15 Couple Board Overhaul */
 .ludo-mode-row { display: flex; gap: 6px; flex-wrap: wrap; }
 .ludo-mode-row > button { flex: 1; white-space: nowrap; min-height: 36px; }
+.game-live-banner {
+    background: linear-gradient(135deg, #fdf2f8, #fce7f3); border: 1.5px solid #ec407a;
+    color: #880e4f; border-radius: 12px; padding: 7px 10px; font-size: 11.5px; font-weight: 700;
+    line-height: 1.35; text-align: center;
+}
+.game-live-banner.my-turn {
+    background: linear-gradient(135deg, #dcfce7, #fef9c3); border-color: #16a34a; color: #14532d;
+}
+body.dark-mode .game-live-banner {
+    background: linear-gradient(135deg, #3b1831, #4c1d3d); border-color: #ec407a; color: #fbcfe8;
+}
+body.dark-mode .game-live-banner.my-turn {
+    background: linear-gradient(135deg, #14532d, #3b1831); border-color: #22c55e; color: #dcfce7;
+}
 .ludo-stake-bar { display: flex; gap: 6px; align-items: center; }
 .ludo-stake-select { font-size: 12px; padding: 6px 10px; border-radius: 12px; font-weight: 700; color: #880e4f; }
 .ludo-hud-bar {

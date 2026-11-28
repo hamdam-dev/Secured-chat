@@ -10,7 +10,8 @@ import {
   getPayloadUpdatedAtMs,
   shouldApplyGameSync,
   upsertGameSyncEntry,
-  isLiveGameFinished
+  isLiveGameFinished,
+  extractActiveLiveGameIds
 } from "../shared/chatLogic.js";
 import {
   EMOJI_SECTIONS,
@@ -33,6 +34,7 @@ const LAST_REMOTE_GAME_AT_KEY = "sc_last_remote_game_at_v1";
 const STARRED_MSGS_KEY = "sc_starred_msgs_v1";
 const DISAPPEAR_HRS_KEY = "sc_disappear_hrs_v1";
 const PENDING_QUEUE_KEY = "sc_pending_msgs_v1";
+const ACTIVE_LIVE_GAMES_KEY = "sc_active_live_games_v1";
 
 function formatDuration(sec = 0) {
   const s = Math.max(0, Math.floor(sec));
@@ -118,6 +120,8 @@ export function createChatManager({
   let searchIdx = 0;
   let flushingPending = false;
   let walletGiftHandler = null;
+  let messagesChangedHandler = null;
+  const liveGameDocUnsubs = new Map();
   let editingMsgId = null;
   const viewOnceCheck = document.getElementById("view-once-checkbox");
   const viewOnceBtn = document.getElementById("view-once-btn");
@@ -725,7 +729,7 @@ export function createChatManager({
       // Channel 2: User-owned status doc sync so BOTH partners' moves always sync live!
       if (user) {
         const entry = { msgId, cipher, by: user.uid, at: updatedAtMs };
-        const nextLog = upsertGameSyncEntry(readJson(GAME_SYNC_LOG_KEY, []), entry, 12);
+        const nextLog = upsertGameSyncEntry(readJson(GAME_SYNC_LOG_KEY, []), entry, 24);
         writeJson(GAME_SYNC_LOG_KEY, nextLog);
         await setDoc(
           doc(db, "status", user.uid),
@@ -776,8 +780,24 @@ export function createChatManager({
         pendingGameSyncs.set(item.msgId, { at: incomingAt, by: actor, decrypted: dec });
       }
 
-      const m = messagesMap.get(item.msgId);
-      if (m && shouldApplyGameSync(getPayloadUpdatedAtMs(m.decrypted), incomingAt)) {
+      const deleted = getDeletedLocalSet();
+      let m = messagesMap.get(item.msgId);
+      if (!m && dec.gameData && !deleted.has(item.msgId) && !isMessageExpired(dec)) {
+        m = {
+          id: item.msgId,
+          sender: actor,
+          createdAtSec: Math.floor(incomingAt / 1000),
+          createdAtNs: 0,
+          reaction: "",
+          reactions: null,
+          decrypted: dec
+        };
+        messagesMap.set(item.msgId, m);
+        changed = true;
+        if (dec.gameData && gameUpdateHandler) {
+          gameUpdateHandler(m);
+        }
+      } else if (m && shouldApplyGameSync(getPayloadUpdatedAtMs(m.decrypted), incomingAt)) {
         m.decrypted = dec;
         changed = true;
         if (dec.gameData && gameUpdateHandler) {
@@ -797,6 +817,7 @@ export function createChatManager({
     if (changed) {
       renderAllMessages(false, true);
       saveMsgCache();
+      syncLiveGameDocSubscriptions();
     }
     if (newestRemoteAt > lastRemoteGameAt && latestUpdate) {
       lastRemoteGameAt = newestRemoteAt;
@@ -1410,6 +1431,108 @@ export function createChatManager({
     } else if (scrollToBottom) {
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
+    messagesChangedHandler?.();
+  }
+
+  function syncLiveGameDocSubscriptions() {
+    const db = getDb();
+    const deleted = getDeletedLocalSet();
+    const storedIds = readJson(ACTIVE_LIVE_GAMES_KEY, []);
+    const fromMap = extractActiveLiveGameIds([...messagesMap.values()], 8);
+    const mergedIds = [];
+    const seen = new Set();
+    [...fromMap, ...(Array.isArray(storedIds) ? storedIds : [])].forEach(id => {
+      if (!id || seen.has(id) || deleted.has(id)) return;
+      const existing = messagesMap.get(id);
+      if (existing?.decrypted?.gameData && isLiveGameFinished(existing.decrypted.gameData)) return;
+      seen.add(id);
+      mergedIds.push(id);
+    });
+    const desiredIds = mergedIds.slice(0, 8);
+    writeJson(ACTIVE_LIVE_GAMES_KEY, desiredIds);
+
+    const desiredSet = new Set(desiredIds);
+    for (const [id, unsub] of liveGameDocUnsubs.entries()) {
+      if (!desiredSet.has(id)) {
+        try { unsub(); } catch {}
+        liveGameDocUnsubs.delete(id);
+      }
+    }
+
+    if (!db) return;
+    desiredIds.forEach(msgId => {
+      if (liveGameDocUnsubs.has(msgId)) return;
+      const unsub = onSnapshot(doc(db, "messages", msgId), async snap => {
+        if (!snap.exists()) {
+          if (messagesMap.delete(msgId)) {
+            renderAllMessages(false, true);
+            saveMsgCache();
+          }
+          const nextStored = readJson(ACTIVE_LIVE_GAMES_KEY, []).filter(x => x !== msgId);
+          writeJson(ACTIVE_LIVE_GAMES_KEY, nextStored);
+          try { unsub(); } catch {}
+          liveGameDocUnsubs.delete(msgId);
+          return;
+        }
+        const raw = snap.data();
+        const dec = await decryptPayload(raw.text).catch(() => null);
+        if (!dec || isMessageExpired(dec)) return;
+
+        const prevLocal = messagesMap.get(msgId);
+        const msgAt = getPayloadUpdatedAtMs(dec);
+        const pending = pendingGameSyncs.get(msgId);
+        const effectiveDec = pending && shouldApplyGameSync(msgAt, pending.at)
+          ? pending.decrypted
+          : dec;
+        const effAt = getPayloadUpdatedAtMs(effectiveDec);
+        if (msgAt && (!pending || msgAt >= pending.at)) {
+          pendingGameSyncs.set(msgId, { at: msgAt, by: raw.sender, decrypted: dec });
+        }
+
+        const prevAt = getPayloadUpdatedAtMs(prevLocal?.decrypted);
+        if (prevLocal && effAt && effAt <= prevAt) return;
+
+        const mergedReactions = raw.reactions || prevLocal?.reactions || null;
+        const reactionSummary = mergedReactions
+          ? getDisplayReactionsList(mergedReactions, raw.reaction || "").join(" ")
+          : (raw.reaction || prevLocal?.reaction || "");
+        const nextMsg = {
+          id: msgId,
+          sender: raw.sender,
+          createdAtSec: raw.createdAt?.seconds || prevLocal?.createdAtSec || Math.floor(Date.now() / 1000),
+          createdAtNs: raw.createdAt?.nanoseconds || prevLocal?.createdAtNs || 0,
+          reaction: reactionSummary,
+          reactions: mergedReactions,
+          decrypted: effectiveDec
+        };
+        messagesMap.set(msgId, nextMsg);
+        renderAllMessages(false, true);
+        saveMsgCache();
+
+        if (effectiveDec?.gameData && gameUpdateHandler) {
+          gameUpdateHandler(nextMsg);
+        }
+
+        const lastActor = effectiveDec?.gameData?.lastUpdatedBy || raw.sender;
+        const nKey = `${msgId}|${effAt}`;
+        if (lastActor && lastActor !== myUid && effAt && !notifiedUpdateKeys.has(nKey)) {
+          notifiedUpdateKeys.add(nKey);
+          showGameUpdateBanner(msgId, buildGameUpdateLabel(effectiveDec));
+          if (notes.isChatVisible() && document.visibilityState === "visible") {
+            playEmotionSound("gift");
+            markMessagesAsRead();
+          } else {
+            notifications.showBrowserAlert("letter");
+          }
+        }
+
+        if (effectiveDec?.gameData && isLiveGameFinished(effectiveDec.gameData)) {
+          const nextStored = readJson(ACTIVE_LIVE_GAMES_KEY, []).filter(x => x !== msgId);
+          writeJson(ACTIVE_LIVE_GAMES_KEY, nextStored);
+        }
+      });
+      liveGameDocUnsubs.set(msgId, unsub);
+    });
   }
 
   function refreshTicksInPlace() {
@@ -1524,6 +1647,7 @@ export function createChatManager({
           messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight < 180;
         renderAllMessages(nearBottom || incomingNew);
         saveMsgCache();
+        syncLiveGameDocSubscriptions();
       }
       if (incomingNew) {
         if (notes.isChatVisible() && document.visibilityState === "visible") {
@@ -1544,6 +1668,7 @@ export function createChatManager({
       }
       flushPendingQueue();
     });
+    syncLiveGameDocSubscriptions();
   }
 
   async function sendEncryptedMessage(payloadObj, alertKind = "message") {
@@ -1585,6 +1710,9 @@ export function createChatManager({
         });
         renderAllMessages(true);
         saveMsgCache();
+        if (payloadObj?.gameData) {
+          syncLiveGameDocSubscriptions();
+        }
       }
       if (!payloadObj.isCallLog) notifications.sendPushAlert(alertKind);
       return { id: docRef.id, payload: payloadObj };
@@ -2258,6 +2386,10 @@ export function createChatManager({
       unsubMsgs();
       unsubMsgs = null;
     }
+    liveGameDocUnsubs.forEach(unsub => {
+      try { unsub(); } catch {}
+    });
+    liveGameDocUnsubs.clear();
     myUid = null;
     messagesMap.clear();
     pendingGameSyncs.clear();
@@ -2290,6 +2422,7 @@ export function createChatManager({
     setGameRenderer(fn) { gameRenderer = fn; },
     setGameUpdateHandler(fn) { gameUpdateHandler = fn; },
     setWalletGiftHandler(fn) { walletGiftHandler = fn; },
+    setMessagesChangedHandler(fn) { messagesChangedHandler = fn; },
     getLoadedMessages() { return [...messagesMap.values()]; },
     getMessageById,
     getLatestLiveGameMsg,

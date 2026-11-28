@@ -96,6 +96,14 @@
             <button type="button" id="close-game-update-btn" class="pinned-close-btn" aria-label="Dismiss game alert">✕</button>
         </div>
 
+        <div id="active-game-bar" style="display:none;">
+            <button type="button" id="active-game-resume-btn" class="pinned-jump-btn">
+                <span class="pinned-icon">🕹️</span>
+                <span id="active-game-preview">Live Game Chal Raha Hai — Tap to Resume</span>
+            </button>
+            <button type="button" id="close-active-game-btn" class="pinned-close-btn" aria-label="Hide active game bar">✕</button>
+        </div>
+
         <div id="chat-search-bar" style="display:none;">
             <input type="search" id="chat-search-input" placeholder="Chat mein dhoondhein..." aria-label="Search chat messages">
             <span id="chat-search-count"></span>
@@ -280,8 +288,9 @@
     <div class="modal-backdrop" id="games-modal">
         <div class="modal-card care-sheet-card games-hub-card">
             <div class="care-sheet-head">
-                <h4>Games Arcade 🎮</h4>
+                <h4>Games 🎮</h4>
                 <div class="care-head-actions">
+                    <button type="button" id="minimize-games-btn" class="game-mini-btn" title="Chat par wapas jaayen bina game band kiye">💬 Chat</button>
                     <button type="button" id="games-open-saza-btn" class="game-mini-btn">🎯 Saza</button>
                     <button type="button" id="games-open-wallet-btn" class="game-mini-btn">🎟️ Wallet</button>
                     <button class="ep-close-btn" id="close-games-btn" type="button" aria-label="Close">✕</button>
@@ -304,6 +313,7 @@
                     <button type="button" class="game-mini-btn active" id="ludo-rule-btn" title="Classic or Quick Start">⚡ Quick</button>
                     <button type="button" class="game-mini-btn" id="send-ludo-chat-btn">💬 Live Partner</button>
                 </div>
+                <div id="ludo-live-banner" class="game-live-banner" style="display:none;"></div>
                 <div class="ludo-stake-bar">
                     <select id="ludo-stake-select" class="care-input ludo-stake-select" aria-label="Ludo match reward or punishment"></select>
                 </div>
@@ -411,20 +421,22 @@
 
                 <div class="game-subpane" data-subpane="easy:c4">
                     <div id="c4-mode-title" class="care-section-title">🍓 Connect 4 Dil</div>
+                    <div id="c4-live-banner" class="game-live-banner" style="display:none;"></div>
                     <div id="c4-local-status" class="game-card-sub">Aapki baari (❤️) — Column tap karein!</div>
                     <div id="c4-local-grid" class="c4-grid"></div>
                     <div class="game-btn-row">
-                        <button type="button" id="c4-local-reset" class="modal-btn">🤖 Vs Bot</button>
+                        <button type="button" id="c4-local-reset" class="modal-btn">🤖 Naya Bot</button>
                         <button type="button" id="start-c4-btn" class="modal-btn primary">💬 Live Partner</button>
                     </div>
                 </div>
 
                 <div class="game-subpane" data-subpane="easy:ttt" style="display:none;">
                     <div id="ttt-mode-title" class="care-section-title">❤️ vs 😘 Tic-Tac-Toe</div>
+                    <div id="ttt-live-banner" class="game-live-banner" style="display:none;"></div>
                     <div id="ttt-local-status" class="game-card-sub">Aap ❤️ hain — Kisi bhi box par tap karein!</div>
                     <div id="ttt-local-grid" class="ttt-grid" style="margin:0 auto;"></div>
                     <div class="game-btn-row">
-                        <button type="button" id="ttt-local-reset" class="modal-btn">🤖 Vs Bot</button>
+                        <button type="button" id="ttt-local-reset" class="modal-btn">🤖 Naya Bot</button>
                         <button type="button" id="start-ttt-btn" class="modal-btn primary">💬 Live Partner</button>
                     </div>
                 </div>
@@ -463,10 +475,12 @@
                         <span class="care-section-title">💥 Heart Pop Rush (15s)</span>
                         <span id="pop-rush-hud" class="catcher-hud tabular-nums">Score: 0 · 15s</span>
                     </div>
+                    <div id="duel-banner-pop" class="game-live-banner" style="display:none;"></div>
                     <div id="pop-rush-grid" class="pop-rush-grid"></div>
                     <div class="game-btn-row">
-                        <button type="button" id="pop-rush-start-btn" class="modal-btn primary" data-start="true">▶ Start 15s Rush</button>
-                        <button type="button" id="pop-rush-share-btn" class="modal-btn">💬 Score Share</button>
+                        <button type="button" id="pop-rush-start-btn" class="modal-btn primary" data-start="true">▶ Start 15s</button>
+                        <button type="button" id="pop-rush-reset-btn" class="modal-btn">🔄 Naya</button>
+                        <button type="button" id="pop-rush-share-btn" class="modal-btn">⚔️ Live Duel</button>
                     </div>
                 </div>
             </div>
@@ -483,6 +497,7 @@
 
                 <div class="game-subpane" data-subpane="hard:2048">
                     <div class="care-section-title">🔢 Couple 2048 Heart Merge</div>
+                    <div id="duel-banner-g2048" class="game-live-banner" style="display:none;"></div>
                     <div class="g2048-hud">
                         <span id="g2048-score" class="tabular-nums">Score: 0</span>
                         <span id="g2048-status">Swipe ya Arrows use karein</span>
@@ -495,7 +510,7 @@
                         <button type="button" class="game-mini-btn" data-g2048-dir="down" aria-label="Slide Down">⬇️</button>
                         <button type="button" class="game-mini-btn" data-g2048-dir="right" aria-label="Slide Right">➡️</button>
                         <button type="button" id="g2048-reset-btn" class="game-mini-btn" aria-label="Reset 2048">🔄</button>
-                        <button type="button" id="g2048-share-btn" class="game-mini-btn active" aria-label="Share 2048 score">📤</button>
+                        <button type="button" id="g2048-share-btn" class="game-mini-btn active" aria-label="Challenge 2048 duel">⚔️</button>
                     </div>
                 </div>
 
@@ -513,10 +528,11 @@
 
                 <div class="game-subpane" data-subpane="hard:dots" style="display:none;">
                     <div id="dots-mode-title" class="care-section-title">📦 Dots & Boxes (Dil Kabza)</div>
+                    <div id="dots-live-banner" class="game-live-banner" style="display:none;"></div>
                     <div id="dots-local-status" class="game-card-sub">❤️ 0 · 😘 0 · Line par tap karein!</div>
                     <div id="dots-local-grid" class="dots-grid"></div>
                     <div class="game-btn-row">
-                        <button type="button" id="dots-local-reset" class="modal-btn">🤖 Vs Bot</button>
+                        <button type="button" id="dots-local-reset" class="modal-btn">🤖 Naya Bot</button>
                         <button type="button" id="start-dots-btn" class="modal-btn primary">💬 Live Partner</button>
                     </div>
                 </div>
@@ -541,14 +557,15 @@
                         <span class="care-section-title">🧩 Sliding Love Puzzle</span>
                         <span id="puzzle-status" class="catcher-hud tabular-nums">Moves: 0 · 0s</span>
                     </div>
+                    <div id="duel-banner-puzzle" class="game-live-banner" style="display:none;"></div>
                     <div class="game-btn-row">
                         <button type="button" class="game-mini-btn active" data-puzzle-size="3">🐣 3×3 (8-Tile)</button>
                         <button type="button" class="game-mini-btn" data-puzzle-size="4">🔥 4×4 (15-Tile)</button>
                     </div>
                     <div id="sliding-puzzle-grid" class="puzzle-grid size-3"></div>
                     <div class="game-btn-row">
-                        <button type="button" id="puzzle-reset-btn" class="modal-btn">🔄 Shuffle</button>
-                        <button type="button" id="puzzle-share-btn" class="modal-btn primary">💬 Score Share</button>
+                        <button type="button" id="puzzle-reset-btn" class="modal-btn">🔄 Naya</button>
+                        <button type="button" id="puzzle-share-btn" class="modal-btn primary">⚔️ Live Duel</button>
                     </div>
                 </div>
             </div>
@@ -565,6 +582,7 @@
 
                 <div class="game-subpane" data-subpane="arcade:catcher">
                     <div class="care-section-title">💘 Heart Catcher (30s Arcade)</div>
+                    <div id="duel-banner-catcher" class="game-live-banner" style="display:none;"></div>
                     <div class="game-btn-row">
                         <button type="button" class="game-mini-btn active" data-catcher-diff="easy">🐣 Asan</button>
                         <button type="button" class="game-mini-btn" data-catcher-diff="hard">🔥 Mushkil</button>
@@ -577,11 +595,15 @@
                             <button type="button" id="catcher-start-btn" class="modal-btn primary" data-start="true">▶ Start Game</button>
                         </div>
                     </div>
-                    <button type="button" id="catcher-share-btn" class="modal-btn">💬 Score Challenge Bhejein</button>
+                    <div class="game-btn-row">
+                        <button type="button" id="catcher-reset-btn" class="modal-btn">🔄 Naya</button>
+                        <button type="button" id="catcher-share-btn" class="modal-btn primary">⚔️ Live Duel</button>
+                    </div>
                 </div>
 
                 <div class="game-subpane" data-subpane="arcade:snake" style="display:none;">
                     <div class="care-section-title">🐍 Love Snake</div>
+                    <div id="duel-banner-snake" class="game-live-banner" style="display:none;"></div>
                     <div class="game-btn-row">
                         <button type="button" class="game-mini-btn active" data-snake-speed="easy">🐣 Slow</button>
                         <button type="button" class="game-mini-btn" data-snake-speed="hard">🔥 Fast</button>
@@ -602,7 +624,10 @@
                             <button type="button" class="game-mini-btn" data-snake-dir="right" aria-label="Snake Right">➡️</button>
                         </div>
                     </div>
-                    <button type="button" id="snake-share-btn" class="modal-btn">💬 Snake Score Share</button>
+                    <div class="game-btn-row">
+                        <button type="button" id="snake-reset-btn" class="modal-btn">🔄 Naya</button>
+                        <button type="button" id="snake-share-btn" class="modal-btn primary">⚔️ Live Duel</button>
+                    </div>
                 </div>
 
                 <div class="game-subpane" data-subpane="arcade:breaker" style="display:none;">
@@ -610,6 +635,7 @@
                         <span class="care-section-title">🧱 Dil Brick Breaker</span>
                         <span id="breaker-hud" class="catcher-hud tabular-nums">Score: 0 · ❤️ 3</span>
                     </div>
+                    <div id="duel-banner-breaker" class="game-live-banner" style="display:none;"></div>
                     <div class="catcher-stage">
                         <canvas id="breaker-canvas" width="320" height="230"></canvas>
                         <div id="breaker-overlay" class="catcher-overlay">
@@ -617,11 +643,15 @@
                             <button type="button" id="breaker-start-btn" class="modal-btn primary" data-start="true">▶ Start Breaker</button>
                         </div>
                     </div>
-                    <button type="button" id="breaker-share-btn" class="modal-btn">💬 Breaker Score Share</button>
+                    <div class="game-btn-row">
+                        <button type="button" id="breaker-reset-btn" class="modal-btn">🔄 Naya</button>
+                        <button type="button" id="breaker-share-btn" class="modal-btn primary">⚔️ Live Duel</button>
+                    </div>
                 </div>
 
                 <div class="game-subpane" data-subpane="arcade:memory" style="display:none;">
                     <div class="care-section-title">🃏 Heart Memory Match</div>
+                    <div id="duel-banner-memory" class="game-live-banner" style="display:none;"></div>
                     <div class="game-btn-row">
                         <button type="button" class="game-mini-btn active" data-mem-diff="easy">🐣 4×3 Asan</button>
                         <button type="button" class="game-mini-btn" data-mem-diff="hard">🔥 4×4 Mushkil</button>
@@ -630,7 +660,7 @@
                     <div id="memory-game-board" class="memory-board"></div>
                     <div class="game-btn-row">
                         <button class="modal-btn" id="memory-restart-btn" type="button">🔄 Naya Game</button>
-                        <button class="modal-btn primary" id="memory-share-btn" type="button">💬 Score Share</button>
+                        <button class="modal-btn primary" id="memory-share-btn" type="button">⚔️ Live Duel</button>
                     </div>
                 </div>
 
@@ -639,11 +669,15 @@
                         <span class="care-section-title">⚡ Love Reflex Duel (3 Rounds)</span>
                         <span id="reflex-hud" class="catcher-hud tabular-nums">Best: — ms</span>
                     </div>
+                    <div id="duel-banner-reflex" class="game-live-banner" style="display:none;"></div>
                     <button type="button" id="reflex-pad" class="reflex-pad">
                         💖 Tap to Start Reflex Test!
                     </button>
                     <div id="reflex-rounds-list" class="game-card-sub tabular-nums">3 rounds ka average speed dekhein!</div>
-                    <button type="button" id="reflex-share-btn" class="modal-btn primary">💬 Speed Challenge Bhejein</button>
+                    <div class="game-btn-row">
+                        <button type="button" id="reflex-reset-btn" class="modal-btn">🔄 Naya</button>
+                        <button type="button" id="reflex-share-btn" class="modal-btn primary">⚔️ Live Duel</button>
+                    </div>
                 </div>
             </div>
 

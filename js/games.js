@@ -35,8 +35,18 @@ import {
   createSlidingPuzzle,
   moveSlidingTile,
   createSnakeState,
-  stepSnakeState
+  stepSnakeState,
+  resolveTwoPlayerTurn,
+  resolveLiveLudoTurnAccess,
+  SCORE_DUEL_GAMES,
+  createScoreDuel,
+  submitScoreDuelTurn
 } from "../shared/gameLogic.js";
+import {
+  isLiveGameFinished,
+  describeLiveGameTurn,
+  pickActiveResumeGame
+} from "../shared/chatLogic.js";
 import {
   DEFAULT_SAZA_WHEEL,
   getEffectivePool,
@@ -46,6 +56,7 @@ import {
 import { createIntimateGamesManager } from "./intimateGames.js";
 
 const UNIVERSAL_CUSTOM_KEY = "sc_custom_games_v2";
+const GAMES_PROGRESS_KEY = "sc_games_progress_v1";
 
 const TDW_BANK = {
   easy: [
@@ -276,15 +287,27 @@ export function createGamesManager({ getAuth, chat }) {
     arcade: "arcade:catcher"
   };
 
-  // Ludo state
+  // Ludo & Live Board states
   let ludoMode = "bot";
   let ludoQuick = true;
   let ludoSelectedStake = "";
   let ludoState = buildInitialLudo("bot", true);
   let ludoBotTimer = null;
   let liveLudoMsg = null;
+  let liveC4Msg = null;
+  let liveTttMsg = null;
+  let liveDotsMsg = null;
+  const activeLiveBindings = { ludo: "", c4: "", ttt: "", dots: "" };
+  const activeDuelIds = {
+    pop: "", g2048: "", puzzle: "", catcher: "", snake: "", breaker: "", memory: "", reflex: ""
+  };
+  let preferredResumeMsgId = "";
+  let activeBarDismissedSig = "";
   let ludoCellNodes = null;
   const ludoStakeSelect = document.getElementById("ludo-stake-select");
+  const activeGameBar = document.getElementById("active-game-bar");
+  const activeGamePreviewEl = document.getElementById("active-game-preview");
+  const minimizeBtn = document.getElementById("minimize-games-btn");
 
   // Universal Custom / Saza Bank state
   let activeSazaCat = "saza";
@@ -389,6 +412,7 @@ export function createGamesManager({ getAuth, chat }) {
 
   // Heart Pop Rush 15s state
   let popRunning = false;
+  let popPaused = false;
   let popScore = 0;
   let popBest = Number(localStorage.getItem("sc_pop_best_v1") || "0");
   let popTimeLeft = 15;
@@ -402,7 +426,7 @@ export function createGamesManager({ getAuth, chat }) {
   let g2048Score = 0;
   let g2048Best = Number(localStorage.getItem("sc_2048_best_v1") || "0");
 
-  const lockGuess = ["❤️", "💜", "💛", "🌹"];
+  let lockGuess = ["❤️", "💜", "💛", "🌹"];
   let lockTarget = Array.from({ length: 4 }, () => LOCK_EMOJIS[Math.floor(Math.random() * LOCK_EMOJIS.length)]);
   let lockHistory = [];
   let lockSolved = false;
@@ -429,12 +453,14 @@ export function createGamesManager({ getAuth, chat }) {
   let memFlipped = [];
   let memMatched = new Set();
   let memMoves = 0;
-  let memStartMs = 0;
+  let memSeconds = 0;
+  let memTimerInt = null;
   let memLock = false;
 
   // Catcher canvas state
   let catcherDiff = "easy";
   let catcherRunning = false;
+  let catcherPaused = false;
   let catcherRaf = null;
   let catcherBasketX = 160;
   let catcherItems = [];
@@ -451,11 +477,13 @@ export function createGamesManager({ getAuth, chat }) {
   let snakeState = createSnakeState(SNAKE_GRID);
   let snakeNextDir = "right";
   let snakeRunning = false;
+  let snakePaused = false;
   let snakeTimerInt = null;
   let snakeBest = Number(localStorage.getItem("sc_snake_best_v1") || "0");
 
   // Dil Brick Breaker canvas state
   let breakerRunning = false;
+  let breakerPaused = false;
   let breakerRaf = null;
   let breakerPaddleX = 160;
   let breakerBall = { x: 160, y: 185, vx: 135, vy: -155 };
@@ -487,40 +515,293 @@ export function createGamesManager({ getAuth, chat }) {
     return st;
   }
 
+  function loadGamesProgress() {
+    try {
+      const raw = localStorage.getItem(GAMES_PROGRESS_KEY);
+      if (!raw) return;
+      const p = JSON.parse(raw);
+      if (!p || typeof p !== "object") return;
+      if (p.activeTab) activeTab = p.activeTab;
+      if (p.activeSubtabs && typeof p.activeSubtabs === "object") {
+        Object.assign(activeSubtabs, p.activeSubtabs);
+      }
+      if (p.activeLiveBindings && typeof p.activeLiveBindings === "object") {
+        Object.assign(activeLiveBindings, p.activeLiveBindings);
+      }
+      if (p.activeDuelIds && typeof p.activeDuelIds === "object") {
+        Object.assign(activeDuelIds, p.activeDuelIds);
+      }
+      if (typeof p.preferredResumeMsgId === "string") preferredResumeMsgId = p.preferredResumeMsgId;
+      if (p.ludoMode === "bot" || p.ludoMode === "local") ludoMode = p.ludoMode;
+      if (typeof p.ludoQuick === "boolean") ludoQuick = p.ludoQuick;
+      if (typeof p.ludoSelectedStake === "string") ludoSelectedStake = p.ludoSelectedStake;
+      if (p.ludoState && Array.isArray(p.ludoState.tokensA) && Array.isArray(p.ludoState.tokensB)) {
+        ludoState = p.ludoState;
+      }
+      if (p.wheelMood) wheelMood = p.wheelMood;
+      if (typeof p.lastWheelResult === "string") lastWheelResult = p.lastWheelResult;
+      if (Array.isArray(p.localCoupons)) localCoupons = p.localCoupons;
+      if (typeof p.localCouponPicked === "number") localCouponPicked = p.localCouponPicked;
+      if (typeof p.localWyrIdx === "number") localWyrIdx = p.localWyrIdx;
+      if (typeof p.localWyrChoice === "string") localWyrChoice = p.localWyrChoice;
+      if (p.tdwTier) tdwTier = p.tdwTier;
+      if (p.currentTdwCard?.prompt) currentTdwCard = p.currentTdwCard;
+
+      if (Array.isArray(p.c4LocalBoard) && p.c4LocalBoard.length === 42) {
+        c4LocalBoard = p.c4LocalBoard;
+        c4LocalWinner = p.c4LocalWinner || "";
+        c4LocalDraw = Boolean(p.c4LocalDraw);
+      }
+      if (Array.isArray(p.tttLocalBoard) && p.tttLocalBoard.length === 9) {
+        tttLocalBoard = p.tttLocalBoard;
+        tttLocalWinner = p.tttLocalWinner || "";
+        tttLocalDraw = Boolean(p.tttLocalDraw);
+      }
+      if (p.rpsScore && typeof p.rpsScore.you === "number") {
+        rpsScore.you = p.rpsScore.you;
+        rpsScore.bot = p.rpsScore.bot || 0;
+      }
+      if (typeof p.popScore === "number") {
+        popScore = p.popScore;
+        popTimeLeft = typeof p.popTimeLeft === "number" ? p.popTimeLeft : 15;
+        popPaused = Boolean(p.popPaused && popTimeLeft > 0 && popTimeLeft < 15);
+      }
+      if (Array.isArray(p.g2048Board) && p.g2048Board.length === 16) {
+        g2048Board = p.g2048Board;
+        g2048Score = Number(p.g2048Score || 0);
+      }
+      if (Array.isArray(p.lockTarget) && p.lockTarget.length === 4) {
+        lockTarget = p.lockTarget;
+        lockGuess = Array.isArray(p.lockGuess) && p.lockGuess.length === 4 ? p.lockGuess : lockGuess;
+        lockHistory = Array.isArray(p.lockHistory) ? p.lockHistory : [];
+        lockSolved = Boolean(p.lockSolved);
+      }
+      if (p.dotsLocal && Array.isArray(p.dotsLocal.hEdges)) dotsLocal = p.dotsLocal;
+      if (typeof p.wordIdx === "number") {
+        wordIdx = p.wordIdx;
+        wordGuessed = Array.isArray(p.wordGuessed) ? p.wordGuessed : [];
+        wordClueUsed = Boolean(p.wordClueUsed);
+      }
+      if (Array.isArray(p.puzzleBoard) && p.puzzleBoard.length >= 9) {
+        puzzleSize = p.puzzleSize === 4 ? 4 : 3;
+        puzzleBoard = p.puzzleBoard;
+        puzzleMoves = Number(p.puzzleMoves || 0);
+        puzzleSeconds = Number(p.puzzleSeconds || 0);
+        puzzleSolved = Boolean(p.puzzleSolved);
+      }
+      if (typeof p.catcherDiff === "string") {
+        catcherDiff = p.catcherDiff === "hard" ? "hard" : "easy";
+        catcherScore = Number(p.catcherScore || 0);
+        catcherLives = typeof p.catcherLives === "number" ? p.catcherLives : 3;
+        catcherTimeLeft = typeof p.catcherTimeLeft === "number" ? p.catcherTimeLeft : 30;
+        catcherBasketX = Number(p.catcherBasketX || 160);
+        catcherItems = Array.isArray(p.catcherItems) ? p.catcherItems : [];
+        catcherPaused = Boolean(p.catcherPaused && catcherLives > 0 && catcherTimeLeft > 0 && catcherTimeLeft < 30);
+      }
+      if (p.snakeState && Array.isArray(p.snakeState.snake)) {
+        snakeSpeed = p.snakeSpeed === "hard" ? "hard" : "easy";
+        snakeState = p.snakeState;
+        snakeNextDir = p.snakeNextDir || "right";
+        snakePaused = Boolean(p.snakePaused && snakeState.alive);
+      }
+      if (Array.isArray(p.breakerBricks) && p.breakerBricks.length) {
+        breakerBricks = p.breakerBricks;
+        breakerScore = Number(p.breakerScore || 0);
+        breakerLives = typeof p.breakerLives === "number" ? p.breakerLives : 3;
+        breakerPaddleX = Number(p.breakerPaddleX || 160);
+        if (p.breakerBall) breakerBall = p.breakerBall;
+        breakerPaused = Boolean(p.breakerPaused && breakerLives > 0 && breakerBricks.some(b => b.alive));
+      }
+      if (Array.isArray(p.memCards) && p.memCards.length) {
+        memPairsCount = p.memPairsCount === 8 ? 8 : 6;
+        memCards = p.memCards;
+        memFlipped = Array.isArray(p.memFlipped) ? p.memFlipped : [];
+        memMatched = new Set(Array.isArray(p.memMatched) ? p.memMatched : []);
+        memMoves = Number(p.memMoves || 0);
+        memSeconds = Number(p.memSeconds || 0);
+      }
+      if (Array.isArray(p.reflexTimes)) {
+        reflexTimes = p.reflexTimes;
+        reflexRound = Number(p.reflexRound || reflexTimes.length);
+        reflexPhase = reflexRound >= 3 ? "done" : "idle";
+      }
+    } catch {}
+  }
+
+  function saveGamesProgress() {
+    try {
+      const snap = {
+        activeTab,
+        activeSubtabs,
+        activeLiveBindings,
+        activeDuelIds,
+        preferredResumeMsgId,
+        ludoMode,
+        ludoQuick,
+        ludoSelectedStake,
+        ludoState,
+        wheelMood,
+        lastWheelResult,
+        localCoupons,
+        localCouponPicked,
+        localWyrIdx,
+        localWyrChoice,
+        tdwTier,
+        currentTdwCard,
+        c4LocalBoard,
+        c4LocalWinner,
+        c4LocalDraw,
+        tttLocalBoard,
+        tttLocalWinner,
+        tttLocalDraw,
+        rpsScore,
+        popScore,
+        popTimeLeft,
+        popPaused,
+        g2048Board,
+        g2048Score,
+        lockTarget,
+        lockGuess,
+        lockHistory,
+        lockSolved,
+        dotsLocal,
+        wordIdx,
+        wordGuessed,
+        wordClueUsed,
+        puzzleSize,
+        puzzleBoard,
+        puzzleMoves,
+        puzzleSeconds,
+        puzzleSolved,
+        catcherDiff,
+        catcherScore,
+        catcherLives,
+        catcherTimeLeft,
+        catcherBasketX,
+        catcherItems,
+        catcherPaused,
+        snakeSpeed,
+        snakeState,
+        snakeNextDir,
+        snakePaused,
+        breakerScore,
+        breakerLives,
+        breakerPaddleX,
+        breakerBall,
+        breakerBricks,
+        breakerPaused,
+        memPairsCount,
+        memCards,
+        memFlipped,
+        memMatched: [...memMatched],
+        memMoves,
+        memSeconds,
+        reflexRound,
+        reflexTimes
+      };
+      localStorage.setItem(GAMES_PROGRESS_KEY, JSON.stringify(snap));
+    } catch {}
+  }
+  loadGamesProgress();
+
   function myUid() {
     return getAuth()?.currentUser?.uid || "";
   }
 
-  function stopCatcherLoop() {
+  function stopMemoryTimer() {
+    clearInterval(memTimerInt);
+    memTimerInt = null;
+  }
+
+  function updateArcadeResumeUi() {
+    const popStartBtn = document.getElementById("pop-rush-start-btn");
+    if (popStartBtn) {
+      popStartBtn.innerText = popPaused ? `▶ Resume (${popTimeLeft}s)` : "▶ Start 15s";
+    }
+    const catcherStartBtn = document.getElementById("catcher-start-btn");
+    if (catcherStartBtn) {
+      catcherStartBtn.innerText = catcherPaused ? `▶ Resume (${Math.ceil(catcherTimeLeft)}s)` : "▶ Start Game";
+    }
+    if (catcherPaused && catcherOverlay && catcherOverlayMsg) {
+      catcherOverlayMsg.innerText = `⏸ Paused! Score: ${catcherScore} · ❤️ ${catcherLives} · ${Math.ceil(catcherTimeLeft)}s`;
+      catcherOverlay.style.display = "flex";
+    }
+    const snakeStartBtn = document.getElementById("snake-start-btn");
+    if (snakeStartBtn) {
+      snakeStartBtn.innerText = snakePaused ? "▶ Resume Snake" : "▶ Start Snake";
+    }
+    if (snakePaused && snakeOverlay && snakeOverlayMsg) {
+      snakeOverlayMsg.innerText = `⏸ Paused! Score: ${snakeState.score} · Tap Resume!`;
+      snakeOverlay.style.display = "flex";
+    }
+    const breakerStartBtn = document.getElementById("breaker-start-btn");
+    if (breakerStartBtn) {
+      breakerStartBtn.innerText = breakerPaused ? "▶ Resume Breaker" : "▶ Start Breaker";
+    }
+    if (breakerPaused && breakerOverlay && breakerOverlayMsg) {
+      breakerOverlayMsg.innerText = `⏸ Paused! Score: ${breakerScore} · ❤️ ${breakerLives}`;
+      breakerOverlay.style.display = "flex";
+    }
+  }
+
+  function stopCatcherLoop(pause = false) {
+    const wasRunning = catcherRunning;
     catcherRunning = false;
     if (catcherRaf) {
       cancelAnimationFrame(catcherRaf);
       catcherRaf = null;
     }
+    if (pause && wasRunning && catcherLives > 0 && catcherTimeLeft > 0) {
+      catcherPaused = true;
+    } else if (!pause) {
+      catcherPaused = false;
+    }
+    updateArcadeResumeUi();
   }
 
-  function stopSnakeLoop() {
+  function stopSnakeLoop(pause = false) {
+    const wasRunning = snakeRunning;
     snakeRunning = false;
     if (snakeTimerInt) {
       clearInterval(snakeTimerInt);
       snakeTimerInt = null;
     }
+    if (pause && wasRunning && snakeState.alive && !snakeState.won) {
+      snakePaused = true;
+    } else if (!pause) {
+      snakePaused = false;
+    }
+    updateArcadeResumeUi();
   }
 
-  function stopBreakerLoop() {
+  function stopBreakerLoop(pause = false) {
+    const wasRunning = breakerRunning;
     breakerRunning = false;
     if (breakerRaf) {
       cancelAnimationFrame(breakerRaf);
       breakerRaf = null;
     }
+    if (pause && wasRunning && breakerLives > 0 && breakerBricks.some(b => b.alive)) {
+      breakerPaused = true;
+    } else if (!pause) {
+      breakerPaused = false;
+    }
+    updateArcadeResumeUi();
   }
 
-  function stopPopRush() {
+  function stopPopRush(pause = false) {
+    const wasRunning = popRunning;
     popRunning = false;
     clearInterval(popTickInt);
     clearInterval(popCountdownInt);
     popTickInt = null;
     popCountdownInt = null;
+    if (pause && wasRunning && popTimeLeft > 0 && popTimeLeft < 15) {
+      popPaused = true;
+    } else if (!pause) {
+      popPaused = false;
+    }
+    updateArcadeResumeUi();
   }
 
   function stopReflex() {
@@ -536,19 +817,259 @@ export function createGamesManager({ getAuth, chat }) {
     puzzleTimerInt = null;
   }
 
-  function stopAllArcadeLoops() {
-    stopCatcherLoop();
-    stopSnakeLoop();
-    stopBreakerLoop();
-    stopPopRush();
+  function stopAllArcadeLoops(pause = false) {
+    stopCatcherLoop(pause);
+    stopSnakeLoop(pause);
+    stopBreakerLoop(pause);
+    stopPopRush(pause);
     stopReflex();
+    stopMemoryTimer();
+  }
+
+  function setLiveBanner(el, text = "", myTurn = false) {
+    if (!el) return;
+    if (!text) {
+      el.style.display = "none";
+      el.classList.remove("my-turn");
+      el.textContent = "";
+      return;
+    }
+    el.style.display = "block";
+    el.classList.toggle("my-turn", Boolean(myTurn));
+    el.textContent = text;
+  }
+
+  function hydrateLiveBindingsFromChat() {
+    const kinds = [
+      ["ludo", () => liveLudoMsg, val => { liveLudoMsg = val; }],
+      ["c4", () => liveC4Msg, val => { liveC4Msg = val; }],
+      ["ttt", () => liveTttMsg, val => { liveTttMsg = val; }],
+      ["dots", () => liveDotsMsg, val => { liveDotsMsg = val; }]
+    ];
+    for (const [kind, getter, setter] of kinds) {
+      const boundId = activeLiveBindings[kind];
+      let msg = boundId ? chat.getMessageById?.(boundId) : null;
+      if (!msg && getter()?.id) {
+        msg = chat.getMessageById?.(getter().id) || getter();
+      }
+      if (!msg && !boundId) {
+        msg = chat.getLatestLiveGameMsg?.(kind, false) || null;
+      }
+      if (msg?.id && msg.decrypted?.gameData?.kind === kind) {
+        setter({ id: msg.id, dec: msg.decrypted });
+        activeLiveBindings[kind] = msg.id;
+      } else if (boundId) {
+        setter(null);
+        activeLiveBindings[kind] = "";
+      }
+    }
+  }
+
+  function updateLiveBannersUI() {
+    const uid = myUid();
+
+    // Ludo banner & mode buttons
+    const ludoBtn = document.getElementById("send-ludo-chat-btn");
+    if (liveLudoMsg?.dec?.gameData) {
+      const st = liveLudoMsg.dec.gameData.ludoState || {};
+      const access = resolveLiveLudoTurnAccess(st, liveLudoMsg.dec.gameData, uid);
+      const isMyTurn = !st.winner && (access.canRoll || access.canMoveToken);
+      const msgText = st.winner
+        ? `🏆 Live Ludo Khatam (${st.winner === "A" ? "❤️ A" : "😘 B"} Jeeta) — 🔄 Naya dabakar naya match lagayen`
+        : (isMyTurn
+          ? `🟢 LIVE PARTNER MATCH — Aapki Baari (${access.mySide || "Player"})! Chalne ke baad Partner ki baari hogi.`
+          : `⏳ LIVE PARTNER MATCH — Partner (${access.currentTurn}) ki baari ka intezar...`);
+      setLiveBanner(document.getElementById("ludo-live-banner"), msgText, isMyTurn);
+      ludoBtn?.classList.add("active");
+      modal?.querySelectorAll("[data-ludo-mode]").forEach(b => b.classList.remove("active"));
+    } else {
+      setLiveBanner(document.getElementById("ludo-live-banner"), "", false);
+      ludoBtn?.classList.remove("active");
+      modal?.querySelectorAll("[data-ludo-mode]").forEach(b => {
+        b.classList.toggle("active", b.dataset.ludoMode === ludoMode);
+      });
+    }
+
+    // C4 live banner
+    const c4Title = document.getElementById("c4-mode-title");
+    if (liveC4Msg?.dec?.gameData) {
+      const gd = liveC4Msg.dec.gameData;
+      const t = resolveTwoPlayerTurn({
+        playerA: gd.playerA || "",
+        playerB: gd.playerB || "",
+        turnSide: gd.turnSide || "",
+        lastMover: gd.lastMover || "",
+        myUid: uid,
+        finished: Boolean(gd.winnerSymbol || gd.draw)
+      });
+      const text = gd.winnerSymbol
+        ? `🏆 Live Connect 4: ${gd.winnerSymbol} Jeet gaya!`
+        : (gd.draw
+          ? "🤝 Live Connect 4 Draw!"
+          : (t.canMove
+            ? `🟢 LIVE PARTNER MATCH (${t.mySym}) — Aapki Baari!`
+            : "⏳ LIVE PARTNER MATCH — Partner ki baari ka intezar..."));
+      setLiveBanner(document.getElementById("c4-live-banner"), text, t.canMove);
+      if (c4Title) c4Title.innerText = "🍓 Connect 4 Dil (Live Partner)";
+    } else {
+      setLiveBanner(document.getElementById("c4-live-banner"), "", false);
+      if (c4Title) c4Title.innerText = "🍓 Connect 4 Dil (Vs Bot)";
+    }
+
+    // TTT live banner
+    const tttTitle = document.getElementById("ttt-mode-title");
+    if (liveTttMsg?.dec?.gameData) {
+      const gd = liveTttMsg.dec.gameData;
+      const t = resolveTwoPlayerTurn({
+        playerA: gd.playerA || "",
+        playerB: gd.playerB || "",
+        turnSide: gd.turnSide || "",
+        lastMover: gd.lastMover || "",
+        myUid: uid,
+        finished: Boolean(gd.winnerSymbol || gd.draw)
+      });
+      const text = gd.winnerSymbol
+        ? `🏆 Live Tic-Tac: ${gd.winnerSymbol} Jeet gaya!`
+        : (gd.draw
+          ? "🤝 Live Tic-Tac Draw!"
+          : (t.canMove
+            ? `🟢 LIVE PARTNER MATCH (${t.mySym}) — Aapki Baari!`
+            : "⏳ LIVE PARTNER MATCH — Partner ki baari ka intezar..."));
+      setLiveBanner(document.getElementById("ttt-live-banner"), text, t.canMove);
+      if (tttTitle) tttTitle.innerText = "❤️ vs 😘 Tic-Tac-Toe (Live Partner)";
+    } else {
+      setLiveBanner(document.getElementById("ttt-live-banner"), "", false);
+      if (tttTitle) tttTitle.innerText = "❤️ vs 😘 Tic-Tac-Toe (Vs Bot)";
+    }
+
+    // Dots live banner
+    const dotsTitle = document.getElementById("dots-mode-title");
+    if (liveDotsMsg?.dec?.gameData) {
+      const gd = liveDotsMsg.dec.gameData;
+      const st = gd.dotsState || createDotsBoxesState();
+      const t = resolveTwoPlayerTurn({
+        playerA: gd.playerA || "",
+        playerB: gd.playerB || "",
+        turnSide: st.turn || gd.turnSide || "A",
+        lastMover: gd.lastMover || "",
+        myUid: uid,
+        finished: Boolean(st.winner)
+      });
+      const text = st.winner
+        ? `🏆 Live Dots: ${st.winner === "draw" ? "Draw" : (st.winner === "A" ? "❤️ A Jeeta" : "😘 B Jeeta")} (${st.scoreA}-${st.scoreB})`
+        : (t.canMove
+          ? `🟢 LIVE PARTNER MATCH (${t.mySym}) — Aapki Baari!`
+          : "⏳ LIVE PARTNER MATCH — Partner ki baari ka intezar...");
+      setLiveBanner(document.getElementById("dots-live-banner"), text, t.canMove);
+      if (dotsTitle) dotsTitle.innerText = "📦 Dots & Boxes (Live Partner)";
+    } else {
+      setLiveBanner(document.getElementById("dots-live-banner"), "", false);
+      if (dotsTitle) dotsTitle.innerText = "📦 Dots & Boxes (Vs Bot)";
+    }
+
+    // Score duel banners
+    Object.keys(SCORE_DUEL_GAMES).forEach(key => {
+      const bannerEl = document.getElementById(`duel-banner-${key}`);
+      const duelId = activeDuelIds[key];
+      const m = duelId ? chat.getMessageById?.(duelId) : null;
+      const gd = m?.decrypted?.gameData;
+      if (!m || !gd || gd.kind !== "score_duel" || gd.winner || gd.playerA === uid) {
+        if (duelId) activeDuelIds[key] = "";
+        setLiveBanner(bannerEl, "", false);
+        return;
+      }
+      setLiveBanner(
+        bannerEl,
+        `⚔️ LIVE DUEL ACTIVE — Target beat karein: ${gd.detailA} · Khel ke '⚔️ Live Duel' dabakar submit karein!`,
+        true
+      );
+    });
+  }
+
+  function hasLocalResumableProgress() {
+    const ludoTouched = !ludoState.winner && (
+      ludoState.dice > 0 ||
+      ludoState.turn === "B" ||
+      (ludoQuick
+        ? (ludoState.tokensA.some((p, i) => i === 0 ? p !== 0 : p !== -1) || ludoState.tokensB.some((p, i) => i === 0 ? p !== 0 : p !== -1))
+        : (ludoState.tokensA.some(p => p !== -1) || ludoState.tokensB.some(p => p !== -1)))
+    );
+    if (ludoTouched) return { subtab: "ludo", label: `🎲 Ludo (${ludoMode === "bot" ? "Vs Bot" : "Pass & Play"}) Jari Hai — Tap to Resume` };
+    if (popPaused) return { subtab: "easy:pop", label: `💥 Heart Pop Rush Paused (${popTimeLeft}s left) — Resume` };
+    if (catcherPaused) return { subtab: "arcade:catcher", label: `💘 Heart Catcher Paused (${catcherScore} pts) — Resume` };
+    if (snakePaused) return { subtab: "arcade:snake", label: `🐍 Love Snake Paused (${snakeState.score} pts) — Resume` };
+    if (breakerPaused) return { subtab: "arcade:breaker", label: `🧱 Brick Breaker Paused (${breakerScore} pts) — Resume` };
+    if (g2048Score > 0 && can2048Move(g2048Board)) return { subtab: "hard:2048", label: `🔢 Couple 2048 (${g2048Score} pts) — Resume` };
+    if (puzzleMoves > 0 && !puzzleSolved) return { subtab: "hard:puzzle", label: `🧩 Puzzle (${puzzleMoves} moves) — Resume` };
+    if (memMoves > 0 && memMatched.size < memCards.length) return { subtab: "arcade:memory", label: `🃏 Memory Match (${memMatched.size / 2}/${memPairsCount}) — Resume` };
+    if (c4LocalBoard.some(Boolean) && !c4LocalWinner && !c4LocalDraw) return { subtab: "easy:c4", label: "🍓 Connect 4 Game Paused — Resume" };
+    if (tttLocalBoard.some(Boolean) && !tttLocalWinner && !tttLocalDraw) return { subtab: "easy:ttt", label: "❤️ Tic-Tac Game Paused — Resume" };
+    if (!dotsLocal.winner && (dotsLocal.hEdges.some(Boolean) || dotsLocal.vEdges.some(Boolean))) {
+      return { subtab: "hard:dots", label: `📦 Dots & Boxes (❤️${dotsLocal.scoreA}·😘${dotsLocal.scoreB}) — Resume` };
+    }
+    return null;
+  }
+
+  let currentResumeTarget = null;
+
+  function refreshActiveGameBar() {
+    if (!activeGameBar || !activeGamePreviewEl) return;
+    const uid = myUid();
+    const msgs = chat.getLoadedMessages?.() || [];
+    const liveMsg = pickActiveResumeGame(msgs, uid, preferredResumeMsgId);
+    const liveInfo = liveMsg?.decrypted?.gameData ? describeLiveGameTurn(liveMsg.decrypted.gameData, uid) : null;
+    const localProg = hasLocalResumableProgress();
+
+    const showLive = () => {
+      if (!liveMsg || !liveInfo || liveInfo.finished) return false;
+      const sig = `live:${liveMsg.id}:${liveInfo.statusLine}`;
+      if (activeBarDismissedSig === sig) {
+        activeGameBar.style.display = "none";
+        return true;
+      }
+      currentResumeTarget = { type: "live", msg: liveMsg, info: liveInfo, sig };
+      activeGameBar.classList.toggle("my-turn", Boolean(liveInfo.isMyTurn));
+      activeGamePreviewEl.innerText = `${liveInfo.icon} ${liveInfo.title}: ${liveInfo.statusLine}`;
+      activeGameBar.style.display = "flex";
+      return true;
+    };
+
+    const showLocal = () => {
+      if (!localProg) return false;
+      const sig = `local:${localProg.subtab}:${localProg.label}`;
+      if (activeBarDismissedSig === sig) {
+        activeGameBar.style.display = "none";
+        return true;
+      }
+      currentResumeTarget = { type: "local", subtab: localProg.subtab, sig };
+      activeGameBar.classList.remove("my-turn");
+      activeGamePreviewEl.innerText = localProg.label;
+      activeGameBar.style.display = "flex";
+      return true;
+    };
+
+    if (liveInfo && !liveInfo.finished && liveInfo.isMyTurn) {
+      if (showLive()) return;
+    }
+    if (localProg) {
+      if (showLocal()) return;
+    }
+    if (liveInfo && !liveInfo.finished) {
+      if (showLive()) return;
+    }
+
+    currentResumeTarget = null;
+    activeGameBar.classList.remove("my-turn");
+    activeGameBar.style.display = "none";
   }
 
   function showSubTab(subKey) {
     if (!subKey || !subKey.includes(":")) return;
-    stopAllArcadeLoops();
+    stopAllArcadeLoops(true);
     const [parentTab] = subKey.split(":");
     activeSubtabs[parentTab] = subKey;
+    saveGamesProgress();
+    updateLiveBannersUI();
 
     const pane = modal?.querySelector(`[data-game-pane="${parentTab}"]`);
     if (pane) {
@@ -572,6 +1093,7 @@ export function createGamesManager({ getAuth, chat }) {
 
     if (subKey === "flirty:coupons") {
       if (!localCoupons.length) shuffleLocalCoupons();
+      else renderLocalCoupons();
     } else if (subKey === "flirty:wyr") {
       renderFlirtyWyr();
     } else if (subKey === "flirty:tdw") {
@@ -595,6 +1117,7 @@ export function createGamesManager({ getAuth, chat }) {
     } else if (subKey === "hard:puzzle") {
       renderSlidingPuzzle();
     } else if (subKey === "arcade:catcher") {
+      updateCatcherHud();
       renderCatcherFrame();
     } else if (subKey === "arcade:snake") {
       renderSnakeFrame();
@@ -609,20 +1132,24 @@ export function createGamesManager({ getAuth, chat }) {
     } else if (subKey === "arcade:reflex") {
       renderReflexUi();
     }
+    updateArcadeResumeUi();
   }
 
-  function stopTransientLoops() {
-    stopAllArcadeLoops();
+  function stopTransientLoops(pause = true) {
+    stopAllArcadeLoops(pause);
     stopPuzzleTimer();
     intimateGames.stopLoops();
     clearTimeout(ludoBotTimer);
+    saveGamesProgress();
   }
 
   function showTab(tabKey, subKey = "") {
     activeTab = tabKey;
-    stopAllArcadeLoops();
+    stopAllArcadeLoops(true);
     if (tabKey !== "hard") stopPuzzleTimer();
     if (tabKey !== "intimate") intimateGames.stopLoops();
+    saveGamesProgress();
+    updateLiveBannersUI();
 
     modal?.querySelectorAll("[data-game-tab]").forEach(b => {
       const isAct = b.dataset.gameTab === tabKey;
@@ -652,6 +1179,7 @@ export function createGamesManager({ getAuth, chat }) {
 
   function openGameSubtab(subKey) {
     if (!modal) return;
+    hydrateLiveBindingsFromChat();
     if (subKey === "ludo" || subKey === "intimate") {
       showTab(subKey);
     } else if (subKey && subKey.includes(":")) {
@@ -659,7 +1187,16 @@ export function createGamesManager({ getAuth, chat }) {
     } else {
       showTab(activeTab || "ludo");
     }
+    updateLiveBannersUI();
     modal.style.display = "flex";
+    saveGamesProgress();
+    refreshActiveGameBar();
+  }
+
+  function minimizeGamesToChat() {
+    stopTransientLoops(true);
+    modal.style.display = "none";
+    refreshActiveGameBar();
   }
 
   modal?.querySelectorAll("[data-game-tab]").forEach(btn => {
@@ -671,14 +1208,74 @@ export function createGamesManager({ getAuth, chat }) {
   });
 
   openBtn?.addEventListener("click", () => {
+    hydrateLiveBindingsFromChat();
     showTab(activeTab || "ludo");
     modal.style.display = "flex";
+    refreshActiveGameBar();
   });
 
-  closeBtn?.addEventListener("click", () => {
-    stopTransientLoops();
-    liveLudoMsg = null;
-    modal.style.display = "none";
+  minimizeBtn?.addEventListener("click", minimizeGamesToChat);
+  closeBtn?.addEventListener("click", minimizeGamesToChat);
+
+  document.getElementById("active-game-resume-btn")?.addEventListener("click", () => {
+    if (!currentResumeTarget) {
+      openGameSubtab(activeTab || "ludo");
+      return;
+    }
+    if (currentResumeTarget.type === "live") {
+      const m = currentResumeTarget.msg;
+      const gd = m.decrypted.gameData;
+      preferredResumeMsgId = m.id;
+      if (gd.kind === "ludo") {
+        liveLudoMsg = { id: m.id, dec: m.decrypted };
+        activeLiveBindings.ludo = m.id;
+        openGameSubtab("ludo");
+        return;
+      }
+      if (gd.kind === "c4") {
+        liveC4Msg = { id: m.id, dec: m.decrypted };
+        activeLiveBindings.c4 = m.id;
+        openGameSubtab("easy:c4");
+        return;
+      }
+      if (gd.kind === "ttt") {
+        liveTttMsg = { id: m.id, dec: m.decrypted };
+        activeLiveBindings.ttt = m.id;
+        openGameSubtab("easy:ttt");
+        return;
+      }
+      if (gd.kind === "dots") {
+        liveDotsMsg = { id: m.id, dec: m.decrypted };
+        activeLiveBindings.dots = m.id;
+        openGameSubtab("hard:dots");
+        return;
+      }
+      if (gd.kind === "score_duel") {
+        if (gd.playerA !== myUid() && !gd.winner && gd.gameKey) {
+          activeDuelIds[gd.gameKey] = m.id;
+          saveGamesProgress();
+          openGameSubtab(gd.challengeSubtab || "arcade:catcher");
+          return;
+        }
+      }
+      chat.jumpToMessage?.(m.id);
+      return;
+    }
+    openGameSubtab(currentResumeTarget.subtab || activeTab || "ludo");
+  });
+
+  document.getElementById("close-active-game-btn")?.addEventListener("click", e => {
+    e.stopPropagation();
+    if (currentResumeTarget?.sig) activeBarDismissedSig = currentResumeTarget.sig;
+    if (activeGameBar) activeGameBar.style.display = "none";
+  });
+
+  chat.setMessagesChangedHandler?.(() => {
+    hydrateLiveBindingsFromChat();
+    if (modal?.style.display === "flex") {
+      updateLiveBannersUI();
+    }
+    refreshActiveGameBar();
   });
 
   // =========================================
@@ -697,27 +1294,38 @@ export function createGamesManager({ getAuth, chat }) {
   async function commitLudoState(nextState, actionDesc = "") {
     if (liveLudoMsg) {
       const uid = myUid();
-      liveLudoMsg.dec.gameData.ludoState = nextState;
+      const prevGd = liveLudoMsg.dec?.gameData || {};
+      const nextPlayerB = prevGd.playerB || (uid && prevGd.playerA && uid !== prevGd.playerA ? uid : "");
+      const nextGd = {
+        ...prevGd,
+        playerB: nextPlayerB,
+        turnSide: nextState.turn,
+        lastMover: uid,
+        ludoState: nextState,
+        lastUpdatedBy: uid,
+        lastActionText: actionDesc || `🎲 Ludo: ${nextState.statusText || "Chaal chali gayi!"}`
+      };
+      liveLudoMsg = {
+        id: liveLudoMsg.id,
+        dec: { ...liveLudoMsg.dec, gameData: nextGd }
+      };
+      activeLiveBindings.ludo = liveLudoMsg.id;
+      preferredResumeMsgId = liveLudoMsg.id;
+      activeBarDismissedSig = "";
+      saveGamesProgress();
       renderLudoBoard();
+      refreshActiveGameBar();
       const homeA = (nextState.tokensA || []).filter(p => p === 56).length;
       const homeB = (nextState.tokensB || []).filter(p => p === 56).length;
-      const stakeSuffix = liveLudoMsg.dec.gameData.stakeText || nextState.stakeText
-        ? `\n🔥 Shart/Saza: ${liveLudoMsg.dec.gameData.stakeText || nextState.stakeText}`
+      const stakeSuffix = prevGd.stakeText || nextState.stakeText
+        ? `\n🔥 Shart/Saza: ${prevGd.stakeText || nextState.stakeText}`
         : "";
       const winNotice = nextState.winner
         ? `🏆 Ludo Couple Match khatam! ${nextState.winner === "A" ? "❤️ Player A" : "😘 Player B"} jeet gaya! (${homeA}/4 vs ${homeB}/4)${stakeSuffix}`
         : "";
       await chat.updateEncryptedMessage(
         liveLudoMsg.id,
-        {
-          ...liveLudoMsg.dec,
-          gameData: {
-            ...liveLudoMsg.dec.gameData,
-            ludoState: nextState,
-            lastUpdatedBy: uid,
-            lastActionText: actionDesc || `🎲 Ludo: ${nextState.statusText || "Chaal chali gayi!"}`
-          }
-        },
+        liveLudoMsg.dec,
         {
           notifyPartner: true,
           alertKind: "letter",
@@ -726,19 +1334,15 @@ export function createGamesManager({ getAuth, chat }) {
       );
     } else {
       ludoState = nextState;
+      saveGamesProgress();
       renderLudoBoard();
+      refreshActiveGameBar();
     }
   }
 
   function isMyLudoTurn(st) {
-    if (!liveLudoMsg) {
-      if (st.mode === "bot" && st.turn === "B") return false;
-      return true;
-    }
-    const uid = myUid();
-    const gd = liveLudoMsg.dec?.gameData || {};
-    const mySide = gd.playerA === uid ? "A" : "B";
-    return st.turn === mySide;
+    const access = resolveLiveLudoTurnAccess(st, liveLudoMsg?.dec?.gameData, myUid());
+    return Boolean(!access.winner && (access.canRoll || access.canMoveToken));
   }
 
   function triggerDiceSpinAnim() {
@@ -839,7 +1443,9 @@ export function createGamesManager({ getAuth, chat }) {
     ensureLudoGridBuilt();
     const st = currentLudoDisplayState();
     const activeStake = liveLudoMsg?.dec?.gameData?.stakeText || st.stakeText || ludoSelectedStake || "";
-    const movableSet = st.canMove && isMyLudoTurn(st)
+    const access = resolveLiveLudoTurnAccess(st, liveLudoMsg?.dec?.gameData, myUid());
+    const canInteract = !access.winner && (access.canRoll || access.canMoveToken);
+    const movableSet = st.canMove && canInteract
       ? new Set(getMovableLudoTokens(st.turn === "A" ? st.tokensA : st.tokensB, st.dice))
       : new Set();
 
@@ -849,10 +1455,14 @@ export function createGamesManager({ getAuth, chat }) {
     if (ludoTurnLabel) {
       if (st.winner) {
         ludoTurnLabel.innerText = st.winner === "A" ? "🏆 ❤️ Jeet Gaya!" : "🏆 😘 Jeet Gaya!";
+      } else if (liveLudoMsg) {
+        ludoTurnLabel.innerText = canInteract
+          ? `🟢 Aapki Baari (${access.mySide === "A" ? "❤️ A" : "😘 B"})  •  Ghar: ❤️${homeA}/4 😘${homeB}/4`
+          : `⏳ Partner Ki Baari (${st.turn === "A" ? "❤️ A" : "😘 B"})  •  Ghar: ❤️${homeA}/4 😘${homeB}/4`;
       } else {
         ludoTurnLabel.innerText = st.turn === "A"
           ? `❤️ A Ki Baari  •  Ghar: ❤️${homeA}/4 😘${homeB}/4`
-          : (st.mode === "bot" && !liveLudoMsg
+          : (st.mode === "bot"
             ? `🤖 Love Bot (😘)  •  Ghar: ❤️${homeA}/4 😘${homeB}/4`
             : `😘 B Ki Baari  •  Ghar: ❤️${homeA}/4 😘${homeB}/4`);
       }
@@ -865,8 +1475,9 @@ export function createGamesManager({ getAuth, chat }) {
       ludoDiceFace.innerText = st.dice ? `${DICE_GLYPHS[st.dice]} ${st.dice}` : "—";
     }
     if (ludoRollBtn) {
-      ludoRollBtn.disabled = Boolean(st.winner || st.canMove || !isMyLudoTurn(st));
+      ludoRollBtn.disabled = Boolean(st.winner || st.canMove || !canInteract);
     }
+    updateLiveBannersUI();
 
     const cellTokens = new Map();
     const pushTok = (side, idx, progress) => {
@@ -924,6 +1535,7 @@ export function createGamesManager({ getAuth, chat }) {
     ludoSelectedStake = ludoStakeSelect.value || "";
     if (!liveLudoMsg) {
       ludoState.stakeText = ludoSelectedStake;
+      saveGamesProgress();
       renderLudoBoard();
     }
   });
@@ -931,11 +1543,13 @@ export function createGamesManager({ getAuth, chat }) {
   modal?.querySelectorAll("[data-ludo-mode]").forEach(btn => {
     btn.addEventListener("click", () => {
       liveLudoMsg = null;
+      activeLiveBindings.ludo = "";
       ludoMode = btn.dataset.ludoMode;
-      modal.querySelectorAll("[data-ludo-mode]").forEach(b => b.classList.toggle("active", b === btn));
       ludoState = buildInitialLudo(ludoMode, ludoQuick);
       clearTimeout(ludoBotTimer);
+      saveGamesProgress();
       renderLudoBoard();
+      refreshActiveGameBar();
     });
   });
 
@@ -946,6 +1560,7 @@ export function createGamesManager({ getAuth, chat }) {
     ludoRuleBtn.classList.toggle("active", ludoQuick);
     clearTimeout(ludoBotTimer);
     ludoState = buildInitialLudo(ludoMode, ludoQuick);
+    saveGamesProgress();
     renderLudoBoard();
   });
 
@@ -964,9 +1579,12 @@ export function createGamesManager({ getAuth, chat }) {
 
   document.getElementById("ludo-reset-btn")?.addEventListener("click", () => {
     liveLudoMsg = null;
+    activeLiveBindings.ludo = "";
     clearTimeout(ludoBotTimer);
     ludoState = buildInitialLudo(ludoMode, ludoQuick);
+    saveGamesProgress();
     renderLudoBoard();
+    refreshActiveGameBar();
   });
 
   document.getElementById("ludo-share-btn")?.addEventListener("click", async () => {
@@ -974,7 +1592,6 @@ export function createGamesManager({ getAuth, chat }) {
     const homeA = (st.tokensA || []).filter(p => p === 56).length;
     const homeB = (st.tokensB || []).filter(p => p === 56).length;
     const stake = liveLudoMsg?.dec?.gameData?.stakeText || st.stakeText || ludoSelectedStake || "";
-    modal.style.display = "none";
     playEmotionSound("gift");
     await chat.sendEncryptedMessage({
       gameData: {
@@ -991,18 +1608,29 @@ export function createGamesManager({ getAuth, chat }) {
   document.getElementById("send-ludo-chat-btn")?.addEventListener("click", async () => {
     const uid = myUid();
     const stake = ludoSelectedStake || "";
-    modal.style.display = "none";
+    const initLudo = buildInitialLudo("chat", ludoQuick);
     playEmotionSound("gift");
-    await chat.sendEncryptedMessage({
+    const res = await chat.sendEncryptedMessage({
       gameData: {
         kind: "ludo",
         title: "Ludo Couple Board",
         stakeText: stake,
         playerA: uid,
         playerB: "",
-        ludoState: buildInitialLudo("chat", ludoQuick)
+        turnSide: "A",
+        lastMover: "",
+        ludoState: initLudo
       }
     }, "letter");
+    if (res?.id) {
+      liveLudoMsg = { id: res.id, dec: res.payload };
+      activeLiveBindings.ludo = res.id;
+      preferredResumeMsgId = res.id;
+      activeBarDismissedSig = "";
+      saveGamesProgress();
+      renderLudoBoard();
+      refreshActiveGameBar();
+    }
   });
 
   // Wire Universal Custom Saza & Tasks Modal
@@ -1364,10 +1992,136 @@ export function createGamesManager({ getAuth, chat }) {
   // =========================================
   // 3. ASAN GAMES (CONNECT 4, TTT, RPS, QUIZ, POP RUSH)
   // =========================================
+  async function submitOrLaunchScoreDuel(gameKey, score, detail, titleOverride = "") {
+    const uid = myUid();
+    const duelId = activeDuelIds[gameKey];
+    const duelMsg = duelId ? chat.getMessageById?.(duelId) : null;
+    if (duelMsg?.decrypted?.gameData?.kind === "score_duel" && !duelMsg.decrypted.gameData.winner && duelMsg.decrypted.gameData.playerA !== uid) {
+      const updatedGd = submitScoreDuelTurn(duelMsg.decrypted.gameData, { uid, score, detail });
+      if (updatedGd) {
+        activeDuelIds[gameKey] = "";
+        saveGamesProgress();
+        updateLiveBannersUI();
+        refreshActiveGameBar();
+        playEmotionSound("gift");
+        modal.style.display = "none";
+        await chat.updateEncryptedMessage(
+          duelMsg.id,
+          { ...duelMsg.decrypted, gameData: updatedGd },
+          {
+            notifyPartner: true,
+            alertKind: "letter",
+            gameNoticeText: updatedGd.lastActionText
+          }
+        );
+        return;
+      }
+    }
+
+    const duelPayload = createScoreDuel({
+      gameKey,
+      title: titleOverride,
+      playerA: uid,
+      scoreA: score,
+      detailA: detail
+    });
+    modal.style.display = "none";
+    playEmotionSound("gift");
+    const res = await chat.sendEncryptedMessage({ gameData: duelPayload }, "letter");
+    if (res?.id) {
+      preferredResumeMsgId = res.id;
+      saveGamesProgress();
+      refreshActiveGameBar();
+    }
+  }
+
+  async function playLiveC4Move(msgId, dec, col) {
+    const uid = myUid();
+    const gd = dec?.gameData || {};
+    const turn = resolveTwoPlayerTurn({
+      playerA: gd.playerA || "",
+      playerB: gd.playerB || "",
+      turnSide: gd.turnSide || "",
+      lastMover: gd.lastMover || "",
+      myUid: uid,
+      finished: Boolean(gd.winnerSymbol || gd.draw)
+    });
+    if (!turn.canMove) return;
+    const board = gd.board || createConnect4Board();
+    const res = dropConnect4Disc(board, col, turn.mySym);
+    if (!res) return;
+    playEmotionSound(res.winner ? "gift" : "chime");
+    const endNotice = res.winner
+      ? `🍓 Connect 4 khatam! ${res.winner} Jeet gaya! 🎉`
+      : (res.draw ? "🍓 Connect 4 Draw ho gaya! 🤝" : "");
+    const nextDec = {
+      ...dec,
+      gameData: {
+        ...gd,
+        board: res.board,
+        playerB: gd.playerB || (uid && gd.playerA && uid !== gd.playerA ? uid : ""),
+        turnSide: turn.nextTurnSide,
+        lastMover: uid,
+        lastUpdatedBy: uid,
+        lastActionText: endNotice || `🍓 Connect 4 mein ${turn.mySym} ne chaal chali!`,
+        winnerSymbol: res.winner || "",
+        draw: res.draw
+      }
+    };
+    if (liveC4Msg?.id === msgId) {
+      liveC4Msg = { id: msgId, dec: nextDec };
+      activeLiveBindings.c4 = msgId;
+      preferredResumeMsgId = msgId;
+      activeBarDismissedSig = "";
+      saveGamesProgress();
+      renderC4Local();
+      refreshActiveGameBar();
+    }
+    await chat.updateEncryptedMessage(
+      msgId,
+      nextDec,
+      { notifyPartner: true, alertKind: "letter", gameNoticeText: endNotice }
+    );
+  }
+
   function renderC4Local() {
     const grid = document.getElementById("c4-local-grid");
     const statusEl = document.getElementById("c4-local-status");
     if (!grid) return;
+    updateLiveBannersUI();
+
+    if (liveC4Msg?.dec?.gameData) {
+      const gd = liveC4Msg.dec.gameData;
+      const uid = myUid();
+      const board = gd.board || createConnect4Board();
+      const winCells = new Set(checkConnect4WinningLine(board)?.cells || []);
+      const turn = resolveTwoPlayerTurn({
+        playerA: gd.playerA || "",
+        playerB: gd.playerB || "",
+        turnSide: gd.turnSide || "",
+        lastMover: gd.lastMover || "",
+        myUid: uid,
+        finished: Boolean(gd.winnerSymbol || gd.draw)
+      });
+      if (statusEl) {
+        if (gd.winnerSymbol) statusEl.innerText = `${gd.winnerSymbol} 4-in-a-Row Jeet gaya! 🎉`;
+        else if (gd.draw) statusEl.innerText = "Board Bhar Gaya — Draw! 🤝";
+        else statusEl.innerText = turn.canMove ? `Aapki baari (${turn.mySym}) — Column tap karein!` : "⏳ Love ki baari ka intezar...";
+      }
+      grid.innerHTML = "";
+      for (let i = 0; i < 42; i++) {
+        const col = i % 7;
+        const cell = document.createElement("button");
+        cell.type = "button";
+        cell.className = "c4-cell" + (winCells.has(i) ? " win-cell" : "");
+        cell.innerText = board[i] || "•";
+        cell.disabled = !turn.canMove;
+        cell.onclick = () => playLiveC4Move(liveC4Msg.id, liveC4Msg.dec, col);
+        grid.appendChild(cell);
+      }
+      return;
+    }
+
     const winInfo = checkConnect4WinningLine(c4LocalBoard);
     const winCells = new Set(winInfo?.cells || []);
 
@@ -1391,8 +2145,10 @@ export function createGamesManager({ getAuth, chat }) {
         c4LocalBoard = res.board;
         c4LocalWinner = res.winner || "";
         c4LocalDraw = res.draw;
+        saveGamesProgress();
         playEmotionSound(res.winner ? "gift" : "chime");
         renderC4Local();
+        refreshActiveGameBar();
         if (!c4LocalWinner && !c4LocalDraw) {
           c4BotBusy = true;
           renderC4Local();
@@ -1404,11 +2160,13 @@ export function createGamesManager({ getAuth, chat }) {
                 c4LocalBoard = bRes.board;
                 c4LocalWinner = bRes.winner || "";
                 c4LocalDraw = bRes.draw;
+                saveGamesProgress();
                 playEmotionSound(bRes.winner ? "gift" : "happy");
               }
             }
             c4BotBusy = false;
             renderC4Local();
+            refreshActiveGameBar();
           }, 360);
         }
       };
@@ -1417,34 +2175,130 @@ export function createGamesManager({ getAuth, chat }) {
   }
 
   document.getElementById("c4-local-reset")?.addEventListener("click", () => {
+    liveC4Msg = null;
+    activeLiveBindings.c4 = "";
     c4LocalBoard = createConnect4Board();
     c4LocalWinner = "";
     c4LocalDraw = false;
     c4BotBusy = false;
+    saveGamesProgress();
     renderC4Local();
+    refreshActiveGameBar();
   });
 
   document.getElementById("start-c4-btn")?.addEventListener("click", async () => {
     const uid = myUid();
-    modal.style.display = "none";
     playEmotionSound("gift");
-    await chat.sendEncryptedMessage({
+    const res = await chat.sendEncryptedMessage({
       gameData: {
         kind: "c4",
         title: "Connect 4 Dil",
         board: createConnect4Board(),
         playerA: uid,
-        lastMover: uid,
+        playerB: "",
+        turnSide: "A",
+        lastMover: "",
         winnerSymbol: "",
         draw: false
       }
     }, "letter");
+    if (res?.id) {
+      liveC4Msg = { id: res.id, dec: res.payload };
+      activeLiveBindings.c4 = res.id;
+      preferredResumeMsgId = res.id;
+      activeBarDismissedSig = "";
+      saveGamesProgress();
+      renderC4Local();
+      refreshActiveGameBar();
+    }
   });
+
+  async function playLiveTttMove(msgId, dec, idx) {
+    const uid = myUid();
+    const gd = dec?.gameData || {};
+    const turn = resolveTwoPlayerTurn({
+      playerA: gd.playerA || "",
+      playerB: gd.playerB || "",
+      turnSide: gd.turnSide || "",
+      lastMover: gd.lastMover || "",
+      myUid: uid,
+      finished: Boolean(gd.winnerSymbol || gd.draw)
+    });
+    if (!turn.canMove) return;
+    const board = gd.board || createInitialTttBoard();
+    const res = applyTttMove(board, idx, turn.mySym);
+    if (!res) return;
+    playEmotionSound(res.winner ? "gift" : "chime");
+    const endNotice = res.winner
+      ? `🎮 Tic-Tac-Toe khatam! ${res.winner} Jeet gaya! 🎉`
+      : (res.draw ? "🎮 Tic-Tac-Toe Draw ho gaya! 🤝" : "");
+    const nextDec = {
+      ...dec,
+      gameData: {
+        ...gd,
+        board: res.board,
+        playerB: gd.playerB || (uid && gd.playerA && uid !== gd.playerA ? uid : ""),
+        turnSide: turn.nextTurnSide,
+        lastMover: uid,
+        lastUpdatedBy: uid,
+        lastActionText: endNotice || `🎮 Tic-Tac-Toe mein ${turn.mySym} ne chaal chali!`,
+        winnerSymbol: res.winner || "",
+        draw: res.draw
+      }
+    };
+    if (liveTttMsg?.id === msgId) {
+      liveTttMsg = { id: msgId, dec: nextDec };
+      activeLiveBindings.ttt = msgId;
+      preferredResumeMsgId = msgId;
+      activeBarDismissedSig = "";
+      saveGamesProgress();
+      renderTttLocal();
+      refreshActiveGameBar();
+    }
+    await chat.updateEncryptedMessage(
+      msgId,
+      nextDec,
+      { notifyPartner: true, alertKind: "letter", gameNoticeText: endNotice }
+    );
+  }
 
   function renderTttLocal() {
     const grid = document.getElementById("ttt-local-grid");
     const statusEl = document.getElementById("ttt-local-status");
     if (!grid) return;
+    updateLiveBannersUI();
+
+    if (liveTttMsg?.dec?.gameData) {
+      const gd = liveTttMsg.dec.gameData;
+      const uid = myUid();
+      const board = gd.board || createInitialTttBoard();
+      const winCells = new Set(checkTttWinningLine(board)?.line || []);
+      const turn = resolveTwoPlayerTurn({
+        playerA: gd.playerA || "",
+        playerB: gd.playerB || "",
+        turnSide: gd.turnSide || "",
+        lastMover: gd.lastMover || "",
+        myUid: uid,
+        finished: Boolean(gd.winnerSymbol || gd.draw)
+      });
+      if (statusEl) {
+        if (gd.winnerSymbol) statusEl.innerText = `${gd.winnerSymbol} Jeet gaya! 🎉`;
+        else if (gd.draw) statusEl.innerText = "Match Draw! 🤝";
+        else statusEl.innerText = turn.canMove ? `Aapki baari (${turn.mySym}) — Box tap karein!` : "⏳ Love ki baari ka intezar...";
+      }
+      grid.innerHTML = "";
+      board.forEach((val, idx) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "ttt-cell" + (winCells.has(idx) ? " win-cell" : "");
+        b.innerText = val || "";
+        b.disabled = !turn.canMove || Boolean(val);
+        b.onclick = () => playLiveTttMove(liveTttMsg.id, liveTttMsg.dec, idx);
+        grid.appendChild(b);
+      });
+      return;
+    }
+
     const winInfo = checkTttWinningLine(tttLocalBoard);
     const winCells = new Set(winInfo?.line || []);
 
@@ -1466,8 +2320,10 @@ export function createGamesManager({ getAuth, chat }) {
         tttLocalBoard = res.board;
         tttLocalWinner = res.winner || "";
         tttLocalDraw = res.draw;
+        saveGamesProgress();
         playEmotionSound(res.winner ? "gift" : "chime");
         renderTttLocal();
+        refreshActiveGameBar();
         if (!tttLocalWinner && !tttLocalDraw) {
           tttBotBusy = true;
           renderTttLocal();
@@ -1479,11 +2335,13 @@ export function createGamesManager({ getAuth, chat }) {
                 tttLocalBoard = bRes.board;
                 tttLocalWinner = bRes.winner || "";
                 tttLocalDraw = bRes.draw;
+                saveGamesProgress();
                 playEmotionSound(bRes.winner ? "gift" : "happy");
               }
             }
             tttBotBusy = false;
             renderTttLocal();
+            refreshActiveGameBar();
           }, 300);
         }
       };
@@ -1492,29 +2350,42 @@ export function createGamesManager({ getAuth, chat }) {
   }
 
   document.getElementById("ttt-local-reset")?.addEventListener("click", () => {
+    liveTttMsg = null;
+    activeLiveBindings.ttt = "";
     tttLocalBoard = createInitialTttBoard();
     tttLocalWinner = "";
     tttLocalDraw = false;
     tttBotBusy = false;
+    saveGamesProgress();
     renderTttLocal();
+    refreshActiveGameBar();
   });
 
   document.getElementById("start-ttt-btn")?.addEventListener("click", async () => {
     const uid = myUid();
-    modal.style.display = "none";
     playEmotionSound("gift");
-    await chat.sendEncryptedMessage({
+    const res = await chat.sendEncryptedMessage({
       gameData: {
         kind: "ttt",
         title: "Pyar Wala Tic-Tac-Toe",
         board: createInitialTttBoard(),
         playerA: uid,
         playerB: "",
-        lastMover: uid,
+        turnSide: "A",
+        lastMover: "",
         winnerSymbol: "",
         draw: false
       }
     }, "letter");
+    if (res?.id) {
+      liveTttMsg = { id: res.id, dec: res.payload };
+      activeLiveBindings.ttt = res.id;
+      preferredResumeMsgId = res.id;
+      activeBarDismissedSig = "";
+      saveGamesProgress();
+      renderTttLocal();
+      refreshActiveGameBar();
+    }
   });
 
   // Instant RPS vs Bot + Chat Live
@@ -1674,15 +2545,20 @@ export function createGamesManager({ getAuth, chat }) {
     }
   }
 
-  function startPopRush() {
-    stopPopRush();
-    popScore = 0;
-    popTimeLeft = 15;
+  function startPopRush(resume = false) {
+    stopPopRush(false);
+    if (!resume || popTimeLeft <= 0 || popTimeLeft >= 15) {
+      popScore = 0;
+      popTimeLeft = 15;
+    }
+    popPaused = false;
     popRunning = true;
     pickNextPopCell();
+    updateArcadeResumeUi();
     popTickInt = setInterval(() => {
       if (!popRunning || modal?.style.display !== "flex") {
-        stopPopRush();
+        stopPopRush(true);
+        saveGamesProgress();
         return;
       }
       pickNextPopCell();
@@ -1692,30 +2568,35 @@ export function createGamesManager({ getAuth, chat }) {
       popTimeLeft--;
       if (popTimeLeft <= 0) {
         popTimeLeft = 0;
-        stopPopRush();
+        stopPopRush(false);
         if (popScore > popBest) {
           popBest = popScore;
           try { localStorage.setItem("sc_pop_best_v1", String(popBest)); } catch {}
         }
         playEmotionSound("gift");
       }
+      saveGamesProgress();
       renderPopRushGrid();
     }, 1000);
   }
 
-  document.getElementById("pop-rush-start-btn")?.addEventListener("click", startPopRush);
+  document.getElementById("pop-rush-start-btn")?.addEventListener("click", () => {
+    startPopRush(popPaused);
+  });
+  document.getElementById("pop-rush-reset-btn")?.addEventListener("click", () => {
+    stopPopRush(false);
+    popScore = 0;
+    popTimeLeft = 15;
+    popActiveIdx = -1;
+    popPaused = false;
+    saveGamesProgress();
+    updateArcadeResumeUi();
+    renderPopRushGrid();
+    refreshActiveGameBar();
+  });
   document.getElementById("pop-rush-share-btn")?.addEventListener("click", async () => {
-    stopPopRush();
-    modal.style.display = "none";
-    playEmotionSound("gift");
-    await chat.sendEncryptedMessage({
-      gameData: {
-        kind: "score_card",
-        challengeSubtab: "easy:pop",
-        title: "Heart Pop Rush (15s)",
-        summary: `Maine 15s mein ${popScore} hearts pop kiye! (Best: ${popBest}) 💥🏆`
-      }
-    }, "letter");
+    stopPopRush(false);
+    await submitOrLaunchScoreDuel("pop", popScore, `${popScore} pts (15s)`, "Heart Pop Rush (15s)");
   });
 
   // =========================================
@@ -1752,8 +2633,10 @@ export function createGamesManager({ getAuth, chat }) {
       g2048Best = g2048Score;
       try { localStorage.setItem("sc_2048_best_v1", String(g2048Best)); } catch {}
     }
+    saveGamesProgress();
     playEmotionSound(res.won || res.gameOver ? "gift" : (res.gained > 0 ? "happy" : "chime"));
     render2048Board();
+    refreshActiveGameBar();
   }
 
   modal?.querySelectorAll("[data-g2048-dir]").forEach(btn => {
@@ -1780,21 +2663,14 @@ export function createGamesManager({ getAuth, chat }) {
   document.getElementById("g2048-reset-btn")?.addEventListener("click", () => {
     g2048Board = create2048Board();
     g2048Score = 0;
+    saveGamesProgress();
     render2048Board();
+    refreshActiveGameBar();
   });
 
   document.getElementById("g2048-share-btn")?.addEventListener("click", async () => {
     const maxTile = Math.max(...g2048Board);
-    modal.style.display = "none";
-    playEmotionSound("gift");
-    await chat.sendEncryptedMessage({
-      gameData: {
-        kind: "score_card",
-        challengeSubtab: "hard:2048",
-        title: "Couple 2048 Challenge",
-        summary: `Mera Score: ${g2048Score} • Best Tile: ${maxTile} (Record: ${g2048Best}) 🏆`
-      }
-    }, "letter");
+    await submitOrLaunchScoreDuel("g2048", g2048Score, `${g2048Score} pts (Tile ${maxTile})`, "Couple 2048 Duel");
   });
 
   // Dil Ka Lock Solo + Challenge
@@ -1937,10 +2813,88 @@ export function createGamesManager({ getAuth, chat }) {
     }, 340);
   }
 
+  async function playLiveDotsMove(msgId, dec, type, edgeIdx) {
+    const uid = myUid();
+    const gd = dec?.gameData || {};
+    const st = gd.dotsState || createDotsBoxesState();
+    const turn = resolveTwoPlayerTurn({
+      playerA: gd.playerA || "",
+      playerB: gd.playerB || "",
+      turnSide: st.turn || gd.turnSide || "A",
+      lastMover: gd.lastMover || "",
+      myUid: uid,
+      finished: Boolean(st.winner)
+    });
+    if (!turn.canMove) return;
+    const next = claimDotsEdge(st, type, edgeIdx, turn.mySide);
+    if (!next) return;
+    playEmotionSound(next.completedNow ? "happy" : "chime");
+    const endNotice = next.winner
+      ? (next.winner === "draw"
+        ? `📦 Dots & Boxes Draw (${next.scoreA}-${next.scoreB}) 🤝`
+        : `📦 Dots & Boxes Jeeta: ${next.winner === "A" ? "❤️ Player A" : "😘 Player B"} (${next.scoreA}-${next.scoreB}) 🏆`)
+      : "";
+    const nextDec = {
+      ...dec,
+      gameData: {
+        ...gd,
+        playerB: gd.playerB || (uid && gd.playerA && uid !== gd.playerA ? uid : ""),
+        turnSide: next.turn,
+        lastMover: uid,
+        dotsState: next,
+        lastUpdatedBy: uid,
+        lastActionText: endNotice || `📦 Dots & Boxes mein line lagi (❤️ ${next.scoreA} · 😘 ${next.scoreB})`
+      }
+    };
+    if (liveDotsMsg?.id === msgId) {
+      liveDotsMsg = { id: msgId, dec: nextDec };
+      activeLiveBindings.dots = msgId;
+      preferredResumeMsgId = msgId;
+      activeBarDismissedSig = "";
+      saveGamesProgress();
+      renderDotsLocal();
+      refreshActiveGameBar();
+    }
+    await chat.updateEncryptedMessage(
+      msgId,
+      nextDec,
+      { notifyPartner: true, alertKind: "letter", gameNoticeText: endNotice }
+    );
+  }
+
   function renderDotsLocal() {
     const grid = document.getElementById("dots-local-grid");
     const statusEl = document.getElementById("dots-local-status");
     if (!grid) return;
+    updateLiveBannersUI();
+
+    if (liveDotsMsg?.dec?.gameData) {
+      const gd = liveDotsMsg.dec.gameData;
+      const st = gd.dotsState || createDotsBoxesState();
+      const uid = myUid();
+      const turn = resolveTwoPlayerTurn({
+        playerA: gd.playerA || "",
+        playerB: gd.playerB || "",
+        turnSide: st.turn || gd.turnSide || "A",
+        lastMover: gd.lastMover || "",
+        myUid: uid,
+        finished: Boolean(st.winner)
+      });
+      if (statusEl) {
+        if (st.winner) {
+          statusEl.innerText = st.winner === "draw"
+            ? `Barabar (${st.scoreA}-${st.scoreB}) 🤝`
+            : `${st.winner === "A" ? "❤️ A" : "😘 B"} Jeet gaya! (${st.scoreA}-${st.scoreB}) 🏆`;
+        } else {
+          statusEl.innerText = `❤️ ${st.scoreA} · 😘 ${st.scoreB} · ${turn.canMove ? `Aapki chaal (${turn.mySym})!` : "⏳ Intezar..."}`;
+        }
+      }
+      renderDotsGridInto(grid, st, turn.canMove, (type, edgeIdx) => {
+        playLiveDotsMove(liveDotsMsg.id, liveDotsMsg.dec, type, edgeIdx);
+      });
+      return;
+    }
+
     if (statusEl) {
       if (dotsLocal.winner) {
         statusEl.innerText = dotsLocal.winner === "draw"
@@ -1955,33 +2909,50 @@ export function createGamesManager({ getAuth, chat }) {
       const next = claimDotsEdge(dotsLocal, type, idx, "A");
       if (!next) return;
       dotsLocal = next;
+      saveGamesProgress();
       playEmotionSound(next.completedNow ? "happy" : "chime");
       if (!dotsLocal.winner && dotsLocal.turn === "B") {
         scheduleDotsBot();
       } else {
         renderDotsLocal();
+        refreshActiveGameBar();
       }
     });
   }
 
   document.getElementById("dots-local-reset")?.addEventListener("click", () => {
+    liveDotsMsg = null;
+    activeLiveBindings.dots = "";
     dotsLocal = createDotsBoxesState();
     dotsBotBusy = false;
+    saveGamesProgress();
     renderDotsLocal();
+    refreshActiveGameBar();
   });
 
   document.getElementById("start-dots-btn")?.addEventListener("click", async () => {
     const uid = myUid();
-    modal.style.display = "none";
     playEmotionSound("gift");
-    await chat.sendEncryptedMessage({
+    const res = await chat.sendEncryptedMessage({
       gameData: {
         kind: "dots",
         title: "Dots & Boxes (Dil Kabza)",
         playerA: uid,
+        playerB: "",
+        turnSide: "A",
+        lastMover: "",
         dotsState: createDotsBoxesState()
       }
     }, "letter");
+    if (res?.id) {
+      liveDotsMsg = { id: res.id, dec: res.payload };
+      activeLiveBindings.dots = res.id;
+      preferredResumeMsgId = res.id;
+      activeBarDismissedSig = "";
+      saveGamesProgress();
+      renderDotsLocal();
+      refreshActiveGameBar();
+    }
   });
 
   // Word Boojho Solo Play + Hint + Custom Send
@@ -2087,7 +3058,9 @@ export function createGamesManager({ getAuth, chat }) {
     puzzleMoves = 0;
     puzzleSeconds = 0;
     puzzleSolved = false;
+    saveGamesProgress();
     renderSlidingPuzzle();
+    refreshActiveGameBar();
   }
 
   function renderSlidingPuzzle() {
@@ -2108,7 +3081,7 @@ export function createGamesManager({ getAuth, chat }) {
         b.onclick = () => {
           const moved = moveSlidingTile(puzzleBoard, puzzleSize, idx);
           if (!moved) return;
-          if (!puzzleTimerInt && puzzleMoves === 0) {
+          if (!puzzleTimerInt && !puzzleSolved) {
             puzzleTimerInt = setInterval(() => {
               if (!puzzleSolved && modal?.style.display === "flex" && activeSubtabs.hard === "hard:puzzle") {
                 puzzleSeconds++;
@@ -2125,7 +3098,9 @@ export function createGamesManager({ getAuth, chat }) {
           } else {
             playEmotionSound("chime");
           }
+          saveGamesProgress();
           renderSlidingPuzzle();
+          refreshActiveGameBar();
         };
       }
       grid.appendChild(b);
@@ -2143,18 +3118,13 @@ export function createGamesManager({ getAuth, chat }) {
   document.getElementById("puzzle-reset-btn")?.addEventListener("click", () => resetSlidingPuzzle(puzzleSize));
   document.getElementById("puzzle-share-btn")?.addEventListener("click", async () => {
     stopPuzzleTimer();
-    modal.style.display = "none";
-    playEmotionSound("gift");
-    await chat.sendEncryptedMessage({
-      gameData: {
-        kind: "score_card",
-        challengeSubtab: "hard:puzzle",
-        title: `Sliding Love Puzzle (${puzzleSize}×${puzzleSize})`,
-        summary: puzzleSolved
-          ? `Maine ${puzzleMoves} moves (${puzzleSeconds}s) mein puzzle solve kiya! 🧩🏆`
-          : `Puzzle try: ${puzzleMoves} moves (${puzzleSeconds}s) 🧩`
-      }
-    }, "letter");
+    const scoreVal = puzzleMoves || 999;
+    await submitOrLaunchScoreDuel(
+      "puzzle",
+      scoreVal,
+      `${puzzleMoves} moves (${puzzleSeconds}s)`,
+      `Sliding Puzzle (${puzzleSize}×${puzzleSize})`
+    );
   });
 
   // =========================================
@@ -2222,7 +3192,8 @@ export function createGamesManager({ getAuth, chat }) {
 
   function stepCatcher(ts) {
     if (!catcherRunning || modal?.style.display !== "flex") {
-      stopCatcherLoop();
+      stopCatcherLoop(true);
+      saveGamesProgress();
       return;
     }
     const rawDt = catcherLastTs ? (ts - catcherLastTs) / 1000 : 0.016;
@@ -2262,11 +3233,12 @@ export function createGamesManager({ getAuth, chat }) {
     renderCatcherFrame();
 
     if (catcherLives <= 0 || catcherTimeLeft <= 0) {
-      stopCatcherLoop();
+      stopCatcherLoop(false);
       if (catcherScore > catcherBest) {
         catcherBest = catcherScore;
         try { localStorage.setItem("sc_catcher_best_v1", String(catcherBest)); } catch {}
       }
+      saveGamesProgress();
       playEmotionSound(catcherLives > 0 ? "gift" : "chime");
       if (catcherOverlayMsg) {
         catcherOverlayMsg.innerText = catcherLives <= 0
@@ -2280,24 +3252,44 @@ export function createGamesManager({ getAuth, chat }) {
     catcherRaf = requestAnimationFrame(stepCatcher);
   }
 
-  function startCatcherGame() {
-    stopCatcherLoop();
+  function startCatcherGame(resume = false) {
+    stopCatcherLoop(false);
+    if (!resume || catcherLives <= 0 || catcherTimeLeft <= 0) {
+      catcherBasketX = 160;
+      catcherItems = [];
+      catcherScore = 0;
+      catcherLives = 3;
+      catcherTimeLeft = 30;
+      catcherSpawnAcc = 0;
+      spawnCatcherItem();
+      spawnCatcherItem();
+    }
+    catcherLastTs = 0;
+    catcherPaused = false;
+    updateCatcherHud();
+    if (catcherOverlay) catcherOverlay.style.display = "none";
+    updateArcadeResumeUi();
+    catcherRunning = true;
+    catcherRaf = requestAnimationFrame(stepCatcher);
+  }
+
+  document.getElementById("catcher-start-btn")?.addEventListener("click", () => startCatcherGame(catcherPaused));
+  document.getElementById("catcher-reset-btn")?.addEventListener("click", () => {
+    stopCatcherLoop(false);
     catcherBasketX = 160;
     catcherItems = [];
     catcherScore = 0;
     catcherLives = 3;
     catcherTimeLeft = 30;
-    catcherSpawnAcc = 0;
-    catcherLastTs = 0;
-    spawnCatcherItem();
-    spawnCatcherItem();
+    catcherPaused = false;
+    saveGamesProgress();
     updateCatcherHud();
-    if (catcherOverlay) catcherOverlay.style.display = "none";
-    catcherRunning = true;
-    catcherRaf = requestAnimationFrame(stepCatcher);
-  }
-
-  document.getElementById("catcher-start-btn")?.addEventListener("click", startCatcherGame);
+    renderCatcherFrame();
+    if (catcherOverlayMsg) catcherOverlayMsg.innerText = "Girte hue ❤️🌹💋 pakdo, 💣💔 se bacho!";
+    if (catcherOverlay) catcherOverlay.style.display = "flex";
+    updateArcadeResumeUi();
+    refreshActiveGameBar();
+  });
 
   if (catcherCanvas) {
     const moveBasketToClientX = clientX => {
@@ -2315,17 +3307,8 @@ export function createGamesManager({ getAuth, chat }) {
   }
 
   document.getElementById("catcher-share-btn")?.addEventListener("click", async () => {
-    stopCatcherLoop();
-    modal.style.display = "none";
-    playEmotionSound("gift");
-    await chat.sendEncryptedMessage({
-      gameData: {
-        kind: "score_card",
-        challengeSubtab: "arcade:catcher",
-        title: `Heart Catcher (${catcherDiff === "hard" ? "Mushkil" : "Asan"})`,
-        summary: `Maine ${catcherScore} points score kiya! (Best: ${catcherBest}) 💘🏆`
-      }
-    }, "letter");
+    stopCatcherLoop(false);
+    await submitOrLaunchScoreDuel("catcher", catcherScore, `${catcherScore} pts`, `Heart Catcher (${catcherDiff === "hard" ? "Mushkil" : "Asan"})`);
   });
 
   // LOVE SNAKE CANVAS
@@ -2389,19 +3372,24 @@ export function createGamesManager({ getAuth, chat }) {
     });
   }
 
-  function startSnakeGame() {
-    stopSnakeLoop();
-    snakeState = createSnakeState(SNAKE_GRID);
-    snakeNextDir = "right";
+  function startSnakeGame(resume = false) {
+    stopSnakeLoop(false);
+    if (!resume || !snakeState.alive || snakeState.won) {
+      snakeState = createSnakeState(SNAKE_GRID);
+      snakeNextDir = "right";
+    }
+    snakePaused = false;
     if (snakeOverlay) snakeOverlay.style.display = "none";
     updateSnakeHud();
     renderSnakeFrame();
+    updateArcadeResumeUi();
     snakeRunning = true;
 
     const intervalMs = snakeSpeed === "hard" ? 115 : 175;
     snakeTimerInt = setInterval(() => {
       if (!snakeRunning || modal?.style.display !== "flex") {
-        stopSnakeLoop();
+        stopSnakeLoop(true);
+        saveGamesProgress();
         return;
       }
       const next = stepSnakeState(snakeState, snakeNextDir, SNAKE_GRID);
@@ -2414,7 +3402,7 @@ export function createGamesManager({ getAuth, chat }) {
       updateSnakeHud();
       renderSnakeFrame();
       if (!next.alive) {
-        stopSnakeLoop();
+        stopSnakeLoop(false);
         playEmotionSound(next.won ? "gift" : "chime");
         if (snakeOverlayMsg) {
           snakeOverlayMsg.innerText = next.won
@@ -2423,14 +3411,28 @@ export function createGamesManager({ getAuth, chat }) {
         }
         if (snakeOverlay) snakeOverlay.style.display = "flex";
       }
+      saveGamesProgress();
     }, intervalMs);
   }
 
-  document.getElementById("snake-start-btn")?.addEventListener("click", startSnakeGame);
+  document.getElementById("snake-start-btn")?.addEventListener("click", () => startSnakeGame(snakePaused));
+  document.getElementById("snake-reset-btn")?.addEventListener("click", () => {
+    stopSnakeLoop(false);
+    snakeState = createSnakeState(SNAKE_GRID);
+    snakeNextDir = "right";
+    snakePaused = false;
+    saveGamesProgress();
+    updateSnakeHud();
+    renderSnakeFrame();
+    if (snakeOverlayMsg) snakeOverlayMsg.innerText = "❤️ aur 👑 khao, deewar ya khud se mat takrao!";
+    if (snakeOverlay) snakeOverlay.style.display = "flex";
+    updateArcadeResumeUi();
+    refreshActiveGameBar();
+  });
   modal?.querySelectorAll("[data-snake-dir]").forEach(btn => {
     btn.addEventListener("click", () => {
       snakeNextDir = btn.dataset.snakeDir;
-      if (!snakeRunning && snakeOverlay?.style.display !== "none") startSnakeGame();
+      if (!snakeRunning && snakeOverlay?.style.display !== "none") startSnakeGame(snakePaused);
     });
   });
 
@@ -2450,17 +3452,8 @@ export function createGamesManager({ getAuth, chat }) {
   }
 
   document.getElementById("snake-share-btn")?.addEventListener("click", async () => {
-    stopSnakeLoop();
-    modal.style.display = "none";
-    playEmotionSound("gift");
-    await chat.sendEncryptedMessage({
-      gameData: {
-        kind: "score_card",
-        challengeSubtab: "arcade:snake",
-        title: `Love Snake (${snakeSpeed === "hard" ? "Fast" : "Slow"})`,
-        summary: `Snake Score: ${snakeState.score} • Best: ${snakeBest} 🐍🏆`
-      }
-    }, "letter");
+    stopSnakeLoop(false);
+    await submitOrLaunchScoreDuel("snake", snakeState.score, `${snakeState.score} pts`, `Love Snake (${snakeSpeed === "hard" ? "Fast" : "Slow"})`);
   });
 
   // DIL BRICK BREAKER CANVAS
@@ -2524,7 +3517,8 @@ export function createGamesManager({ getAuth, chat }) {
 
   function stepBreaker(ts) {
     if (!breakerRunning || modal?.style.display !== "flex") {
-      stopBreakerLoop();
+      stopBreakerLoop(true);
+      saveGamesProgress();
       return;
     }
     const rawDt = breakerLastTs ? (ts - breakerLastTs) / 1000 : 0.016;
@@ -2600,7 +3594,8 @@ export function createGamesManager({ getAuth, chat }) {
     renderBreakerFrame();
 
     if (breakerLives <= 0 || cleared) {
-      stopBreakerLoop();
+      stopBreakerLoop(false);
+      saveGamesProgress();
       playEmotionSound(cleared ? "gift" : "chime");
       if (breakerOverlayMsg) {
         breakerOverlayMsg.innerText = cleared
@@ -2614,21 +3609,41 @@ export function createGamesManager({ getAuth, chat }) {
     breakerRaf = requestAnimationFrame(stepBreaker);
   }
 
-  function startBreakerGame() {
-    stopBreakerLoop();
-    breakerPaddleX = 160;
-    breakerBall = { x: 160, y: 185, vx: 130, vy: -160 };
-    breakerScore = 0;
-    breakerLives = 3;
+  function startBreakerGame(resume = false) {
+    stopBreakerLoop(false);
+    if (!resume || breakerLives <= 0 || !breakerBricks.some(b => b.alive)) {
+      breakerPaddleX = 160;
+      breakerBall = { x: 160, y: 185, vx: 130, vy: -160 };
+      breakerScore = 0;
+      breakerLives = 3;
+      resetBreakerBricks();
+    }
     breakerLastTs = 0;
-    resetBreakerBricks();
+    breakerPaused = false;
     updateBreakerHud();
     if (breakerOverlay) breakerOverlay.style.display = "none";
+    updateArcadeResumeUi();
     breakerRunning = true;
     breakerRaf = requestAnimationFrame(stepBreaker);
   }
 
-  document.getElementById("breaker-start-btn")?.addEventListener("click", startBreakerGame);
+  document.getElementById("breaker-start-btn")?.addEventListener("click", () => startBreakerGame(breakerPaused));
+  document.getElementById("breaker-reset-btn")?.addEventListener("click", () => {
+    stopBreakerLoop(false);
+    breakerPaddleX = 160;
+    breakerBall = { x: 160, y: 185, vx: 130, vy: -160 };
+    breakerScore = 0;
+    breakerLives = 3;
+    breakerPaused = false;
+    resetBreakerBricks();
+    saveGamesProgress();
+    updateBreakerHud();
+    renderBreakerFrame();
+    if (breakerOverlayMsg) breakerOverlayMsg.innerText = "Paddle slide karke saari heart bricks todo!";
+    if (breakerOverlay) breakerOverlay.style.display = "flex";
+    updateArcadeResumeUi();
+    refreshActiveGameBar();
+  });
   if (breakerCanvas) {
     const movePaddle = clientX => {
       const rect = breakerCanvas.getBoundingClientRect();
@@ -2641,17 +3656,8 @@ export function createGamesManager({ getAuth, chat }) {
   }
 
   document.getElementById("breaker-share-btn")?.addEventListener("click", async () => {
-    stopBreakerLoop();
-    modal.style.display = "none";
-    playEmotionSound("gift");
-    await chat.sendEncryptedMessage({
-      gameData: {
-        kind: "score_card",
-        challengeSubtab: "arcade:breaker",
-        title: "Dil Brick Breaker",
-        summary: `Bricks Score: ${breakerScore} • Best: ${breakerBest} 🧱💖`
-      }
-    }, "letter");
+    stopBreakerLoop(false);
+    await submitOrLaunchScoreDuel("breaker", breakerScore, `${breakerScore} pts`, "Dil Brick Breaker");
   });
 
   // KEYBOARD ROUTING ACROSS 2048, CATCHER, SNAKE, BREAKER
@@ -2699,13 +3705,15 @@ export function createGamesManager({ getAuth, chat }) {
   });
 
   function startMemoryGame() {
+    stopMemoryTimer();
     const base = MEMORY_POOL.slice(0, memPairsCount);
     memCards = shuffleCopy([...base, ...base]);
     memFlipped = [];
     memMatched = new Set();
     memMoves = 0;
-    memStartMs = Date.now();
+    memSeconds = 0;
     memLock = false;
+    saveGamesProgress();
     renderMemoryBoard();
   }
 
@@ -2720,6 +3728,16 @@ export function createGamesManager({ getAuth, chat }) {
       btn.innerText = isOpen ? em : "💖";
       btn.onclick = () => {
         if (memLock || memMatched.has(idx) || memFlipped.includes(idx)) return;
+        if (!memTimerInt && memMatched.size < memCards.length) {
+          memTimerInt = setInterval(() => {
+            if (modal?.style.display === "flex" && activeSubtabs.arcade === "arcade:memory" && memMatched.size < memCards.length) {
+              memSeconds++;
+              if (memoryStatus) {
+                memoryStatus.innerText = `Pairs: ${memMatched.size / 2}/${memPairsCount} • Moves: ${memMoves} • ${memSeconds}s`;
+              }
+            }
+          }, 1000);
+        }
         memFlipped.push(idx);
         renderMemoryBoard();
         if (memFlipped.length === 2) {
@@ -2730,44 +3748,48 @@ export function createGamesManager({ getAuth, chat }) {
             memMatched.add(b);
             memFlipped = [];
             playEmotionSound("happy");
+            saveGamesProgress();
             renderMemoryBoard();
+            refreshActiveGameBar();
             if (memMatched.size === memCards.length) {
-              const sec = Math.max(1, Math.round((Date.now() - memStartMs) / 1000));
-              memoryStatus.innerText = `Jeet gaye! 🎉 ${memMoves} moves • ${sec}s`;
+              stopMemoryTimer();
+              memoryStatus.innerText = `Jeet gaye! 🎉 ${memMoves} moves • ${memSeconds}s`;
             }
           } else {
             memLock = true;
             setTimeout(() => {
               memFlipped = [];
               memLock = false;
+              saveGamesProgress();
               renderMemoryBoard();
             }, 600);
           }
+        } else {
+          saveGamesProgress();
         }
       };
       memoryBoard.appendChild(btn);
     });
     if (memMatched.size < memCards.length) {
-      memoryStatus.innerText = `Pairs: ${memMatched.size / 2}/${memPairsCount} • Moves: ${memMoves}`;
+      memoryStatus.innerText = `Pairs: ${memMatched.size / 2}/${memPairsCount} • Moves: ${memMoves} • ${memSeconds}s`;
+    } else if (memCards.length) {
+      memoryStatus.innerText = `Jeet gaye! 🎉 ${memMoves} moves • ${memSeconds}s`;
     }
   }
 
-  document.getElementById("memory-restart-btn")?.addEventListener("click", startMemoryGame);
+  document.getElementById("memory-restart-btn")?.addEventListener("click", () => {
+    startMemoryGame();
+    refreshActiveGameBar();
+  });
   document.getElementById("memory-share-btn")?.addEventListener("click", async () => {
-    const sec = Math.max(1, Math.round((Date.now() - memStartMs) / 1000));
-    const solved = memMatched.size === memCards.length;
-    modal.style.display = "none";
-    playEmotionSound("happy");
-    await chat.sendEncryptedMessage({
-      gameData: {
-        kind: "memory_score",
-        challengeSubtab: "arcade:memory",
-        title: `Heart Memory (${memPairsCount === 8 ? "Mushkil 4×4" : "Asan 4×3"})`,
-        moves: memMoves,
-        seconds: sec,
-        solved
-      }
-    }, "letter");
+    stopMemoryTimer();
+    const scoreVal = memMoves || 99;
+    await submitOrLaunchScoreDuel(
+      "memory",
+      scoreVal,
+      `${memMoves} moves (${memSeconds}s)`,
+      `Heart Memory (${memPairsCount === 8 ? "4×4" : "4×3"})`
+    );
   });
 
   // LOVE REFLEX DUEL (3 ROUNDS)
@@ -2845,27 +3867,26 @@ export function createGamesManager({ getAuth, chat }) {
       } else {
         reflexPhase = "idle";
       }
+      saveGamesProgress();
       renderReflexUi();
     }
+  });
+
+  document.getElementById("reflex-reset-btn")?.addEventListener("click", () => {
+    stopReflex();
+    reflexPhase = "idle";
+    reflexRound = 0;
+    reflexTimes = [];
+    saveGamesProgress();
+    renderReflexUi();
   });
 
   document.getElementById("reflex-share-btn")?.addEventListener("click", async () => {
     stopReflex();
     const avg = reflexTimes.length
       ? Math.round(reflexTimes.reduce((s, n) => s + n, 0) / reflexTimes.length)
-      : (reflexBestAvg || 0);
-    modal.style.display = "none";
-    playEmotionSound("gift");
-    await chat.sendEncryptedMessage({
-      gameData: {
-        kind: "score_card",
-        challengeSubtab: "arcade:reflex",
-        title: "Love Reflex Duel",
-        summary: avg
-          ? `Mera Reflex Speed: ${avg} ms average! (Best: ${reflexBestAvg || avg} ms) ⚡🏆`
-          : "Love Reflex Challenge accept karo! ⚡"
-      }
-    }, "letter");
+      : (reflexBestAvg || 500);
+    await submitOrLaunchScoreDuel("reflex", avg, `${avg} ms avg`, "Love Reflex Duel");
   });
 
   // =========================================
@@ -2892,8 +3913,8 @@ export function createGamesManager({ getAuth, chat }) {
       const st = gd.ludoState || buildInitialLudo("chat", ludoQuick);
       const homeA = (st.tokensA || []).filter(p => p === 56).length;
       const homeB = (st.tokensB || []).filter(p => p === 56).length;
-      const mySide = gd.playerA === uid ? "A" : "B";
-      const myTurn = !st.winner && st.turn === mySide;
+      const access = resolveLiveLudoTurnAccess(st, gd, uid);
+      const myTurn = !st.winner && (access.canRoll || access.canMoveToken);
 
       appendCreatorBadge(box, gd.playerA === uid);
       const head = document.createElement("div");
@@ -2911,32 +3932,40 @@ export function createGamesManager({ getAuth, chat }) {
       btn.className = "game-mini-btn" + (myTurn ? " active" : "");
       btn.innerText = st.winner
         ? "🏆 Board Dekhein"
-        : (myTurn ? "🎲 Aapki Baari — Board Kholen" : "👀 Live Board Dekhein");
+        : (myTurn ? "🎲 Aapki Baari — Board Kholen" : "⏳ Partner Ki Baari — Board Dekhein");
       btn.onclick = e => {
         e.stopPropagation();
         liveLudoMsg = { id: m.id, dec };
-        showTab("ludo");
-        modal.style.display = "flex";
+        activeLiveBindings.ludo = m.id;
+        preferredResumeMsgId = m.id;
+        saveGamesProgress();
+        openGameSubtab("ludo");
       };
       box.appendChild(btn);
       return box;
     }
 
     if (gd.kind === "c4") {
-      const mySym = gd.playerA === uid ? "❤️" : "😘";
-      const canMove = !gd.winnerSymbol && !gd.draw && gd.lastMover !== uid;
+      const turn = resolveTwoPlayerTurn({
+        playerA: gd.playerA || "",
+        playerB: gd.playerB || "",
+        turnSide: gd.turnSide || "",
+        lastMover: gd.lastMover || "",
+        myUid: uid,
+        finished: Boolean(gd.winnerSymbol || gd.draw)
+      });
       appendCreatorBadge(box, gd.playerA === uid);
 
       const head = document.createElement("div");
       head.className = "game-card-head";
-      head.innerText = "🍓 Connect 4 Dil (4-in-a-Row)";
+      head.innerText = "🍓 Connect 4 Dil (Live 2-Player)";
       box.appendChild(head);
 
       const sub = document.createElement("div");
       sub.className = "game-card-sub";
       if (gd.winnerSymbol) sub.innerText = `${gd.winnerSymbol} 4-in-a-Row Jeet gaya! 🎉`;
       else if (gd.draw) sub.innerText = "Board Bhar Gaya — Draw! 🤝";
-      else sub.innerText = canMove ? `Aapki baari (${mySym}) — Column chunein` : "Love ki baari ka intezar...";
+      else sub.innerText = turn.canMove ? `Aapki baari (${turn.mySym}) — Column chunein` : "Love ki baari ka intezar... ⏳";
       box.appendChild(sub);
 
       const board = gd.board || createConnect4Board();
@@ -2949,47 +3978,46 @@ export function createGamesManager({ getAuth, chat }) {
         cell.type = "button";
         cell.className = "c4-cell" + (winCells.has(i) ? " win-cell" : "");
         cell.innerText = board[i] || "•";
-        cell.disabled = !canMove;
-        cell.onclick = async e => {
+        cell.disabled = !turn.canMove;
+        cell.onclick = e => {
           e.stopPropagation();
-          const res = dropConnect4Disc(board, col, mySym);
-          if (!res) return;
-          playEmotionSound(res.winner ? "gift" : "chime");
-          const endNotice = res.winner
-            ? `🍓 Connect 4 khatam! ${res.winner} Jeet gaya! 🎉`
-            : (res.draw ? "🍓 Connect 4 Draw ho gaya! 🤝" : "");
-          await chat.updateEncryptedMessage(
-            m.id,
-            {
-              ...dec,
-              gameData: {
-                ...gd,
-                board: res.board,
-                lastMover: uid,
-                lastUpdatedBy: uid,
-                lastActionText: endNotice || `🍓 Connect 4 mein ${mySym} ne chaal chali!`,
-                winnerSymbol: res.winner || "",
-                draw: res.draw
-              }
-            },
-            { notifyPartner: true, alertKind: "letter", gameNoticeText: endNotice }
-          );
+          playLiveC4Move(m.id, dec, col);
         };
         grid.appendChild(cell);
       }
       box.appendChild(grid);
+
+      const zoomBtn = document.createElement("button");
+      zoomBtn.type = "button";
+      zoomBtn.className = "game-mini-btn" + (turn.canMove ? " active" : "");
+      zoomBtn.innerText = "🔍 Modal Mein Kholen";
+      zoomBtn.onclick = e => {
+        e.stopPropagation();
+        liveC4Msg = { id: m.id, dec };
+        activeLiveBindings.c4 = m.id;
+        preferredResumeMsgId = m.id;
+        saveGamesProgress();
+        openGameSubtab("easy:c4");
+      };
+      box.appendChild(zoomBtn);
       return box;
     }
 
     if (gd.kind === "dots") {
       const st = gd.dotsState || createDotsBoxesState();
-      const mySide = gd.playerA === uid ? "A" : "B";
-      const canMove = !st.winner && st.turn === mySide;
+      const turn = resolveTwoPlayerTurn({
+        playerA: gd.playerA || "",
+        playerB: gd.playerB || "",
+        turnSide: st.turn || gd.turnSide || "A",
+        lastMover: gd.lastMover || "",
+        myUid: uid,
+        finished: Boolean(st.winner)
+      });
       appendCreatorBadge(box, gd.playerA === uid);
 
       const head = document.createElement("div");
       head.className = "game-card-head";
-      head.innerText = "📦 Dots & Boxes (Dil Kabza)";
+      head.innerText = "📦 Dots & Boxes (Live 2-Player)";
       box.appendChild(head);
 
       const sub = document.createElement("div");
@@ -2999,36 +4027,30 @@ export function createGamesManager({ getAuth, chat }) {
           ? `Barabar (${st.scoreA}-${st.scoreB}) 🤝`
           : `${st.winner === "A" ? "❤️ A" : "😘 B"} Jeet gaya! (${st.scoreA}-${st.scoreB}) 🏆`;
       } else {
-        sub.innerText = `❤️ ${st.scoreA} · 😘 ${st.scoreB} · ${canMove ? "Aapki chaal!" : "Intezar..."}`;
+        sub.innerText = `❤️ ${st.scoreA} · 😘 ${st.scoreB} · ${turn.canMove ? `Aapki chaal (${turn.mySym})!` : "Intezar... ⏳"}`;
       }
       box.appendChild(sub);
 
       const dbGrid = document.createElement("div");
       dbGrid.className = "dots-grid";
-      renderDotsGridInto(dbGrid, st, canMove, async (type, edgeIdx) => {
-        const next = claimDotsEdge(st, type, edgeIdx, mySide);
-        if (!next) return;
-        playEmotionSound(next.completedNow ? "happy" : "chime");
-        const endNotice = next.winner
-          ? (next.winner === "draw"
-            ? `📦 Dots & Boxes Draw (${next.scoreA}-${next.scoreB}) 🤝`
-            : `📦 Dots & Boxes Jeeta: ${next.winner === "A" ? "❤️ Player A" : "😘 Player B"} (${next.scoreA}-${next.scoreB}) 🏆`)
-          : "";
-        await chat.updateEncryptedMessage(
-          m.id,
-          {
-            ...dec,
-            gameData: {
-              ...gd,
-              dotsState: next,
-              lastUpdatedBy: uid,
-              lastActionText: endNotice || `📦 Dots & Boxes mein line lagi (❤️ ${next.scoreA} · 😘 ${next.scoreB})`
-            }
-          },
-          { notifyPartner: true, alertKind: "letter", gameNoticeText: endNotice }
-        );
+      renderDotsGridInto(dbGrid, st, turn.canMove, (type, edgeIdx) => {
+        playLiveDotsMove(m.id, dec, type, edgeIdx);
       });
       box.appendChild(dbGrid);
+
+      const zoomBtn = document.createElement("button");
+      zoomBtn.type = "button";
+      zoomBtn.className = "game-mini-btn" + (turn.canMove ? " active" : "");
+      zoomBtn.innerText = "🔍 Modal Mein Kholen";
+      zoomBtn.onclick = e => {
+        e.stopPropagation();
+        liveDotsMsg = { id: m.id, dec };
+        activeLiveBindings.dots = m.id;
+        preferredResumeMsgId = m.id;
+        saveGamesProgress();
+        openGameSubtab("hard:dots");
+      };
+      box.appendChild(zoomBtn);
       return box;
     }
 
@@ -3239,8 +4261,14 @@ export function createGamesManager({ getAuth, chat }) {
     }
 
     if (gd.kind === "ttt") {
-      const mySym = gd.playerA === uid ? "❤️" : "😘";
-      const canMove = !gd.winnerSymbol && !gd.draw && gd.lastMover !== uid;
+      const turn = resolveTwoPlayerTurn({
+        playerA: gd.playerA || "",
+        playerB: gd.playerB || "",
+        turnSide: gd.turnSide || "",
+        lastMover: gd.lastMover || "",
+        myUid: uid,
+        finished: Boolean(gd.winnerSymbol || gd.draw)
+      });
       appendCreatorBadge(box, gd.playerA === uid);
 
       const head = document.createElement("div");
@@ -3252,7 +4280,7 @@ export function createGamesManager({ getAuth, chat }) {
       sub.className = "game-card-sub";
       if (gd.winnerSymbol) sub.innerText = `${gd.winnerSymbol} Jeet gaya! 🎉`;
       else if (gd.draw) sub.innerText = "Match Draw! 🤝";
-      else sub.innerText = canMove ? `Aapki baari (${mySym})` : "Love ki baari ka intezar...";
+      else sub.innerText = turn.canMove ? `Aapki baari (${turn.mySym})` : "Love ki baari ka intezar... ⏳";
       box.appendChild(sub);
 
       const board = gd.board || createInitialTttBoard();
@@ -3264,35 +4292,28 @@ export function createGamesManager({ getAuth, chat }) {
         b.type = "button";
         b.className = "ttt-cell" + (winCells.has(idx) ? " win-cell" : "");
         b.innerText = cell || "";
-        b.disabled = !canMove || Boolean(cell);
-        b.onclick = async e => {
+        b.disabled = !turn.canMove || Boolean(cell);
+        b.onclick = e => {
           e.stopPropagation();
-          const res = applyTttMove(board, idx, mySym);
-          if (!res) return;
-          playEmotionSound(res.winner ? "gift" : "chime");
-          const endNotice = res.winner
-            ? `🎮 Tic-Tac-Toe khatam! ${res.winner} Jeet gaya! 🎉`
-            : (res.draw ? "🎮 Tic-Tac-Toe Draw ho gaya! 🤝" : "");
-          await chat.updateEncryptedMessage(
-            m.id,
-            {
-              ...dec,
-              gameData: {
-                ...gd,
-                board: res.board,
-                lastMover: uid,
-                lastUpdatedBy: uid,
-                lastActionText: endNotice || `🎮 Tic-Tac-Toe mein ${mySym} ne chaal chali!`,
-                winnerSymbol: res.winner || "",
-                draw: res.draw
-              }
-            },
-            { notifyPartner: true, alertKind: "letter", gameNoticeText: endNotice }
-          );
+          playLiveTttMove(m.id, dec, idx);
         };
         grid.appendChild(b);
       });
       box.appendChild(grid);
+
+      const zoomBtn = document.createElement("button");
+      zoomBtn.type = "button";
+      zoomBtn.className = "game-mini-btn" + (turn.canMove ? " active" : "");
+      zoomBtn.innerText = "🔍 Modal Mein Kholen";
+      zoomBtn.onclick = e => {
+        e.stopPropagation();
+        liveTttMsg = { id: m.id, dec };
+        activeLiveBindings.ttt = m.id;
+        preferredResumeMsgId = m.id;
+        saveGamesProgress();
+        openGameSubtab("easy:ttt");
+      };
+      box.appendChild(zoomBtn);
       return box;
     }
 
@@ -3373,6 +4394,11 @@ export function createGamesManager({ getAuth, chat }) {
         rep.className = "game-card-answer";
         rep.innerText = `💖 Jawab: ${gd.replyText}`;
         box.appendChild(rep);
+      } else if (gd.creator && gd.creator === uid) {
+        const sub = document.createElement("div");
+        sub.className = "game-card-sub";
+        sub.innerText = "Love ke jawab ka intezar... ⏳";
+        box.appendChild(sub);
       } else {
         const sendTdwReply = async val => {
           if (!val) return;
@@ -3601,6 +4627,54 @@ export function createGamesManager({ getAuth, chat }) {
       return box;
     }
 
+    if (gd.kind === "score_duel") {
+      appendCreatorBadge(box, gd.playerA === uid);
+      const head = document.createElement("div");
+      head.className = "game-card-head";
+      head.innerText = `⚔️ ${gd.title || "Live Score Duel"}`;
+      box.appendChild(head);
+
+      const sub = document.createElement("div");
+      sub.className = "game-card-sub";
+      if (gd.winner) {
+        const winLbl = gd.winner === "draw"
+          ? "🤝 Barabar Draw!"
+          : (gd.winner === "A" ? "🏆 ❤️ Challenger Jeeta!" : "🏆 😘 Partner Jeeta!");
+        sub.innerText = `❤️ A: ${gd.detailA}\n😘 B: ${gd.detailB}\n${winLbl}`;
+        box.appendChild(sub);
+      } else if (gd.playerA === uid) {
+        sub.innerText = `Aapka Score: ${gd.detailA}\n⏳ Partner ke beat karne ka intezar...`;
+        box.appendChild(sub);
+      } else {
+        sub.innerText = `Challenge: ${gd.detailA}\nApni baari khel kar beat karein!`;
+        box.appendChild(sub);
+
+        const playBtn = document.createElement("button");
+        playBtn.type = "button";
+        playBtn.className = "game-mini-btn active";
+        playBtn.innerText = "⚔️ Apni Baari Khelein";
+        playBtn.onclick = e => {
+          e.stopPropagation();
+          const gk = gd.gameKey || "catcher";
+          activeDuelIds[gk] = m.id;
+          preferredResumeMsgId = m.id;
+          // Reset partner's local run cleanly for a fair duel
+          if (gk === "pop") { stopPopRush(false); popScore = 0; popTimeLeft = 15; }
+          else if (gk === "g2048") { g2048Board = create2048Board(); g2048Score = 0; }
+          else if (gk === "puzzle") { resetSlidingPuzzle(puzzleSize); }
+          else if (gk === "catcher") { stopCatcherLoop(false); catcherScore = 0; catcherLives = 3; catcherTimeLeft = 30; catcherItems = []; }
+          else if (gk === "snake") { stopSnakeLoop(false); snakeState = createSnakeState(SNAKE_GRID); snakeNextDir = "right"; }
+          else if (gk === "breaker") { stopBreakerLoop(false); breakerScore = 0; breakerLives = 3; resetBreakerBricks(); }
+          else if (gk === "memory") { startMemoryGame(); }
+          else if (gk === "reflex") { stopReflex(); reflexPhase = "idle"; reflexRound = 0; reflexTimes = []; }
+          saveGamesProgress();
+          openGameSubtab(gd.challengeSubtab || SCORE_DUEL_GAMES[gk]?.subtab || "arcade:catcher");
+        };
+        box.appendChild(playBtn);
+      }
+      return box;
+    }
+
     if (gd.kind === "ludo_summary" || gd.kind === "score_card") {
       const head = document.createElement("div");
       head.className = "game-card-head";
@@ -3651,24 +4725,64 @@ export function createGamesManager({ getAuth, chat }) {
 
   function handleLiveMessageUpdate(m) {
     if (!m || !m.id || !m.decrypted?.gameData) return;
-    if (liveLudoMsg && liveLudoMsg.id === m.id && m.decrypted.gameData.kind === "ludo") {
+    const gd = m.decrypted.gameData;
+    const isModalOpen = modal?.style.display === "flex";
+
+    if (gd.kind === "ludo" && (liveLudoMsg?.id === m.id || activeLiveBindings.ludo === m.id)) {
       liveLudoMsg = { id: m.id, dec: m.decrypted };
-      if (modal?.style.display === "flex" && activeTab === "ludo") {
-        renderLudoBoard();
-      }
+      if (isModalOpen && activeTab === "ludo") renderLudoBoard();
+    } else if (gd.kind === "c4" && (liveC4Msg?.id === m.id || activeLiveBindings.c4 === m.id)) {
+      liveC4Msg = { id: m.id, dec: m.decrypted };
+      if (isModalOpen && activeTab === "easy" && activeSubtabs.easy === "easy:c4") renderC4Local();
+    } else if (gd.kind === "ttt" && (liveTttMsg?.id === m.id || activeLiveBindings.ttt === m.id)) {
+      liveTttMsg = { id: m.id, dec: m.decrypted };
+      if (isModalOpen && activeTab === "easy" && activeSubtabs.easy === "easy:ttt") renderTttLocal();
+    } else if (gd.kind === "dots" && (liveDotsMsg?.id === m.id || activeLiveBindings.dots === m.id)) {
+      liveDotsMsg = { id: m.id, dec: m.decrypted };
+      if (isModalOpen && activeTab === "hard" && activeSubtabs.hard === "hard:dots") renderDotsLocal();
     }
+    if (isModalOpen) updateLiveBannersUI();
+    saveGamesProgress();
+    refreshActiveGameBar();
   }
+
+  // Sync restored control states on boot
+  if (ludoRuleBtn) {
+    ludoRuleBtn.innerText = ludoQuick ? "⚡ Quick" : "🎲 Classic";
+    ludoRuleBtn.classList.toggle("active", ludoQuick);
+  }
+  modal?.querySelectorAll("[data-puzzle-size]").forEach(b => {
+    b.classList.toggle("active", Number(b.dataset.puzzleSize) === puzzleSize);
+  });
+  modal?.querySelectorAll("[data-catcher-diff]").forEach(b => {
+    b.classList.toggle("active", b.dataset.catcherDiff === catcherDiff);
+  });
+  modal?.querySelectorAll("[data-snake-speed]").forEach(b => {
+    b.classList.toggle("active", b.dataset.snakeSpeed === snakeSpeed);
+  });
+  modal?.querySelectorAll("[data-mem-diff]").forEach(b => {
+    b.classList.toggle("active", (b.dataset.memDiff === "hard" ? 8 : 6) === memPairsCount);
+  });
+  modal?.querySelectorAll("[data-wheel-mood]").forEach(b => {
+    b.classList.toggle("active", b.dataset.wheelMood === wheelMood);
+  });
+  modal?.querySelectorAll("[data-tdw-tier]").forEach(b => {
+    b.classList.toggle("active", b.dataset.tdwTier === tdwTier);
+  });
 
   // Initialize dynamic previews
   renderQuizSetup();
   renderTdwPreview();
   renderSlidingPuzzle();
+  hydrateLiveBindingsFromChat();
+  refreshActiveGameBar();
 
   return {
     renderGameBubble,
     openGameSubtab,
     stopTransientLoops,
     handleLiveMessageUpdate,
+    refreshActiveGameBar,
     openWalletModal: intimateGames.openWalletModal,
     claimWalletGift: intimateGames.claimWalletGift
   };
